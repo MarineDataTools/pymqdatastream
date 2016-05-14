@@ -7,7 +7,7 @@ to distribute and process realtime sensor data.
 Pymqdatastream intends to be a software tool which makes it simple to
 distribute manifold realtime sensor by providing a framework to
 publisch/subscribe datastreams. The network transport relies on the 
-`ZeroMQ <www.zeromq.org>` library. The individual sensors have to be
+`ZeroMQ <www.zeromq.org>`_ library. The individual sensors have to be
 "connected" by writing a connector which is reading the sensor data
 and using a pymqdatastream object to distribute it. The software
 focusses on marine sensors as GPS, echo sounder and scientific data as
