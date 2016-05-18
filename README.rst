@@ -36,4 +36,8 @@ Uninstall as a user
 Documentation
 -------------   
 
+Building the documentation from scratch
 
+.. code:: bash
+   
+   sphinx-build -b html . _html
