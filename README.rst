@@ -40,4 +40,5 @@ Building the documentation from scratch
 
 .. code:: bash
    
-   sphinx-build -b html . _html
+   cd pymqdatastream/doc
+   make html
