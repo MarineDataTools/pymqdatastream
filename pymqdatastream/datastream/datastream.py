@@ -46,10 +46,14 @@ else:
 class zmq_socket(object):
     """
     A class of a zmq socket for the actual connection
-    init: 
-    socket_type: socket type of stream object: e.g. 'control', 'remote_control', 'pubstream', 'substream'
-    address = zmq address string, e.g. adress = 'tcp://127.0.0.1:20000'
-    filter_uuid: message filter for the subscribe sockets, default '', only use it if a 'substream' socket is created
+    Args:
+        socket_type: socket type of stream object: e.g. 'control', 'remote_control', 'pubstream', 'substream'
+
+        address = zmq address string, e.g. adress = 'tcp://127.0.0.1:20000'
+
+        filter_uuid: message filter for the subscribe sockets, default '', only use it if a 'substream' socket is created
+
+        logging_level: 
     """
     def __init__(self,socket_type, address = '', deque = None, control_socket_reply_function = None, filter_uuid = '', connect = True, remote = False, statistic = False, logging_level='INFO'):
         """
@@ -76,7 +80,7 @@ class zmq_socket(object):
         self.do_statistic = False
         self.deque = deque
         self.packets = 0 # Packets sent via pub_data
-
+    
         # The serialise function
         #self.dumps = self.dumps_json
         #self.loads = self.loads_json
@@ -189,9 +193,14 @@ class zmq_socket(object):
     
 
     def bind_socket(self, zmq_socket_type, address):
-        '''
+        """
         Binding the socket to a port
-        '''
+
+        Args:
+            zmq_socket_type:
+        
+            address: Address or list of addresses for the binding, the first free address will be used
+        """
         funcname = self.__class__.__name__ + '.bind_socket()'
         if(not(isinstance(address,list))):
             address = [address]
@@ -219,7 +228,9 @@ class zmq_socket(object):
     
     def connect_socket(self,filter_uuid = ''):
         '''
+
         connecting the socket to a remote zmq socket with address
+
         '''
         funcname = self.__class__.__name__ + '.connect_socket()'
         address = self.address
@@ -854,9 +865,15 @@ class DataStream(object):
     
     The DataStream object
     
-    init:
-    address: The address the control sockets is bound to default = None: Searches for the next free sockets on predefined ports
-    remote: If False this is a local datastream object, if True its a remote datastream object with a reduced functionality (more of informative type)
+    Args:
+       address: The address the control sockets is bound to default = None: Searches for the next free sockets on predefined ports
+    
+       remote: If False this is a local datastream object, if True its a remote datastream object with a reduced functionality (more of informative type)
+    
+       name: The name of the datastream [default='datastream']
+    
+       logging_level: The logging level of the logger object (logging.DEBUG, logging.INFO, logging.CRITICAL)
+
     """
     def __init__(self,address = None, remote = False, name = 'datastream',logging_level = 'INFO'):
         funcname = '.__init__()'
@@ -883,7 +900,9 @@ class DataStream(object):
             if(address == None):
                 addresses = standard_datastream_control_addresses
             else:
-                addresses = [address]
+                if(not(isinstance(address,list))): # A single address
+                    addresses = [address]
+
 
             # Create control socket
             control_socket = zmq_socket(socket_type = 'control', address = addresses, control_socket_reply_function = self.control_socket_reply)
@@ -1228,7 +1247,7 @@ class DataStream(object):
                 if(stream.do_statistic):
                     ret_str += 'Packets sent: ' + str(stream.statistic['packets sent'])
 
-            ret_str += '\n\n'                
+            ret_str += '\n\n'  
             return ret_str
             
     def __str__(self):
