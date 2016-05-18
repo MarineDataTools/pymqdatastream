@@ -13,3 +13,27 @@ and using a pymqdatastream object to distribute it. The software
 focusses on marine sensors as GPS, echo sounder and scientific data as
 conductivity, temperature and depth data but is not limited to this
 purpose.
+
+
+Install
+-------
+
+Developer
+_________
+
+Install as a user
+
+.. code:: bash
+	  
+   python setup.py develop --user
+
+Uninstall as a user
+   
+.. code:: bash
+	  
+   pip uninstall pymqdatastream
+
+Documentation
+-------------   
+
+
