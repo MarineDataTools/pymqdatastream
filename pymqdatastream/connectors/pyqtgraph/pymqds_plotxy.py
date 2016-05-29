@@ -155,7 +155,8 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         """
 
         Add a check state box for the subscribed streams, indicating
-        if to plot or not
+        if to plot or not, choose color for plot and which data to
+        plot against in x and y
 
         """
         # http://stackoverflow.com/questions/1667688/qcombobox-inside-qtreewidgetitem
@@ -174,6 +175,8 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 childitem.stream.pyqtgraph
             except:
                 childitem.stream.pyqtgraph = {'color':self.line_colors[self.color_ind]}
+                childitem.stream.pyqtgraph['ind_x'] = 0
+                childitem.stream.pyqtgraph['ind_y'] = 1
                 self.color_ind += 1
                 if(self.color_ind == len(self.line_colors)):
                     self.color_ind = 0                 
@@ -182,9 +185,29 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
             childitem.setData(1, QtCore.Qt.UserRole, 'blab')            
             grandchild_count = childitem.childCount()
             print('grandchild',grandchild_count)
-            # Add plot options as grandchilds
+            # Add plot options as grandchilds if initialized the first time
             if(grandchild_count == 0):
                 childitem.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
+                # Create X axis and Y axis data indicators
+                ind_x = childitem.stream.pyqtgraph['ind_x']
+                ind_y = childitem.stream.pyqtgraph['ind_y']
+                strvar_x = str(childitem.stream.variables[ind_x]['name'])
+                strvar_y = str(childitem.stream.variables[ind_y]['name'])                
+                streamx_txt = 'X Data: ' + strvar_x + ' (' + str(ind_x) + ')'
+                streamy_txt = 'Y Data: ' + strvar_y + ' (' + str(ind_y) + ')'
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [streamx_txt])
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, ['X'])
+                self.button_X = QtWidgets.QPushButton('Change X')
+                self.button_X.clicked.connect(self.handle_button_XY_clicked)
+                self.button_X.stream = childitem.stream
+                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , self.button_X)
+
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [streamy_txt])                
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, ['Y'])
+                self.button_Y = QtWidgets.QPushButton('Change Y')
+                self.button_Y.clicked.connect(self.handle_button_XY_clicked)                
+                self.button_Y.stream = childitem.stream
+                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , self.button_Y)
                 # Create color choosing button
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, ['Color'])
                 button = QtWidgets.QPushButton('Color')
@@ -201,6 +224,9 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
 
     def handle_button_color_clicked(self):
         """
+
+        Adding a color to the stream 
+        
         """
         print('Clicked color')
         dia = QtGui.QColorDialog(self)
@@ -209,16 +235,42 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         button.pyqtgraph['color'] = color
         p = button.palette()
         p.setColor(button.backgroundRole(), color)
-        button.setPalette(p)        
-            
+        button.setPalette(p)
+
+
+    def handle_button_XY_clicked(self):
+        """
+
+        Choosing the variables of the stream to be plotted
         
+        """
+        print('Clicked XY')
+        layout = QtGui.QVBoxLayout()  # layout for the central widget
+        widget = QtGui.QWidget()  # central widget
+        widget.setLayout(layout)
+        self._number_group=QtWidgets.QButtonGroup() # Number group
+        self._number_group.buttonClicked[QtWidgets.QAbstractButton].connect(self.XY_group_clicked)
+        button = self.sender()
+        for i,var in enumerate(button.stream.variables):
+            r0 = QtGui.QRadioButton(str(i) + ': ' + var['name'])
+            self._number_group.addButton(r0)
+            layout.addWidget(r0)            
+
+
+        self._XY_widget = widget
+        print('Clicked XY show')        
+        self._XY_widget.show()
+        print('Clicked XY end')
+
+    def XY_group_clicked(self,btn):
+        print('Hallo' + str(btn.text()))
 
 class pyqtgraphMainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
         
         mainMenu = self.menuBar()
-        self.setWindowTitle("My Window")
+        self.setWindowTitle("Python Zeromq Datastream_PlotXY")
         self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
         extractAction = QtWidgets.QAction("&Quit", self)
         extractAction.setShortcut("Ctrl+Q")
@@ -322,13 +374,15 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                         time_plot_data = data['info']['ts']
                         ind_start = stream.pyqtgraph_npdata['ind_start']
                         ind_end = stream.pyqtgraph_npdata['ind_end']
+                        ind_x = stream.pyqtgraph['ind_x']
+                        ind_y = stream.pyqtgraph['ind_y']                        
                         for n in range(len(plot_data)):
                             stream.pyqtgraph_cmod += 1
                             if(stream.pyqtgraph_cmod >= stream.pyqtgraph_nplot):
                                 stream.pyqtgraph_cmod = 0
                                 stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
-                                stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][0]
-                                stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][1]
+                                stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
+                                stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
 
                                 ind_end += 1
                                 if( (ind_end - ind_start ) >= self.buf_tilesize):

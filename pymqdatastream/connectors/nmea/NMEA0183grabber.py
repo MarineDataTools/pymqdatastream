@@ -205,6 +205,9 @@ class NMEA0183Grabber(object):
 
     def time_interval_thread(self,filename,time_interval,thread_queue):
         """
+
+        
+
         """
         funcname = self.__class__.__name__ + '.time_interval_thread()'
         dt = 0.05

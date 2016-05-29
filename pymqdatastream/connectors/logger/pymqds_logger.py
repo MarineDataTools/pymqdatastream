@@ -27,14 +27,7 @@ logger.setLevel(logging.DEBUG)
 class LoggerDataStream(pymqdatastream.DataStream):
     """ The LoggerDataStream
 
-    Creates a file in ubjson format:
-
-    - fdsfsdf::
-
-        : Hallo
-        : Peter
-    - fsdfs
-    
+    Creates a file of subscribed streams in ubjson format:
     
     """
     def __init__(self, **kwargs):

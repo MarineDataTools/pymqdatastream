@@ -15,6 +15,7 @@ import collections
 import time
 import json
 import re
+from cobs import cobs
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pydatastream_sam4log')
@@ -23,6 +24,9 @@ logger.setLevel(logging.DEBUG)
 
 class sam4logDataStream(pymqdatastream.DataStream):
     """
+
+    
+    
     """
     def __init__(self, **kwargs):
         """
@@ -34,14 +38,18 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.uuid = uuid
         funcname = self.__class__.__name__ + '.__init__()'
         self.logger.debug(funcname)
-        self.dequelen = 10000 # Length of the deque
+        self.dequelen = 10000 # Length of the deque used to store data
 
+        self.print_serial_data = False
         self.serial_thread_queue = queue.Queue()
         self.serial_thread_queue_ans = queue.Queue()
         self.bytes_read = 0
         self.serial = None # The device to be connected to
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen)]
         self.commands = []
+
+        # The data format
+        self.data_format = 0
 
 
     def load_file(self,filename):
@@ -57,9 +65,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.file_thread.start()            
         self.logger.debug(funcname + ': Starting thread done')
 
+        
     def read_file_data(self, dt = 0.01, num_bytes = 200):
         """
+
         The function which reads the file
+
         """
         funcname = self.__class__.__name__ + '.read_serial_data()'
         self.logger.debug(funcname)
@@ -69,7 +80,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 try:
                     data = self.data_file.read(num_bytes)
                     if(data == ''):
-                        logger.debug(funcname + ': EOF')
+                        self.logger.debug(funcname + ': EOF')
                         return True
                     
                     self.bytes_read += num_bytes
@@ -77,13 +88,13 @@ class sam4logDataStream(pymqdatastream.DataStream):
                         deque.appendleft(data)
 
                 except Exception as e:
-                    logger.debug(funcname + ':Exception:' + str(e))
+                    self.logger.debug(funcname + ':Exception:' + str(e))
 
                     
             # Try to read from the queue, if something was read, quit
             try:
                 data = self.serial_thread_queue.get(block=False)
-                logger.debug(funcname + ': Got data:' + data)
+                self.logger.debug(funcname + ': Got data:' + data)
                 break
             except queue.Empty:
                 pass
@@ -128,6 +139,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
             if(num_bytes > 0):
                 try:
                     data = self.serial.read(num_bytes)
+                    if(self.print_serial_data):
+                        print(data)
+                        
                     self.bytes_read += num_bytes
                     for n,deque in enumerate(self.deques_raw_serial):
                         deque.appendleft(data)
@@ -153,13 +167,21 @@ class sam4logDataStream(pymqdatastream.DataStream):
         Sends data to serial device
         
         """
-
+        funcname = self.__class__.__name__ + '.send_serial_data()'
         if(self.serial != None):
             print('Sending:' + str(data))
             self.serial.write(str(data))
+            print('done')
+        else:
+            self.logger.debug(funcname + ':Serial port is not open.')
 
 
     def stop_serial_data(self):
+        """
+
+        Closes the serial port and does a cleanup of running threads etc.
+
+        """
         self.logger.debug('Stopping')
         self.serial_thread_queue.put('stop')
         data = self.serial_thread_queue_ans.get()
@@ -208,6 +230,45 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 data = deque.pop()
                 data_all.append(data)
                 stream.pub_data(data_all)
+
+                
+    def init_data_format_functions(self):
+        """
+        
+        
+        """
+        if(self.data_format == 0):
+            self.convert_raw_data = self.convert_raw_data_format0
+
+        if(self.data_format == 2):
+            self.convert_raw_data = self.convert_raw_data_format2
+
+
+    def init_sam4logger(self,flag_adcs):
+        """
+    
+        Function to set specific settings on the logger
+        Args:
+            flag_adcs: List of the ltc2442 channels to be send back [e.g. [0,2,7]], has to be between 0 and 7
+        
+        """
+        
+        self.print_serial_data = True        
+        self.send_serial_data('stop\n')
+        time.sleep(0.1)
+        self.flag_adcs = flag_adcs
+        cmd = 'send ad'
+        for ad in self.flag_adcs:
+            cmd += ' %d' %ad
+        self.send_serial_data(cmd + '\n')
+        time.sleep(0.1)
+        s.send_serial_data('format 2\n')
+        time.sleep(0.1)
+        self.data_format = 2
+        time.sleep(5.0)        
+        self.send_serial_data('start\n')
+        self.print_serial_data = False
+
                 
                 
     def start_converting_raw_data(self):
@@ -219,34 +280,37 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
         """
         funcname = self.__class__.__name__ + '.start_converting_raw_data()'
-        logger.debug(funcname)
+        self.logger.debug(funcname)
         deque = collections.deque(maxlen=self.dequelen)
         self.deques_raw_serial.append(deque)
-        # Adding two streams, from ltc0 and ltc1
+        # Adding a stream with all ltcs
         timevar = pymqdatastream.StreamVariable('time','seconds','float')
-        datavar = pymqdatastream.StreamVariable('data_ad0','V','float')        
-        variables = [timevar,datavar]
+        packetvar = pymqdatastream.StreamVariable('packet','number','int')
+        variables = [packetvar,timevar]
         
-        name = 'sam4log_ad0'
+        for ad in self.flag_adcs:
+            datavar = pymqdatastream.StreamVariable('ad ' + str(ad),'V','float')
+            variables.append(datavar)
+
+        name = 'sam4log'
         self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
-        datavar = pymqdatastream.StreamVariable('data_ad1','V','float')        
-        variables = [timevar,datavar]        
-        name = 'sam4log_ad1'
-        #self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)        
-        logger.debug(funcname + ': Starting thread')
+        self.logger.debug(funcname + ': Starting thread')
         streams = self.Streams[-1:]
-        self.convert_thread = threading.Thread(target=self.convert_raw_data_format0,args = (deque,streams))
+        # Analyse data format, choose the right conversion functions and start a conversion thread
+        self.init_data_format_functions()
+
+        self.convert_thread = threading.Thread(target=self.convert_raw_data,args = (deque,streams))
         self.convert_thread.daemon = True
         self.convert_thread.start()            
-        logger.debug(funcname + ': Starting thread done')
+        self.logger.debug(funcname + ': Starting thread done')
         
         
-    def convert_raw_data(self, deque, streams, dt = 0.05):
+    def convert_raw_data_old(self, deque, streams, dt = 0.05):
         """
         Converts raw data which is popped from the deque given as argument
         """
         funcname = self.__class__.__name__ + '.convert_raw_data()'
-        logger.debug(funcname)
+        self.logger.debug(funcname)
         ad0_converted = 0
         data_str = ''
         while True:
@@ -293,7 +357,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                         data1.append(data_tmp)
                         ad0_converted += 1
                     except Exception as e:
-                        logger.debug(funcname + ': Exception:' + str(e))
+                        self.logger.debug(funcname + ': Exception:' + str(e))
 
 
 
@@ -318,7 +382,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         ,
         """
         funcname = self.__class__.__name__ + '.convert_raw_data_format0()'
-        logger.debug(funcname)
+        self.logger.debug(funcname)
         ad0_converted = 0
         data_str = ''
         while True:
@@ -352,31 +416,108 @@ class sam4logDataStream(pymqdatastream.DataStream):
                         data_tmp = [timer_seconds,data_V]
                         data0.append(data_tmp)            
                     else:
-                        logger.debug(funcname + ': no a valid format 0 string:')
+                        self.logger.debug(funcname + ': no a valid format 0 string:')
 
 
             # Push the read data
             ti = time.time()
             
             if(len(data0)>0):
-                streams[0].pub_data(data0)                
+                streams[0].pub_data(data0)
+                print(data0)
                 #data_dict0 = {'time':ti,'data':data0}
                 #data_json0 = json.dumps(data_dict0).encode('utf-8')
                 #streams[0].deque.appendleft(data_json0)
                 #streams[0].push_substream_data()
 
 
+    def convert_raw_data_format2(self, deque, streams, dt = 0.5):
+        """
+
+        Converts raw data of the format 2, which is popped from the deque
+        given as argument 
+
+        """
+        funcname = self.__class__.__name__ + '.convert_raw_data_format2()'
+        self.logger.debug(funcname)
+        ad0_converted = 0
+        data_str = ''
+        while True:
+            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
+            time.sleep(dt)
+            data_stream = []
+            while(len(deque) > 0):
+                data = deque.pop()
+                data_str += data
+                # Get commands first
+                for i,me in enumerate(re.finditer(r'[><][><][><].*\n',data_str)):
+                    print('COMMAND!',i)
+                    print(me)
+                    print(me.group(0))
+                    print(me.span(0))
+                    self.commands.append(me.group(0))
+                    
+            data_split = data_str.rsplit(b'\x00')
+            if(len(data_split) > 0):
+                if(len(data_split[-1]) == 0): # The last byte was a 0x00
+                   data_str = ''
+                else:
+                   data_str = data_split[-1]
+
+                for data_cobs in data_split:
+                    #print('Cobs data:')
+                    #print(data_cobs)
+                    if(len(data_cobs) > 17):
+                        try:
+                            data_decobs = cobs.decode(data_cobs)
+                            print(len(data_decobs))
+                            packet_ident    = data_decobs[0]
+                            packet_num_bin  = data_decobs[1:9]
+                            packet_num      = int(packet_num_bin.encode('hex'), 16)
+                            packet_time_bin  = data_decobs[9:17]
+                            packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0
+                            packet_flag_ltc = ord(data_decobs[17])
+                            num_ltcs        = bin(packet_flag_ltc).count("1")
+
+                            data_packet = [packet_num,packet_time]
+                            print(data_decobs.encode('hex_codec'))
+                            print(packet_num_bin.encode('hex_codec'))
+                            print(packet_time_bin.encode('hex_codec'))
+                            print(packet_flag_ltc)
+                            print(num_ltcs)
+                            for i in range(0,num_ltcs*3,3):
+                                data_ltc = data_decobs[18+i:18+i+3]
+                                print(data_ltc.encode('hex_codec'))
+                                data_ltc += chr(int('88',16))
+                                conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096)
+                                data_packet.append(conv['V'][0])
+
+                            data_stream.append(data_packet)
+                            print(data_packet)
+                        except cobs.DecodeError:
+                            print('DecodeError')
+                            pass
+        
+            if(len(data_stream)>0):
+                streams[0].pub_data(data_stream)
+            
+
                 
 if __name__ == '__main__':
     s = sam4logDataStream()
     s.add_serial_device('/dev/ttyUSB0')
+    #s.print_serial_data = True
     s.add_raw_data_stream()
-    #s.load_file('netstring_format1.log') 
-    s.start_converting_raw_data()
-    
+    #s.load_file('netstring_format1.log')
+
+    # Send a format 2 command
+    time.sleep(0.5)
+    s.init_sam4logger(flag_adcs = [0,2,4])
+    time.sleep(0.5)
+    s.start_converting_raw_data()    
     print(s.get_info_str('short'))
     while(True):
-        print('Raw bytes read ' + str(s.bytes_read))
-        print(s.get_info_str('short'))
+        #print('Raw bytes read ' + str(s.bytes_read))
+        #print(s.get_info_str('short'))
         time.sleep(5)
     

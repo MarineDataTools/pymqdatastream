@@ -95,8 +95,10 @@ def test_convert_binary():
     
 def convert_binary(ad_raw,ref_voltage=5.0):
     """ 
+
     Converts the LTC2442 binary data into voltage
     Input ad_raw has to be a 8 bit char
+
     """
     # ADC binary status bits (LTC datasheet page 11)
     #  31   30   29   28   27  ...  0 ( ad_32bit  )
@@ -126,11 +128,11 @@ def convert_binary(ad_raw,ref_voltage=5.0):
     Vref = 0.5 * (refp - refm)
     bout = (ad_data)
     if(SIG == 1):
-        bout_shift = ad_data
-    else:
         bout_shift = ad_data - (2**28)
+    else:
+        bout_shift = - ad_data
 
-    Vout = 1.0 * bout_shift/(2**28) * Vref
+    Vout = - 1.0 * bout_shift/(2**28) * Vref
     data_rec = recarray((1,), dtype=[('V', float64),('SIG', bool), ('DMY', bool),
                                      ('MSB', bool), ('FLAG_VALID', bool),])
     data_rec['V'] = Vout
