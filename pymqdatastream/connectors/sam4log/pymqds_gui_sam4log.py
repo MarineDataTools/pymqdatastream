@@ -97,8 +97,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.show_textdata.setReadOnly(True)
 
         self.show_textdata.appendPlainText("HALLO!!")
-
-
+        # Textdataformat of the show_textdata widget 0 str, 1 hex
+        self.__textdataformat = 0 
+        self.combo_format = QtWidgets.QComboBox()
+        self.combo_format.addItem('utf-8')
+        self.combo_format.addItem('hex')        
+        self.combo_format.activated.connect(self.__combo_format)
         self.show_comdata = QtWidgets.QPlainTextEdit()
         self.show_comdata.setReadOnly(True)     
 
@@ -108,14 +112,57 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         #self.timer.start(25)
         #self.show_textdata.clear()
 
+        #
+        # Add eight lcd numbers for the adc data
+        #
+        self._ad_widget = QtWidgets.QWidget()
+        ad_layoutV = QtWidgets.QVBoxLayout(self._ad_widget)
+
+
+        self.__ad_apply_bu = QtWidgets.QPushButton('Apply')
+        self.__ad_reset_bu = QtWidgets.QPushButton('Reset')
+        self.__ad_apply_bu.clicked.connect(self.__ad_check)
+        self.__ad_reset_bu.clicked.connect(self.__ad_update_check_state)
+        ad_widget_tmp = QtWidgets.QWidget()
+        ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
+        ad_layoutH.addWidget(self.__ad_apply_bu)
+        ad_layoutH.addWidget(self.__ad_reset_bu)        
+
+        ad_layoutV.addWidget(ad_widget_tmp)        
+
+        
+        self._ad_lcds = []
+        self._ad_check = []        
+        for i in range(8):
+            ad_lcd = QtWidgets.QLCDNumber(self)
+            ad_lcd.setDigitCount(8)
+            ad_check = QtWidgets.QCheckBox('AD ' + str(i))
+            self._ad_lcds.append(ad_lcd)
+            self._ad_check.append(ad_check)
+            ad_widget_tmp = QtWidgets.QWidget()
+            ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
+            ad_layoutH.addWidget(ad_check)            
+            ad_layoutH.addWidget(ad_lcd)
+            ad_layoutV.addWidget(ad_widget_tmp)
+
+
+
+
+
+        # The main layout
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
+        layout.addWidget(self.combo_format,1,0)        
         layout.addWidget(self.serial_open_bu,0,2)
         layout.addWidget(self.bytesreadlcd,0,3)
         layout.addWidget(self.send_le,1,2)
         layout.addWidget(send_bu,1,3)
         layout.addWidget(self.show_textdata,2,0,2,2)
         layout.addWidget(self.show_comdata,2,2,2,2)
+        
+        layout.addWidget(self._ad_widget,2,4,2,1)        
+
+
         
         self.setCentralWidget(self.mainwidget)
         
@@ -138,7 +185,13 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.dequetimer = QtCore.QTimer(self)
         self.dequetimer.setInterval(100)
         self.dequetimer.timeout.connect(self.poll_deque)
-        self.dequetimer.start()                
+        self.dequetimer.start()
+
+
+        self.intraqueuetimer = QtCore.QTimer(self)
+        self.intraqueuetimer.setInterval(100)
+        self.intraqueuetimer.timeout.connect(self.__poll_intraqueue)
+        self.intraqueuetimer.start()                        
 
 
     def close_application(self):
@@ -160,34 +213,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self.combo_serial.addItem(str(port))
 
 
-    def open_close_serial(self):
-        """
-        """
-
-        
-        ser = str(self.combo_serial.currentText())
-        b = int(self.combo_baud.currentText())
-        print(ser,b)
-        if(self.sam4log == None):
-            print('Opening port' + ser + ' with baudrate ' + str(b))
-            self.sam4log.add_serial_device(ser,baud=b)
-            return True
-        else:
-            print('Closing port ')
-            self.sam4log.stop_serial_data()
-            return True
-            #
-
-        #
-
-        return False
-
     def clicked_open_bu(self):
         """
         """
         t = self.serial_open_bu.text()
         print('Click ' + str(t))
-        #ret = self.open_close_serial()
         if True:
             if(t == 'open'):
                 ser = str(self.combo_serial.currentText())
@@ -196,6 +226,10 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 print('Opening port' + ser + ' with baudrate ' + str(b))
                 self.sam4log.add_serial_device(ser,baud=b)
                 self.sam4log.add_raw_data_stream()
+                time.sleep(0.2)
+                self.sam4log.init_sam4logger(flag_adcs = [0,2,4])
+                self.__ad_update_check_state()
+                time.sleep(0.2)                
                 self.sam4log.start_converting_raw_data()
             else:
                 self.sam4log.stop_serial_data()
@@ -223,22 +257,99 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def poll_deque(self):
         while(len(self.rawdata_deque) > 0):
             data = self.rawdata_deque.pop()
-            self.show_textdata.appendPlainText(str(data))
+            if(self.__textdataformat == 0):
+                try:
+                    data_str = data.encode('utf-8')
+                except UnicodeDecodeError:
+                    data_str = data.encode('hex')                    
+            elif(self.__textdataformat == 1):
+                data_str = data.encode('hex')
+
+            self.show_textdata.appendPlainText(str(data_str))
             
 
     def show_data(self):
         # Load data and plot
+        print('Hallo0')            
         while(len(self.stream.deque) > 0):
+            print('Hallo1')            
             data = self.stream.deque.pop()
-            # Convert the data to a str
-            data_str = self.data2str(data)
+            if(self.__textdataformat == 0):
+                try:
+                    data_str = data.encode('utf-8')
+                except UnicodeDecodeError:
+                    data_str = data.encode('hex')
+            elif(self.__textdataformat == 1):
+                data_str = data.encode('hex')
+                print(data_str)
+            else:
+                # Raw text format
+                data_str = self.data2str(data)
+                
             self.show_textdata.appendPlainText(data_str)
             #print(self.data2str_raw(data))
 
 
         self.stream_data.verticalScrollBar().setValue(
-            self.stream_data.verticalScrollBar().maximum())                
+            self.stream_data.verticalScrollBar().maximum())
 
+
+    def __ad_check(self):
+        """
+
+        Function called to change the adcs transmitted from the logger 
+
+        """
+
+        flag_adcs = []
+        for i,ad in enumerate(self._ad_check):
+            if(ad.isChecked()):
+                flag_adcs.append(i)
+
+        self.sam4log.init_sam4logger(flag_adcs,data_format=2)
+        print(flag_adcs)
+
+    def __ad_update_check_state(self):
+        """
+
+        Check the flag state in the sam4log class and updates the check
+
+        """
+
+        flag_adcs = self.sam4log.flag_adcs
+        for i in flag_adcs:
+            self._ad_check[i].setChecked(True)
+
+    def __poll_intraqueue(self):
+        """
+
+        Polling the intraque to fill the ad lcd numbers with data
+
+        """
+        data = []
+        while(len(self.sam4log.intraqueue) > 0):
+            data = self.sam4log.intraqueue.pop()
+            print('Hallo!',data)
+
+        #show the last dataset
+        if(len(data)>0):
+            for i,n in enumerate(self.sam4log.flag_adcs):
+                self._ad_lcds[n].display(data[-1][i+2])
+
+
+    def __combo_format(self):
+        """
+        """
+        f = self.combo_format.currentText()
+        print(f)            
+        if(f == 'utf-8'):
+            self.__textdataformat = 0
+        if(f == 'hex'):
+            self.__textdataformat = 1
+
+        print(self.__textdataformat)
+            
+    
 
 # If run from the command line
 if __name__ == "__main__":

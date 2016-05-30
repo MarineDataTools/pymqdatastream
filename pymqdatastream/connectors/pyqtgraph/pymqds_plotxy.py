@@ -196,15 +196,11 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 streamx_txt = 'X Data: ' + strvar_x + ' (' + str(ind_x) + ')'
                 streamy_txt = 'Y Data: ' + strvar_y + ' (' + str(ind_y) + ')'
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [streamx_txt])
-                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, ['X'])
-                self.button_X = QtWidgets.QPushButton('Change X')
-                self.button_X.clicked.connect(self.handle_button_XY_clicked)
-                self.button_X.stream = childitem.stream
-                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , self.button_X)
-
-                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [streamy_txt])                
+                childitem.stream.pyqtgraph['itemX'] = grandchilditem
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [streamy_txt])
+                childitem.stream.pyqtgraph['itemY'] = grandchilditem                                
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, ['Y'])
-                self.button_Y = QtWidgets.QPushButton('Change Y')
+                self.button_Y = QtWidgets.QPushButton('Change X/Y data')
                 self.button_Y.clicked.connect(self.handle_button_XY_clicked)                
                 self.button_Y.stream = childitem.stream
                 self.treeWidgetsub.setItemWidget(grandchilditem, 0 , self.button_Y)
@@ -245,17 +241,55 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         
         """
         print('Clicked XY')
-        layout = QtGui.QVBoxLayout()  # layout for the central widget
-        widget = QtGui.QWidget()  # central widget
-        widget.setLayout(layout)
-        self._number_group=QtWidgets.QButtonGroup() # Number group
-        self._number_group.buttonClicked[QtWidgets.QAbstractButton].connect(self.XY_group_clicked)
         button = self.sender()
-        for i,var in enumerate(button.stream.variables):
-            r0 = QtGui.QRadioButton(str(i) + ': ' + var['name'])
-            self._number_group.addButton(r0)
-            layout.addWidget(r0)            
+        
+        layoutH = QtGui.QHBoxLayout()  # layout for the central widget
+        widget = QtGui.QWidget()  # central widget        
+        widget.setLayout(layoutH)        
+        layoutX = QtGui.QVBoxLayout()  # layout for the central widget
+        layoutY = QtGui.QVBoxLayout()  # layout for the central widget        
+        widgetX = QtGui.QWidget()  # central widget        
+        widgetX.setLayout(layoutX)
+        widgetY = QtGui.QWidget()  # central widget        
+        widgetY.setLayout(layoutY)
+        layoutH.addWidget(widgetX)
+        layoutH.addWidget(widgetY)
 
+        self._number_groupX=QtWidgets.QButtonGroup() # Number group
+        self._number_groupY=QtWidgets.QButtonGroup() # Number group        
+
+        self._number_groupX.buttonClicked[QtWidgets.QAbstractButton].connect(self.XY_group_clicked)
+        self._number_groupY.buttonClicked[QtWidgets.QAbstractButton].connect(self.XY_group_clicked)
+        # To get the indices
+        self._number_groupX.pyqtgraph = button.stream.pyqtgraph
+        self._number_groupY.pyqtgraph = button.stream.pyqtgraph        
+        
+
+            
+        labX = QtWidgets.QLabel('X-Axis')
+        labY = QtWidgets.QLabel('Y-Axis')
+        layoutX.addWidget(labX)
+        layoutY.addWidget(labY)
+        for i,var in enumerate(button.stream.variables):
+            rX = QtGui.QRadioButton(str(i) + ': ' + var['name'])
+            rX.var_ind = i
+            rX.var_name = var['name']            
+            self._number_groupX.addButton(rX)
+            layoutX.addWidget(rX)
+
+            rY = QtGui.QRadioButton(str(i) + ': ' + var['name'])
+            rY.var_ind = i
+            rY.var_name = var['name']
+            self._number_groupY.addButton(rY)
+            layoutY.addWidget(rY)               
+
+        self._button_XY_appl = QtWidgets.QPushButton('Apply')
+        self._button_XY_cancl = QtWidgets.QPushButton('Cancel')        
+        self._button_XY_appl.clicked.connect(self.handle_button_XY_appl_cancl_clicked)
+        self._button_XY_cancl.clicked.connect(self.handle_button_XY_appl_cancl_clicked)
+
+        layoutX.addWidget(self._button_XY_appl)
+        layoutY.addWidget(self._button_XY_cancl)
 
         self._XY_widget = widget
         print('Clicked XY show')        
@@ -263,48 +297,51 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         print('Clicked XY end')
 
     def XY_group_clicked(self,btn):
-        print('Hallo' + str(btn.text()))
-
-class pyqtgraphMainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
-        QtWidgets.QMainWindow.__init__(self)
+        #print(self.sender().text())
+        print('Hallo' + str(btn.text()),btn.var_ind)
+        #if(self.sender() == self._number_groupX):
+        #    print('X-Axis')
+        #    self._number_groupX.pyqtgraph['ind_x'] = btn.var_ind
+        #if(self.sender() == self._number_groupY):
+        #    print('Y-Axis')
+        #    self._number_groupY.pyqtgraph['ind_y'] = btn.var_ind            
         
-        mainMenu = self.menuBar()
-        self.setWindowTitle("Python Zeromq Datastream_PlotXY")
-        self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
-        extractAction = QtWidgets.QAction("&Quit", self)
-        extractAction.setShortcut("Ctrl+Q")
-        extractAction.setStatusTip('Closing the program')
-        extractAction.triggered.connect(self.close_application)
+    def handle_button_XY_appl_cancl_clicked(self):
+        ind_x = self._number_groupX.checkedButton().var_ind
+        ind_y = self._number_groupY.checkedButton().var_ind
+        name_x = self._number_groupX.checkedButton().var_name
+        name_y = self._number_groupY.checkedButton().var_name       
+        print(ind_x,ind_y)
+        if(self.sender() == self._button_XY_appl):
+            self._number_groupX.pyqtgraph['ind_x'] = ind_x
+            self._number_groupY.pyqtgraph['ind_y'] = ind_y
+            streamx_txt = 'X Data: ' + name_x + ' (' + str(ind_x) + ')'            
+            self._number_groupY.pyqtgraph['itemX'].setText(0,streamx_txt)
+            streamy_txt = 'Y Data: ' + name_y + ' (' + str(ind_y) + ')'
+            self._number_groupY.pyqtgraph['itemY'].setText(0,streamy_txt)            
+            self._XY_widget.close()            
+        if(self.sender() == self._button_XY_cancl):
+            self._XY_widget.close()
 
-        fileMenu = mainMenu.addMenu('&File')
-        fileMenu.addAction(extractAction)
-        
-        self.statusBar()
-
-
-        # Add the pyqtgraphWidget
-        self.pyqtgraphwidget = pyqtgraphWidget()
-        self.setCentralWidget(self.pyqtgraphwidget)
-        
-        self.show()
-        #self.pyqtgraphwidget.show()
-
-    def close_application(self):
-        print('Goodbye!')
-        self.pyqtgraphwidget.update_timer.stop()        
-        self.close()
 
         
 class pyqtgraphWidget(QtWidgets.QWidget):
-    def __init__(self):
+    """
+    
+    Widget to plot data
+
+    """
+    def __init__(self,bufsize = 20000):
+        """
+        
+        Args:
+           bufsize: size of the data buffer, if filled half it is swapped. 
+        """
         QtWidgets.QWidget.__init__(self)
         self.Datastream = pymqdatastream.DataStream(name = 'plotxy')
         list_status = []
         self.color_ind = 0
         # Datastream stuff
-
-
         self.datastream_subscribe = DataStreamChoosePlotWidget(self.Datastream,hide_myself = True)
 
         # The pyqtgraph stuff
@@ -332,7 +369,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.update_timer = timer
         
         self.setLayout(layout)
-        self.bufsize = 20000
+        self.bufsize = bufsize
         self.buf_tilesize = int ( 0.5 * self.bufsize )
         
 
@@ -407,6 +444,37 @@ class pyqtgraphWidget(QtWidgets.QWidget):
     def handlePlot(self):
         print('Plotting Streams...')
         #self.plot_streams = True
+
+
+class pyqtgraphMainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        QtWidgets.QMainWindow.__init__(self)
+        
+        mainMenu = self.menuBar()
+        self.setWindowTitle("Python Zeromq Datastream_PlotXY")
+        self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
+        extractAction = QtWidgets.QAction("&Quit", self)
+        extractAction.setShortcut("Ctrl+Q")
+        extractAction.setStatusTip('Closing the program')
+        extractAction.triggered.connect(self.close_application)
+
+        fileMenu = mainMenu.addMenu('&File')
+        fileMenu.addAction(extractAction)
+        
+        self.statusBar()
+
+
+        # Add the pyqtgraphWidget
+        self.pyqtgraphwidget = pyqtgraphWidget(bufsize = 5000000)
+        self.setCentralWidget(self.pyqtgraphwidget)
+        
+        self.show()
+        #self.pyqtgraphwidget.show()
+
+    def close_application(self):
+        print('Goodbye!')
+        self.pyqtgraphwidget.update_timer.stop()        
+        self.close()        
 
 
 
