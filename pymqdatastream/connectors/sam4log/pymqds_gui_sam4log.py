@@ -329,7 +329,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         data = []
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
-            print('Hallo!',data)
+            #print('Hallo!',data)
 
         #show the last dataset
         if(len(data)>0):

@@ -125,13 +125,13 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.logger.debug(funcname + ': Could not open device at: ' + str(port))
 
             
-    def read_serial_data(self, dt = 0.005):
+    def read_serial_data(self, dt = 0.003):
         """
 
         The serial data polling thread
 
         Args:
-            dt: Sleeping time between polling [default 0.005]
+            dt: Sleeping time between polling [default 0.003]
 
         """
         funcname = self.__class__.__name__ + '.read_serial_data()'
@@ -481,12 +481,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     #print(data_cobs)
                     try:
                         data_decobs = cobs.decode(data_cobs)
-                        self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
+                        #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
                         if(len(data_cobs) > 3):
                             packet_ident    = ord(data_decobs[0])
-                            self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
+                            #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
                             if(packet_ident == 0xad):
-                                print('gut')
                                 packet_flag_ltc = ord(data_decobs[1])
                                 num_ltcs        = bin(packet_flag_ltc).count("1")
                                 packet_size = 5 + 8 + 8 + num_ltcs * 3
@@ -494,10 +493,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                 packet_com_ltc1 = ord(data_decobs[3])
                                 packet_com_ltc2 = ord(data_decobs[4])
                                 ind = 5
-                                self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
-                                self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
-                                self.logger.debug(funcname + ': packet_size ' + str(packet_size))
-                                self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
+                                #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
+                                #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
+                                #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
+                                #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
                                 if(len(data_cobs) >= packet_size):
                                         packet_num_bin  = data_decobs[ind:ind+8]
                                         packet_num      = int(packet_num_bin.encode('hex'), 16)
@@ -506,11 +505,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                         packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0
                                         data_packet = [packet_num,packet_time]
                                         ind += 8
-                                        self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.encode('hex_codec'))
-                                        self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.encode('hex_codec'))                                        
+                                        #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.encode('hex_codec'))
+                                        #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.encode('hex_codec'))                                        
                                         for i in range(0,num_ltcs*3,3):
                                             data_ltc = data_decobs[ind+i:ind+i+3]
-                                            print(data_ltc.encode('hex_codec'))
                                             data_ltc += chr(int('88',16))
                                             if(len(data_ltc) == 4):
                                                 conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096)
@@ -527,7 +525,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             if(len(data_stream)>0):
                 streams[0].pub_data(data_stream)
                 self.intraqueue.appendleft(data_stream)
-                print(data_stream)
+                #print(data_stream)
             
 
                 
