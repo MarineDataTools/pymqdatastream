@@ -100,7 +100,7 @@ def convert_binary(ad_raw,ref_voltage=5.0,Voff = 0, Vlarge = 9.9999, Vsmall = -9
     Input ad_raw has to be a 8 bit char
 
     Args:
-       ad_raw: raw binary data as a char string ( python2 ) or binary ( python3 )
+       ad_raw: raw binary data as a char string of length 4 ( python2 ) or binary ( python3 )
        ref_voltage: Reference voltage of (VREF in LTC2442 Datasheet)
        Voff: Offset voltage to be added to the result. 
        Vlarge: Output voltage if measured voltage is above ref_voltage [default:  9.9999]

@@ -511,7 +511,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                             data_ltc = data_decobs[ind+i:ind+i+3]
                                             data_ltc += chr(int('88',16))
                                             if(len(data_ltc) == 4):
-                                                conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096)
+                                                #print('data_ltc:',data_ltc.encode('hex'))
+                                                conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
                                                 data_packet.append(conv['V'][0])
                                             else:
                                                 data_packet.append(9999.99)
@@ -538,7 +539,7 @@ if __name__ == '__main__':
 
     # Send a format 2 command
     time.sleep(0.5)
-    s.init_sam4logger(flag_adcs = [0,2,4],data_format=2)
+    s.init_sam4logger(flag_adcs = [0],data_format=2)
     s.query_sam4logger()
     time.sleep(0.5)
     #s.print_serial_data = True    

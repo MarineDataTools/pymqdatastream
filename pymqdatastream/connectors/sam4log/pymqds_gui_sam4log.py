@@ -13,9 +13,13 @@ import serial
 import glob
 import collections
 import time
+import multiprocessing
+#import subprocess
 import pymqdatastream
 import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
+import pymqdatastream.connectors.pyqtgraph.pymqds_plotxy as pymqds_plotxy
 import pymqds_sam4log
+
 
 
 def serial_ports():
@@ -52,6 +56,22 @@ def serial_ports():
 
 
 baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
+
+
+
+def _start_pymqds_plotxy():
+    """
+    
+    Start a pymqds_plotxy session
+    
+    """
+
+    print('AFDFS')
+    app = QtWidgets.QApplication([])
+    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow()
+    plotxywindow.show()
+    sys.exit(app.exec_())    
+    print('FSFDS')    
 
 
 class sam4logMainWindow(QtWidgets.QMainWindow):
@@ -93,10 +113,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         send_bu = QtWidgets.QPushButton('send')
         send_bu.clicked.connect(self.clicked_send_bu)
 
+        # Show the raw data of the logger
         self.show_textdata = QtWidgets.QPlainTextEdit()
         self.show_textdata.setReadOnly(True)
-
-        self.show_textdata.appendPlainText("HALLO!!")
+        self.check_show_textdata = QtWidgets.QCheckBox('Show data')
+        self.check_show_textdata.setChecked(True)
+        self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
         # Textdataformat of the show_textdata widget 0 str, 1 hex
         self.__textdataformat = 0 
         self.combo_format = QtWidgets.QComboBox()
@@ -104,17 +126,26 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.combo_format.addItem('hex')        
         self.combo_format.activated.connect(self.__combo_format)
         self.show_comdata = QtWidgets.QPlainTextEdit()
-        self.show_comdata.setReadOnly(True)     
+        self.show_comdata.setReadOnly(True)
 
-        # timer to read the data of the stream
-        self.show_timer = QtCore.QTimer(self)
-        self.show_timer.timeout.connect(self.show_data)
-        #self.timer.start(25)
-        #self.show_textdata.clear()
+
+        #
+        # An information, saving, loading and plotting widget
+        #
+        self._infosaveloadplot_widget = QtWidgets.QWidget()
+        info_layout = QtWidgets.QGridLayout(self._infosaveloadplot_widget)
+        
+        self.__info_record_bu = QtWidgets.QPushButton('Record')
+        self.__info_plot_bu = QtWidgets.QPushButton('Plot')
+        self.__info_plot_bu.clicked.connect(self.__plot_clicked)
+
+        info_layout.addWidget(self.__info_record_bu,0,0)
+        info_layout.addWidget(self.__info_plot_bu,0,1)        
 
         #
         # Add eight lcd numbers for the adc data
         #
+        
         self._ad_widget = QtWidgets.QWidget()
         ad_layoutV = QtWidgets.QVBoxLayout(self._ad_widget)
 
@@ -152,18 +183,19 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # The main layout
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
-        layout.addWidget(self.combo_format,1,0)        
+        layout.addWidget(self.combo_format,1,1)
+        layout.addWidget(self.check_show_textdata,1,0)
         layout.addWidget(self.serial_open_bu,0,2)
         layout.addWidget(self.bytesreadlcd,0,3)
         layout.addWidget(self.send_le,1,2)
         layout.addWidget(send_bu,1,3)
         layout.addWidget(self.show_textdata,2,0,2,2)
         layout.addWidget(self.show_comdata,2,2,2,2)
-        
+
+        layout.addWidget(self._infosaveloadplot_widget,0,4)
         layout.addWidget(self._ad_widget,2,4,2,1)        
 
 
-        
         self.setCentralWidget(self.mainwidget)
         
         self.show()
@@ -257,42 +289,18 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def poll_deque(self):
         while(len(self.rawdata_deque) > 0):
             data = self.rawdata_deque.pop()
-            if(self.__textdataformat == 0):
-                try:
-                    data_str = data.encode('utf-8')
-                except UnicodeDecodeError:
-                    data_str = data.encode('hex')                    
-            elif(self.__textdataformat == 1):
-                data_str = data.encode('hex')
-
-            self.show_textdata.appendPlainText(str(data_str))
-            
-
-    def show_data(self):
-        # Load data and plot
-        print('Hallo0')            
-        while(len(self.stream.deque) > 0):
-            print('Hallo1')            
-            data = self.stream.deque.pop()
-            if(self.__textdataformat == 0):
-                try:
-                    data_str = data.encode('utf-8')
-                except UnicodeDecodeError:
+            if(self.check_show_textdata.isChecked()):            
+                if(self.__textdataformat == 0):
+                    try:
+                        data_str = data.encode('utf-8')
+                    except UnicodeDecodeError:
+                        data_str = data.encode('hex')                    
+                elif(self.__textdataformat == 1):
                     data_str = data.encode('hex')
-            elif(self.__textdataformat == 1):
-                data_str = data.encode('hex')
-                print(data_str)
-            else:
-                # Raw text format
-                data_str = self.data2str(data)
-                
-            self.show_textdata.appendPlainText(data_str)
-            #print(self.data2str_raw(data))
 
 
-        self.stream_data.verticalScrollBar().setValue(
-            self.stream_data.verticalScrollBar().maximum())
-
+                self.show_textdata.appendPlainText(str(data_str))
+            
 
     def __ad_check(self):
         """
@@ -348,7 +356,23 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self.__textdataformat = 1
 
         print(self.__textdataformat)
-            
+
+
+    def __plot_clicked(self):
+        """
+        
+        Starts a plotting process ( at the moment pymqds_plotxy )
+
+        """
+
+        print('Plotting')
+        # http://stackoverflow.com/questions/29556291/multiprocessing-with-qt-works-in-windows-but-not-linux
+        # this does not work with python 2.7 
+        multiprocessing.set_start_method('spawn')
+        self.__plotxyprocess = multiprocessing.Process(target=_start_pymqds_plotxy)
+        self.__plotxyprocess.start()
+
+
     
 
 # If run from the command line
