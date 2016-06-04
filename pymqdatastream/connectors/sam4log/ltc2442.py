@@ -93,11 +93,21 @@ def test_convert_binary():
     print('Voltage: ','{:2.20f}'.format(ret_test_5['V'][0]))
     print('\n\n'    )
     
-def convert_binary(ad_raw,ref_voltage=5.0):
+def convert_binary(ad_raw,ref_voltage=5.0,Voff = 0, Vlarge = 9.9999, Vsmall = -9.9999):
     """ 
 
     Converts the LTC2442 binary data into voltage
     Input ad_raw has to be a 8 bit char
+
+    Args:
+       ad_raw: raw binary data as a char string ( python2 ) or binary ( python3 )
+       ref_voltage: Reference voltage of (VREF in LTC2442 Datasheet)
+       Voff: Offset voltage to be added to the result. 
+       Vlarge: Output voltage if measured voltage is above ref_voltage [default:  9.9999]
+       Vsmall: Output voltage if measured voltage is below ref_voltage [default: -9.9999]
+    Returns:
+       data_rec: recarray((1,), dtype=[('V', float64),('SIG', bool), ('DMY', bool),
+                                     ('MSB', bool), ('FLAG_VALID', bool),])
 
     """
     # ADC binary status bits (LTC datasheet page 11)
@@ -113,6 +123,7 @@ def convert_binary(ad_raw,ref_voltage=5.0):
     if((SIG == True) & (MSB == True)): # LTC datasheet page 11
        cons = 'Vin > 0.5 * Vref BAD'
        FLAG_VALID = False
+       Vout = Vsmall
     if((SIG == True) & (MSB == False)): # LTC datasheet page 11
        cons = ' 0 <= Vin < 0.5 * Vref GOOD'
        FLAG_VALID = True
@@ -122,17 +133,20 @@ def convert_binary(ad_raw,ref_voltage=5.0):
     if((SIG == False) & (MSB == False)): # LTC datasheet page 11
        cons = 'Vin < -0.5 * Vref BAD'
        FLAG_VALID = False
+       Vout = Vlarge       
 
-    refp = ref_voltage
-    refm = 0.0
-    Vref = 0.5 * (refp - refm)
-    bout = (ad_data)
-    if(SIG == 1):
-        bout_shift = ad_data - (2**28)
-    else:
-        bout_shift = - ad_data
+    if(FLAG_VALID):
+        refp = ref_voltage
+        refm = 0.0
+        Vref = 0.5 * (refp - refm)
 
-    Vout = - 1.0 * bout_shift/(2**28) * Vref
+        if(SIG == 1):
+            bout_shift = - ad_data 
+        else:
+            bout_shift = (2**28) - ad_data
+
+        Vout = 1.0 * bout_shift/(2**28) * Vref + Voff
+        
     data_rec = recarray((1,), dtype=[('V', float64),('SIG', bool), ('DMY', bool),
                                      ('MSB', bool), ('FLAG_VALID', bool),])
     data_rec['V'] = Vout
@@ -140,6 +154,7 @@ def convert_binary(ad_raw,ref_voltage=5.0):
     data_rec['DMY'] = DMY
     data_rec['MSB'] = MSB
     data_rec['FLAG_VALID'] = FLAG_VALID
+
     return data_rec
 
 
