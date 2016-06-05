@@ -109,15 +109,19 @@ class qtloggerWidget(QtWidgets.QWidget):
 
         """
         self.log_fnum += 1
-        fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file')
-        str_tree = str(self.log_fnum)  + ' ' + str(fname[0].rsplit('/')[-1]) # This rsplit will prob. not work in windows ?!
+        fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "UBJSON (*.ubjson);; All files (*)");
+        print('fname',fname)
+        if(len(fname[0]) > 0):
+            str_tree = str(self.log_fnum)  + ' ' + str(fname[0].rsplit('/')[-1]) # This rsplit will prob. not work in windows ?!
+            # Create a logger datastream object
+            logger.debug('Creating LoggerDatastrem with file:' + str(fname[0]))
+            logDS = pymqds_logger.LoggerDataStream(filename=fname[0], name = 'logger gui: ' + str_tree, logging_level = self.logging_level)
+            self.log_datastreams.append(logDS)
+            file_item = self.addParent(self.tree_files.invisibleRootItem(), 0, str_tree, fname)
+            file_item.LoggerDataStream = logDS
 
-        # Create a logger datastream object
-        logger.debug('Creating LoggerDatastrem with file:' + str(fname[0]))
-        logDS = pymqds_logger.LoggerDataStream(filename=fname[0], name = 'logger gui: ' + str_tree, logging_level = self.logging_level)
-        self.log_datastreams.append(logDS)
-        file_item = self.addParent(self.tree_files.invisibleRootItem(), 0, str_tree, fname)
-        file_item.LoggerDataStream = logDS
+        else:
+            logger.debug('no file choosen')
 
     def add_stream(self):
         """ Adds a stream to the choosen datastream log object, stream is

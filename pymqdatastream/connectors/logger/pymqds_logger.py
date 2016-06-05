@@ -63,7 +63,8 @@ class LoggerDataStream(pymqdatastream.DataStream):
         self.log_streams = []
 
         if filename is not None:
-            self.lf = LoggerFile(filename,'w')
+            self.lf = LoggerFile(filename,'wb')
+            self.lf.fill_loggerstreamdata = True
             self.filename = filename
         else:
             raise Exception("Need a file to log to")
@@ -100,6 +101,7 @@ class LoggerDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.log_stream()'        
         self.logger.debug(funcname)
         new_subscription = True
+        #stream = None
         for sub_stream in self.Streams:
             if( stream == sub_stream ):
                 new_subscription = False
@@ -116,6 +118,7 @@ class LoggerDataStream(pymqdatastream.DataStream):
             self.Streams[-1].log_stream_number = self.first_free_log_number
             self.stream_header = self.get_stream_header()
             self.first_free_log_number += 1
+            self.lf.add_streamdata(self.stream_header['streams'][-1])
             # Stops an already running data writing thread and restarts it
             if(self.logging):
                 self.stop_poll_data_thread()
@@ -137,7 +140,7 @@ class LoggerDataStream(pymqdatastream.DataStream):
         stream_header = self.stream_header
         if(len(self.log_streams) > 0):
             # Write the stream header, TODO this should be written only if the header changed
-            self.lf.write(stream_header)
+            self.lf.write_raw(stream_header)
             # Start the thread
             self.thread_queue = queue.Queue()
             self.thread_queue_answ = queue.Queue()            
@@ -193,7 +196,7 @@ class LoggerDataStream(pymqdatastream.DataStream):
                     data = [s.log_stream_number,data]
                     self.lf.write(data)
 
-            time.sleep(0.05)                    
+            time.sleep(0.05)
 
             
     def get_stream_header(self):
@@ -239,15 +242,20 @@ class LoggerDataStream(pymqdatastream.DataStream):
         self.filename = None
 
             
-
-
 class LoggerFile(object):
     """
+
+
+
     """
     def __init__(self,filename,mode):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
         self.filename = None
+        self.mode = mode
+        self.header = None
+        self.fill_loggerstreamdata = False
+        self.loggerstreams = []
         try:
             self.logger.debug('Opening file with mode ' + mode)
             self.f = open(filename,mode)
@@ -257,10 +265,10 @@ class LoggerFile(object):
 
 
         # Init the file and write a file info header
-        if(mode == 'w'):
+        if(mode == 'wb'):
             self.logger.debug('Writing header')
-            header = ['Start LoggerFile']
-            self.write(header)
+            self.header = {'desc':'pymds_logger LoggerFile','datatype':'ubjson','created':str(datetime.datetime.now())}
+            self.write_raw(self.header)
             self.sync()
 
             
@@ -286,20 +294,76 @@ class LoggerFile(object):
 
         return data_decode_all
 
+    
     def write(self,data):
-        ubdata = ubjson.dumpb(data)
-        ubdata = ubdata + b'\n'
-        print('Writing')
-        self.f.write(ubdata)
+        """
+        Writes data to file and to the loggerstreamdataobjects
+        """
 
+        if(self.mode == 'wb'):
+            ubdata = ubjson.dumpb(data)
+            ubdata = ubdata + b'\n'
+            print('Writing')
+            self.f.write(ubdata)
+        if(self.fill_loggerstreamdata):
+            log_stream_number = data[0]            
+            loggerstream_ind = self.loggerstream_num2ind[log_stream_number]
+            self.loggerstreams[loggerstream_ind].add_data(data[1])
+
+            
     def sync(self):
-        self.f.flush()        
+        self.f.flush()
 
+        
     def close(self):
         try:
             self.f.close()
         except:
             self.logger.warning('Could not close file: ' + self.filename)
+
+            
+    def write_raw(self,data):
+        """
+        """
+        ubdata = ubjson.dumpb(data)
+        ubdata = ubdata + b'\n'
+        print('Writing header')
+        self.f.write(ubdata)
+
+
+    def add_streamdata(self,header):
+        self.loggerstreams.append(LoggerStreamData(header))
+        # Make an index of the log_stream number
+        log_stream_numbers = []
+        for loggerstream in self.loggerstreams:
+            log_stream_numbers.append(loggerstream.header['n'])
+
+
+
+        loggerstream_index = [[]]*(max(log_stream_numbers) + 1)
+        for i,num in enumerate(log_stream_numbers):
+            loggerstream_index[num] = i
+
+        self.loggerstream_num2ind = loggerstream_index
+        
+
+
+class LoggerStreamData(object):
+    """Data of a pymqdatastream with all neccessary information
+    conveniently stored in this object
+
+    """
+
+    def __init__(self,header):
+        """
+        """
+        self.header = header
+
+    def add_data(self,data):
+        """
+        """
+        print('Add data',data)
+        pass
             
 
 # Test logger function
@@ -327,7 +391,6 @@ def test():
     randDS = pymqdatastream.rand.RandDataStream()
     rstream = randDS.add_random_stream()
 
-
     #if(args.log_stream == None):
     #    print('No stream to add')
     #else:
@@ -346,7 +409,7 @@ def test():
     loggerDS.close_file()
     print('File written')
     print('Read file')    
-    lfile = LoggerFile(filename,'r')
+    lfile = LoggerFile(filename,'rb')
     lfile.read()
     
     print('Test done')
