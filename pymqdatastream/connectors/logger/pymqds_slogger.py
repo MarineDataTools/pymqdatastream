@@ -25,10 +25,14 @@ logger.setLevel(logging.DEBUG)
 
 
 class LoggerDataStream(pymqdatastream.DataStream):
-    """ The LoggerDataStream
+    """The LoggerDataStream
 
-    Creates a file of subscribed streams in ubjson format:
-    
+    Creates a file of subscribed streams in ubjson format New streams
+    are added with log_stream() Whenever a new stream is added a new
+    dictionary with all streams are written to the file, each stream
+    has a unique stream number. This number is used to create a short
+    identifier
+
     """
     def __init__(self, **kwargs):
         """ The __init__ function
@@ -177,26 +181,27 @@ class LoggerDataStream(pymqdatastream.DataStream):
         
         """
         funcname = self.__class__.__name__ + '.poll_data()'
-        print('data')
+
         while True:
-            try:
-                # If we got something, just quit!
-                data = self.thread_queue.get(block=False)
-                self.logger.debug(funcname + ': Got data:' + data)
-                self.logger.debug(funcname + ': Stopping thread')
-                self.lf.sync()                
-                self.thread_queue_answ.put('stopped')
-                break
-            except queue.Empty:
-                pass
-            
+            #print('hallo')
+            time.sleep(0.05)            
             for s in self.log_streams:
                 while(len(s.deque)>0):
                     data = s.deque.pop()
                     data = [s.log_stream_number,data]
                     self.lf.write(data)
 
-            time.sleep(0.05)
+            try:
+                # If we got something, just quit!
+                data = self.thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self.logger.debug(funcname + ': Stopping thread')
+                break
+            except queue.Empty as e:
+                pass
+
+        self.lf.sync()   
+        self.thread_queue_answ.put('stopped')
 
             
     def get_stream_header(self):
@@ -248,9 +253,9 @@ class LoggerFile(object):
 
 
     """
-    def __init__(self,filename,mode):
+    def __init__(self,filename,mode,logging_level=logging.WARNING):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging_level)
         self.filename = None
         self.mode = mode
         self.header = None
@@ -270,8 +275,19 @@ class LoggerFile(object):
             self.header = {'desc':'pymds_logger LoggerFile','datatype':'ubjson','created':str(datetime.datetime.now())}
             self.write_raw(self.header)
             self.sync()
-
+        # Read the first line and check if a header was found
+        elif(mode == 'rb'):
+            data = self.f.readline()
+            try:
+                data_decode = ubjson.loadb(data)
+                if(data_decode['desc'] == 'pymds_logger LoggerFile'):
+                    creation_time = data_decode['created']
+                    print('This is a good header! Of a file created at ' + creation_time)
+            except:
+                print('__init__: Could no decode:' + str(data))
+                pass                
             
+
     def read(self,n = None):
         """
         Args:
@@ -279,20 +295,42 @@ class LoggerFile(object):
             data_decode: List
         """
         print('Reading')
-        data_decode_all = []
-        data = ''
-        for line in self.f:
-            data += line
-            try:
-                data_decode = ubjson.loadb(data)
-                data = ''
-                data_decode_all.append(data_decode)
-                print(data_decode)
-            except:
-                print('Could no decode:' + str(data))
-                pass
+        if(self.mode == 'rb'):
+            data_decode_all = []
+            data = b''
+            for line in self.f:
+                data += line
+                try:
+                    data_decode = ubjson.loadb(data)
+                    data = b''
+                    self.interprete_data(data_decode)
+                    data_decode_all.append(data_decode)
+                    #print(data_decode)
+                except:
+                    print('Could no decode:' + str(data))
+                    pass
 
-        return data_decode_all
+            return data_decode_all
+
+    def interprete_data(self,data):
+        """
+
+        Interpretes the data read
+
+        """
+        # Test if we have a stream info dictionary
+        try:
+            streams = data['streams']
+            self.logger.debug('Found a stream info dictionary')
+            for s in streams:
+                print(s)
+                self.add_streamdata(s)
+                var = s['info']['variables']
+                print(var)
+        except:
+            pass
+
+            
 
     
     def write(self,data):
@@ -303,7 +341,7 @@ class LoggerFile(object):
         if(self.mode == 'wb'):
             ubdata = ubjson.dumpb(data)
             ubdata = ubdata + b'\n'
-            print('Writing')
+            print('Writing',data)
             self.f.write(ubdata)
         if(self.fill_loggerstreamdata):
             log_stream_number = data[0]            
@@ -358,13 +396,22 @@ class LoggerStreamData(object):
         """
         """
         self.header = header
+        variables = self.header['info']['variables']
+        self.variables = variables
+        self.data = []
 
     def add_data(self,data):
         """
         """
-        print('Add data',data)
-        pass
-            
+        #print('Add data',data)
+        for d in data['data']:
+            d_save = [data['info']['n'],data['info']['ts'],data['info']['tr']]
+            for dp in d:
+                d_save.append(dp)
+
+        #print(d_save)
+        self.data.append(d_save)
+
 
 # Test logger function
 def test():
@@ -452,10 +499,12 @@ if __name__ == '__main__':
 
     # Add stream to log and log
     logstream = loggerDS.log_stream(rstream)
+    print('Start write thread')
     loggerDS.start_write_data_thread()
-    time.sleep(5)
+    time.sleep(100)
+    print('Stop write thread')    
     ret = loggerDS.stop_poll_data_thread()
-    
+
     while True:
         print('Sleeping')
         print(loggerDS.get_info_str('short'))
@@ -463,5 +512,5 @@ if __name__ == '__main__':
         utc_str = utc_datetime.strftime("%Y-%m-%d %H:%M:%S")
         print(utc_datetime.strftime("%Y%m%d%H%M%S%f"))
         print(len(logstream.deque))
-        loggerDS.poll_data()
+        #loggerDS.poll_data()
         time.sleep(200)

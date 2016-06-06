@@ -53,7 +53,7 @@ class RandDataStream(pymqdatastream.DataStream):
         """
         self.add_pub_socket()
         timevar = pymqdatastream.StreamVariable(name = 'unix time', unit = 'seconds', datatype = 'float')
-        datavar = pymqdatastream.StreamVariable(name = 'data', unit = 'float')        
+        datavar = pymqdatastream.StreamVariable(name = 'data', datatype = 'float')        
         variables = [timevar,datavar]        
         name = 'random ' + str(dt) + ' ' + str(num_elements)
         stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
@@ -71,8 +71,8 @@ class RandDataStream(pymqdatastream.DataStream):
             num_elements: number of elements generated every dt
         """
         self.add_pub_socket()
-        timevar = pymqdatastream.StreamVariable(name = 'unix time',unit = 'float')
-        datavar = pymqdatastream.StreamVariable(name = 'data',unit = 'str')
+        timevar = pymqdatastream.StreamVariable(name = 'unix time',unit = 'seconds', datatype = 'float')
+        datavar = pymqdatastream.StreamVariable(name = 'data',datatype = 'str')
         variables = [timevar,datavar]
 
         name = 'random str ' + str(dt) + ' ' + str(num_elements)

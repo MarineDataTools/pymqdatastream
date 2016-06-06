@@ -24,9 +24,9 @@ setup(name='pymqdatastream',
                  'pymqdatastream/connectors/nmea/pymqds_NMEA0183.py',\
                  'pymqdatastream/connectors/qt/pymqds_qtoverview.py',\
                  'pymqdatastream/connectors/qt/pymqds_qtshowdata.py',\
-                 'pymqdatastream/connectors/logger/pymqds_logger.py',\
-                 'pymqdatastream/connectors/logger/pymqds_gui_logger.py'],
+                 'pymqdatastream/connectors/logger/pymqds_slogger.py',\
+                 'pymqdatastream/connectors/logger/pymqds_gui_slogger.py'],
       entry_points={ 'console_scripts': ['NMEA0183logger=pymqdatastream.connectors.nmea.NMEA0183grabber:main',\
-      'pymqds_test_logger=pymqdatastream.connectors.logger.pymqds_logger:test'], },
+      'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
       package_data = {'microrider':['data/*.DAT'],'':['VERSION']},
       zip_safe=False)
