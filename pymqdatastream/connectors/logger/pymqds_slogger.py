@@ -72,6 +72,7 @@ class LoggerDataStream(pymqdatastream.DataStream):
             self.filename = filename
         else:
             raise Exception("Need a file to log to")
+        
 
     def start_logging(self):
         funcname = self.__class__.__name__ + '.start_logging()'
@@ -80,6 +81,7 @@ class LoggerDataStream(pymqdatastream.DataStream):
             # Starts a data writing thread                
             self.start_write_data_thread()
             self.logger.debug(funcname + ': start logging thread')
+            
 
     def stop_logging(self):
         funcname = self.__class__.__name__ + '.stop_logging()'
@@ -277,6 +279,7 @@ class LoggerFile(object):
             self.sync()
         # Read the first line and check if a header was found
         elif(mode == 'rb'):
+            self.fill_loggerstreamdata = True            
             data = self.f.readline()
             try:
                 data_decode = ubjson.loadb(data)
@@ -284,10 +287,9 @@ class LoggerFile(object):
                     creation_time = data_decode['created']
                     print('This is a good header! Of a file created at ' + creation_time)
             except:
-                print('__init__: Could no decode:' + str(data))
-                pass                
+                self.logger.warning('Did not find a valid header. Will abort')
+                raise TypeError('Did not find a valid header. Wrong datatype in file')
             
-
     def read(self,n = None):
         """
         Args:
@@ -318,6 +320,15 @@ class LoggerFile(object):
         Interpretes the data read
 
         """
+        # Test if we have a list with the first member beeing a log_number
+        try:
+            log_stream_number = data[0]            
+            loggerstream_ind = self.loggerstream_num2ind[log_stream_number]
+            print('log number:', log_stream_number)
+            self.write(data)
+            return
+        except:
+            pass
         # Test if we have a stream info dictionary
         try:
             streams = data['streams']
@@ -327,6 +338,8 @@ class LoggerFile(object):
                 self.add_streamdata(s)
                 var = s['info']['variables']
                 print(var)
+
+            return
         except:
             pass
 

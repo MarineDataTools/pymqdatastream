@@ -4,3 +4,6 @@ import logging
 
 slogfile = pymqdatastream.slogger.LoggerFile('test.ubjson','rb',logging_level = logging.DEBUG)
 slogfile.read()
+
+
+print(slogfile.loggerstreams[-1].data)

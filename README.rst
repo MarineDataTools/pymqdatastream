@@ -42,3 +42,14 @@ Building the documentation from scratch
    
    cd pymqdatastream/doc
    make html
+
+Dependencies
+------------
+
+The datastream class relies on the `ZeroMQ
+<http://www.zeromq.org>`_ and the `ubjson
+<https://pypi.python.org/pypi/py-ubjson>`_ libraries.
+
+The connectors have their own specific needs:
+
+* pymqds_NMEA0183.py needs `pynmea2 <https://pypi.python.org/pypi/pynmea2>`_

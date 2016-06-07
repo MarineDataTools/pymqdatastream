@@ -106,11 +106,12 @@ class RandDataStream(pymqdatastream.DataStream):
         """
         c = 0
         npack = 0
+        Nchars = 60
         while True:
             data_all = []
             for n in range(num_elements):
                 ti = time.time()
-                chars = "".join( [random.choice(string.letters) for i in xrange(60)] )
+                chars = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(Nchars))
                 data = [ti, chars]
                 data_all.append(data)
                 c += 1

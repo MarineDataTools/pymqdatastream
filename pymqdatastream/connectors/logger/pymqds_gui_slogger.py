@@ -6,11 +6,11 @@ import logging
 import argparse
 import pymqdatastream
 import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
-import pymqds_logger
+import pymqds_slogger
 
 # Setup logging module
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
-logger = logging.getLogger('pymqds_gui_logger')
+logger = logging.getLogger('pymqds_gui_slogger')
 logger.setLevel(logging.DEBUG)
 
 
@@ -115,7 +115,7 @@ class qtloggerWidget(QtWidgets.QWidget):
             str_tree = str(self.log_fnum)  + ' ' + str(fname[0].rsplit('/')[-1]) # This rsplit will prob. not work in windows ?!
             # Create a logger datastream object
             logger.debug('Creating LoggerDatastrem with file:' + str(fname[0]))
-            logDS = pymqds_logger.LoggerDataStream(filename=fname[0], name = 'logger gui: ' + str_tree, logging_level = self.logging_level)
+            logDS = pymqds_slogger.LoggerDataStream(filename=fname[0], name = 'logger gui: ' + str_tree, logging_level = self.logging_level)
             self.log_datastreams.append(logDS)
             file_item = self.addParent(self.tree_files.invisibleRootItem(), 0, str_tree, fname)
             file_item.LoggerDataStream = logDS
@@ -186,6 +186,7 @@ class qtloggerWidget(QtWidgets.QWidget):
         item.setExpanded(False)
         return item
 
+    
     def addChild(self, parent, column, title, data):
         item = QtWidgets.QTreeWidgetItem(parent, [title])
         item.setData(column, QtCore.Qt.UserRole, data)
