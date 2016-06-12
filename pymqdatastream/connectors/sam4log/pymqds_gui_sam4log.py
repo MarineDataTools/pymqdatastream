@@ -134,13 +134,17 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         #
         self._infosaveloadplot_widget = QtWidgets.QWidget()
         info_layout = QtWidgets.QGridLayout(self._infosaveloadplot_widget)
-        
-        self.__info_record_bu = QtWidgets.QPushButton('Record')
+        self.__recording_status = ['Record','Stop recording']        
+        self.__info_record_bu = QtWidgets.QPushButton(self.__recording_status[0])
+        self.__info_record_info = QtWidgets.QLabel('Status: Not recording')
         self.__info_plot_bu = QtWidgets.QPushButton('Plot')
         self.__info_plot_bu.clicked.connect(self.__plot_clicked)
+        self.__info_record_bu.clicked.connect(self.__record_clicked)
 
         info_layout.addWidget(self.__info_record_bu,0,0)
-        info_layout.addWidget(self.__info_plot_bu,0,1)        
+        info_layout.addWidget(self.__info_record_info,1,0,1,2)
+        info_layout.addWidget(self.__info_plot_bu,0,1)
+
 
         #
         # Add eight lcd numbers for the adc data
@@ -203,6 +207,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # Start real init
         print('Hallo')
         self.sam4log = pymqds_sam4log.sam4logDataStream(logging_level='DEBUG')
+        self.raw_stream = self.sam4log.add_raw_data_stream()
         self.sam4log.deques_raw_serial.append(collections.deque(maxlen=5000))
         self.rawdata_deque = self.sam4log.deques_raw_serial[-1]
         self.test_ports() # Looking for serial ports
@@ -369,8 +374,39 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # http://stackoverflow.com/questions/29556291/multiprocessing-with-qt-works-in-windows-but-not-linux
         # this does not work with python 2.7 
         multiprocessing.set_start_method('spawn')
-        self.__plotxyprocess = multiprocessing.Process(target=_start_pymqds_plotxy)
+        self.__plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy)
         self.__plotxyprocess.start()
+
+        
+    def __record_clicked(self):
+        """
+        
+        Starts a recording process ( )
+
+        """
+        
+
+        t = self.__info_record_bu.text()
+        print('Click ' + str(t))
+        if(t == self.__recording_status[0]):
+            print('Record')            
+            fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "UBJSON (*.ubjson);; All files (*)");
+            if(len(fname[0]) > 0):
+                self.__info_record_info.setText('Status: logfile: ' + fname[0])
+                self.loggerDS = pymqdatastream.slogger.LoggerDataStream(logging_level = logging.DEBUG, filename = fname[0], name = 'sam4log logger')
+                logstream = self.loggerDS.log_stream(self.raw_stream)
+                print('Start write thread')
+                self.loggerDS.start_write_data_thread()
+                self.__info_record_bu.setText(self.__recording_status[1])
+        if(t == self.__recording_status[1]):
+            print('Stop record')            
+            ret = self.loggerDS.stop_poll_data_thread()
+            self.__info_record_bu.setText(self.__recording_status[0])
+            
+
+
+                
+
 
 
     

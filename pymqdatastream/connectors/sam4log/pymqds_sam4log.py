@@ -197,25 +197,19 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         
         """
+        
         funcname = self.__class__.__name__ + '.add_raw_data_stream()'
         logger.debug(funcname)
         self.add_pub_socket()
-        rawvar = pymqdatastream.StreamVariable(name = 'raw',unit = '',datatype = 'str')
+        rawvar = pymqdatastream.StreamVariable(name = 'raw',unit = '',datatype = 'b')
         variables = ['raw',]
         name = 'raw'
 
-        #timevar = pymqdatastream.StreamVariable('time','seconds','float')
-        #datavar = pymqdatastream.StreamVariable('data_ad0','V','float')        
-        #variables = [timevar,datavar]
-        
-        #name = 'sam4log_ad0'
-        #self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
-        
-        #self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
-        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=[rawvar])
+        stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=[rawvar])
         self.raw_stream_thread = threading.Thread(target=self.push_raw_stream_data,args = (self.Streams[-1],))
         self.raw_stream_thread.daemon = True
         self.raw_stream_thread.start()
+        return stream
 
         
     def push_raw_stream_data(self,stream,dt = 0.1):
@@ -224,6 +218,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         
         """
+        
         funcname = self.__class__.__name__ + '.push_raw_stream_data()'
         logger.debug(funcname)        
         deque = self.deques_raw_serial[1]
@@ -437,10 +432,6 @@ class sam4logDataStream(pymqdatastream.DataStream):
             if(len(data0)>0):
                 streams[0].pub_data(data0)
                 self.intraqueue.appendleft(data0)
-                #data_dict0 = {'time':ti,'data':data0}
-                #data_json0 = json.dumps(data_dict0).encode('utf-8')
-                #streams[0].deque.appendleft(data_json0)
-                #streams[0].push_substream_data()
 
 
     def convert_raw_data_format2(self, deque, streams, dt = 0.5):
