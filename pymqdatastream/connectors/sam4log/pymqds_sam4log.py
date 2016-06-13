@@ -173,7 +173,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.send_serial_data()'
         if(self.serial != None):
             print('Sending:' + str(data))
-            self.serial.write(str(data))
+            # Python2 work with that
+            self.serial.write(str(data).encode('utf-8'))
             print('done')
         else:
             self.logger.debug(funcname + ':Serial port is not open.')
@@ -308,7 +309,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data_str = ''
         while(len(deque) > 0):
             data = deque.pop()
-            data_str += data
+            data_str += data.decode('utf-8')
 
 
         # Parse the data
@@ -444,7 +445,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.convert_raw_data_format2()'
         self.logger.debug(funcname)
         ad0_converted = 0
-        data_str = ''
+        data_str = b''
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
             time.sleep(dt)
@@ -453,36 +454,48 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 data = deque.pop()
                 data_str += data
                 # Get commands first
-                for i,me in enumerate(re.finditer(r'[><][><][><].*\n',data_str)):
-                    print('COMMAND!',i)
-                    print(me)
-                    print(me.group(0))
-                    print(me.span(0))
-                    self.commands.append(me.group(0))
+                # 
+                #for i,me in enumerate(re.finditer(b'[><][><][><].*\n',data_str)):
+                #    print('COMMAND!',i)
+                #    print(me)
+                #    print(me.group(0))
+                #    print(me.span(0))
+                #    self.commands.append(me.group(0))
                     
-            data_split = data_str.rsplit(b'\x00')
+            print('Hallo!!!')
+            print(data_str)
+            print(type(data_str))
+            print('Hallo!!! ENDE')            
+            data_split = data_str.split(b'\x00')
             if(len(data_split) > 0):
                 if(len(data_split[-1]) == 0): # The last byte was a 0x00
-                   data_str = ''
+                   data_str = b''
                 else:
                    data_str = data_split[-1]
 
                 for data_cobs in data_split:
-                    #print('Cobs data:')
-                    #print(data_cobs)
+                    print('Cobs data:')
+                    print(data_cobs)
                     try:
-                        data_decobs = cobs.decode(data_cobs)
                         #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
                         if(len(data_cobs) > 3):
-                            packet_ident    = ord(data_decobs[0])
+                            data_decobs = cobs.decode(data_cobs)
+                            print('decobs data:')
+                            print(data_decobs)
+                            print(data_decobs[0],type(data_decobs[0]))                            
+                            packet_ident    = data_decobs[0]
                             #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
                             if(packet_ident == 0xad):
-                                packet_flag_ltc = ord(data_decobs[1])
+                                #packet_flag_ltc = ord(data_decobs[1]) # python2
+                                packet_flag_ltc = data_decobs[1]
                                 num_ltcs        = bin(packet_flag_ltc).count("1")
                                 packet_size = 5 + 8 + 8 + num_ltcs * 3
-                                packet_com_ltc0 = ord(data_decobs[2])
-                                packet_com_ltc1 = ord(data_decobs[3])
-                                packet_com_ltc2 = ord(data_decobs[4])
+                                #packet_com_ltc0 = ord(data_decobs[2]) # python2
+                                #packet_com_ltc1 = ord(data_decobs[3]) # python2
+                                #packet_com_ltc2 = ord(data_decobs[4]) # python2
+                                packet_com_ltc0 = data_decobs[2]
+                                packet_com_ltc1 = data_decobs[3]
+                                packet_com_ltc2 = data_decobs[4]                                
                                 ind = 5
                                 #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
                                 #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
@@ -490,17 +503,20 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                 #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
                                 if(len(data_cobs) >= packet_size):
                                         packet_num_bin  = data_decobs[ind:ind+8]
-                                        packet_num      = int(packet_num_bin.encode('hex'), 16)
+                                        #packet_num      = int(packet_num_bin.encode('hex'), 16) # python2
+                                        packet_num      = int(packet_num_bin.hex(), 16) # python3        
                                         ind += 8
                                         packet_time_bin  = data_decobs[ind:ind+8]
-                                        packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0
+                                        #packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0 # python2
+                                        packet_time     = int(packet_time_bin.hex(), 16)/10000.0 # python3
                                         data_packet = [packet_num,packet_time]
                                         ind += 8
                                         #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.encode('hex_codec'))
-                                        #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.encode('hex_codec'))                                        
+                                        #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.encode('hex_codec'))
                                         for i in range(0,num_ltcs*3,3):
                                             data_ltc = data_decobs[ind+i:ind+i+3]
-                                            data_ltc += chr(int('88',16))
+                                            #data_ltc += chr(int('88',16)) # python2 
+                                            data_ltc += chr(int('88',16)).encode('utf-8') # python3
                                             if(len(data_ltc) == 4):
                                                 #print('data_ltc:',data_ltc.encode('hex'))
                                                 conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)

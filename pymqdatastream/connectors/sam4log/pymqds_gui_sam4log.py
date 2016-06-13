@@ -297,11 +297,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             if(self.check_show_textdata.isChecked()):            
                 if(self.__textdataformat == 0):
                     try:
-                        data_str = data.encode('utf-8')
+                        # This works for python3
+                        data_str = data.decode('utf-8')
                     except UnicodeDecodeError:
-                        data_str = data.encode('hex')                    
+                        # This works for python3                        
+                        data_str = data.hex()
                 elif(self.__textdataformat == 1):
-                    data_str = data.encode('hex')
+                    # This works for python3
+                    data_str = data.hex()
 
 
                 self.show_textdata.appendPlainText(str(data_str))
