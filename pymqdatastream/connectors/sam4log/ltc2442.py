@@ -34,6 +34,7 @@ def interprete_ltc2442_command(command):
     print('A2 A1 A0 ',A2,A1,A0)
     print('OSR3 OSR2 OSR1 OSR0 ',OSR3,OSR2,OSR1,OSR0)
     print('TWOX ',TWOX)
+    
 def test_convert_binary():
     """
     Feeds convert_binary with bit combinations documented in the datasheet
@@ -123,7 +124,7 @@ def convert_binary(ad_raw,ref_voltage=5.0,Voff = 0, Vlarge = 9.9999, Vsmall = -9
     #  31   30   29   28   27  ...  0 ( ad_32bit  )
     #  07   06   05   04   03         ( ad_raw[0] )
     # /EOC  DMY  SIG  MSB          LSB
-    print(ad_raw)
+    #print('raw',ad_raw)
     ad_32bit = (ad_raw[0]<<24) | (ad_raw[1]<<16) | (ad_raw[2]<<8) | ad_raw[3]
     ad_data = ad_32bit & 0x0FFFFFFF
     notEOC  = (ad_raw[0]>>7)     & 0x01 # 

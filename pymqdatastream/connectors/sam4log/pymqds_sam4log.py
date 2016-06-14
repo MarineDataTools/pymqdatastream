@@ -49,6 +49,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
         # Two initial queues, the first is for internal use (init logger), the second is for the raw stream
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen),collections.deque(maxlen=self.dequelen)]
         self.intraqueue = collections.deque(maxlen=self.dequelen) # Queue for for internal processing, e.g. printing of processed data
+        # Two queues to start/stop the raw_data conversion threads
+        self.conversion_thread_queue = queue.Queue()
+        self.conversion_thread_queue_ans = queue.Queue()        
         self.commands = []
 
         # The data format
@@ -341,8 +344,13 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
         Starting a thread to convert the raw data
 
+        Args:
+        Returns:
+            stream: A stream of the converted data
+
 
         """
+        
         funcname = self.__class__.__name__ + '.start_converting_raw_data()'
         self.logger.debug(funcname)
         deque = collections.deque(maxlen=self.dequelen)
@@ -357,16 +365,34 @@ class sam4logDataStream(pymqdatastream.DataStream):
             variables.append(datavar)
 
         name = 'sam4log'
-        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
+        self.conv_stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
         self.logger.debug(funcname + ': Starting thread')
-        streams = self.Streams[-1:]
         # Analyse data format, choose the right conversion functions and start a conversion thread
         self.init_data_format_functions()
+        self.packets_converted = 0
 
-        self.convert_thread = threading.Thread(target=self.convert_raw_data,args = (deque,streams))
+        self.convert_thread = threading.Thread(target=self.convert_raw_data,args = (deque, self.conv_stream))
         self.convert_thread.daemon = True
         self.convert_thread.start()            
         self.logger.debug(funcname + ': Starting thread done')
+        
+        return self.conv_stream
+    
+
+    def stop_converting_raw_data(self):
+        """
+
+        Stops a raw data conversion thread
+
+        """
+        
+        self.logger.debug('Stopping conversion thread')
+        self.conversion_thread_queue.put('stop')
+        data = self.conversion_thread_queue_ans.get()
+        self.logger.debug('Got data from conversion thread, thread stopped')
+        self.rem_stream(self.conv_stream)
+        self.conv_stream = None
+        self.packets_converted = 0
 
         
     def convert_raw_data_format0(self, deque, streams, dt = 0.5):
@@ -422,7 +448,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                             data_V = float(d_split_ltc[2])
                             data_tmp.append(data_V)
                             
-                        data0.append(data_tmp)            
+                        data0.append(data_tmp)
+                        self.packets_converted += 1
                     else:
                         self.logger.debug(funcname + ': no a valid format 0 string:')
 
@@ -435,7 +462,17 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 self.intraqueue.appendleft(data0)
 
 
-    def convert_raw_data_format2(self, deque, streams, dt = 0.5):
+            # Try to read from the queue, if something was read, quit
+            try:
+                data = self.conversion_thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self.conversion_thread_queue_ans.put('stopping')
+                break
+            except queue.Empty:
+                pass                
+
+
+    def convert_raw_data_format2(self, deque, stream, dt = 0.5):
         """
 
         Converts raw data of the format 2, which is popped from the deque
@@ -462,10 +499,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 #    print(me.span(0))
                 #    self.commands.append(me.group(0))
                     
-            print('Hallo!!!')
-            print(data_str)
-            print(type(data_str))
-            print('Hallo!!! ENDE')            
+            #print('Hallo!!!')
+            #print(data_str)
+            #print(type(data_str))
+            #print('Hallo!!! ENDE')            
             data_split = data_str.split(b'\x00')
             if(len(data_split) > 0):
                 if(len(data_split[-1]) == 0): # The last byte was a 0x00
@@ -474,18 +511,19 @@ class sam4logDataStream(pymqdatastream.DataStream):
                    data_str = data_split[-1]
 
                 for data_cobs in data_split:
-                    print('Cobs data:')
-                    print(data_cobs)
+                    #print('Cobs data:')
+                    #print(data_cobs)
                     try:
                         #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
                         if(len(data_cobs) > 3):
                             data_decobs = cobs.decode(data_cobs)
-                            print('decobs data:')
-                            print(data_decobs)
-                            print(data_decobs[0],type(data_decobs[0]))                            
+                            #print('decobs data:')
+                            #print(data_decobs)
+                            #print(data_decobs[0],type(data_decobs[0]))                            
                             packet_ident    = data_decobs[0]
                             #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
                             if(packet_ident == 0xad):
+                                #print('JA')
                                 #packet_flag_ltc = ord(data_decobs[1]) # python2
                                 packet_flag_ltc = data_decobs[1]
                                 num_ltcs        = bin(packet_flag_ltc).count("1")
@@ -501,39 +539,52 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                 #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
                                 #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
                                 #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
-                                if(len(data_cobs) >= packet_size):
-                                        packet_num_bin  = data_decobs[ind:ind+8]
-                                        #packet_num      = int(packet_num_bin.encode('hex'), 16) # python2
-                                        packet_num      = int(packet_num_bin.hex(), 16) # python3        
-                                        ind += 8
-                                        packet_time_bin  = data_decobs[ind:ind+8]
-                                        #packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0 # python2
-                                        packet_time     = int(packet_time_bin.hex(), 16)/10000.0 # python3
-                                        data_packet = [packet_num,packet_time]
-                                        ind += 8
-                                        #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.encode('hex_codec'))
-                                        #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.encode('hex_codec'))
-                                        for i in range(0,num_ltcs*3,3):
-                                            data_ltc = data_decobs[ind+i:ind+i+3]
-                                            #data_ltc += chr(int('88',16)) # python2 
-                                            data_ltc += chr(int('88',16)).encode('utf-8') # python3
-                                            if(len(data_ltc) == 4):
-                                                #print('data_ltc:',data_ltc.encode('hex'))
-                                                conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
-                                                data_packet.append(conv['V'][0])
-                                            else:
-                                                data_packet.append(9999.99)
+                                if(len(data_decobs) == packet_size):
+                                    packet_num_bin  = data_decobs[ind:ind+8]
+                                    #packet_num      = int(packet_num_bin.encode('hex'), 16) # python2
+                                    packet_num      = int(packet_num_bin.hex(), 16) # python3
+                                    ind += 8
+                                    packet_time_bin  = data_decobs[ind:ind+8]
+                                    #packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0 # python2
+                                    packet_time     = int(packet_time_bin.hex(), 16)/10000.0 # python3
+                                    data_packet = [packet_num,packet_time]
+                                    ind += 8
+                                    #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
+                                    #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
+                                    for i in range(0,num_ltcs*3,3):
+                                        data_ltc = data_decobs[ind+i:ind+i+3]
+                                        #data_ltc += chr(int('88',16)) # python2 
+                                        data_ltc += 0x88.to_bytes(1,'big') # python3
+                                        #print(data_decobs.hex(),ind)
+                                        #print(data_ltc.hex(),len(data_ltc))
+                                        if(len(data_ltc) == 4):
+                                            #print('data_ltc:',data_ltc.encode('hex'))
+                                            conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
+                                            #print(conv)
+                                            data_packet.append(conv['V'][0])
+                                            self.packets_converted += 1
+                                        else:
+                                            data_packet.append(9999.99)
 
-                                        data_stream.append(data_packet)
+                                    data_stream.append(data_packet)
                                         
                     except cobs.DecodeError:
                         self.logger.debug(funcname + ': COBS DecodeError')
                         pass
         
             if(len(data_stream)>0):
-                streams[0].pub_data(data_stream)
+                stream.pub_data(data_stream)
                 self.intraqueue.appendleft(data_stream)
                 #print(data_stream)
+
+            # Try to read from the queue, if something was read, quit
+            try:
+                data = self.conversion_thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self.conversion_thread_queue_ans.put('stopping')
+                break
+            except queue.Empty:
+                pass                
             
 
                 

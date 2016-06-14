@@ -205,7 +205,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.show()
 
         # Start real init
-        print('Hallo')
+        self.status = 0 # The status
+        # 0 initialised without a logger open
+        # 1 logger at a serial port open
         self.sam4log = pymqds_sam4log.sam4logDataStream(logging_level='DEBUG')
         self.raw_stream = self.sam4log.add_raw_data_stream()
         self.sam4log.deques_raw_serial.append(collections.deque(maxlen=5000))
@@ -268,9 +270,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self.__ad_update_check_state()
                 time.sleep(0.2)                
                 self.sam4log.start_converting_raw_data()
+                self.status = 1
             else:
                 self.sam4log.stop_serial_data()
+                self.sam4log.stop_converting_raw_data()
                 self.serial_open_bu.setText('open')
+                self.status = 0
 
         else:
             print('bad open close')

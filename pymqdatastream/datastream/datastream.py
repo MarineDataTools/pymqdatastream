@@ -1021,10 +1021,14 @@ class DataStream(object):
 
     def create_pub_stream(self,adress = None, variables = None, name = None, statistic = False):
         """
-        Create a new pubstream
+        Creates a new pubstream
+        This function is a combination of
+        self.add_pub_socket(address = address)
+        and 
+        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, statistic=statistic)        
         """
         
-        self.add_pub_socket()
+        self.add_pub_socket(address = address)
         self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, statistic=statistic)        
 
     def add_stream(self,Stream):
@@ -1036,17 +1040,22 @@ class DataStream(object):
     def rem_stream(self,disstream):
         """
         Disconnects and removes a Stream with the uuid
-        return:
-        True if Stream was succesfully removed
-        False if Stream could not be removed
+        Return:
+            True if Stream was succesfully removed
+            False if Stream could not be removed
         """
         funcname = '.rem_stream()'
         for i,stream in enumerate(self.Streams):
             if(stream == disstream):
-                self.logger.debug(funcname + ': closing and removing stream')
-                stream.disconnect_substream()
-                self.Streams.pop(i)
-                return True
+                if(disstream.stream_type == 'substream'):                        
+                    self.logger.debug(funcname + ': closing and removing substream stream')
+                    stream.disconnect_substream()
+                    self.Streams.pop(i)
+                    return True
+                elif(disstream.stream_type == 'pubstream'):
+                    self.Streams.pop(i)
+                    return True                    
+                    
 
 
         return False
