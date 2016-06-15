@@ -181,9 +181,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             ad_layoutV.addWidget(ad_widget_tmp)
 
 
-
-
-
         # The main layout
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
@@ -209,7 +206,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # 0 initialised without a logger open
         # 1 logger at a serial port open
         self.sam4log = pymqds_sam4log.sam4logDataStream(logging_level='DEBUG')
-        self.raw_stream = self.sam4log.add_raw_data_stream()
         self.sam4log.deques_raw_serial.append(collections.deque(maxlen=5000))
         self.rawdata_deque = self.sam4log.deques_raw_serial[-1]
         self.test_ports() # Looking for serial ports
@@ -402,7 +398,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             if(len(fname[0]) > 0):
                 self.__info_record_info.setText('Status: logfile: ' + fname[0])
                 self.loggerDS = pymqdatastream.slogger.LoggerDataStream(logging_level = logging.DEBUG, filename = fname[0], name = 'sam4log logger')
-                logstream = self.loggerDS.log_stream(self.raw_stream)
+                logstream = self.loggerDS.log_stream(self.sam4log.raw_stream)
+                logstream = self.loggerDS.log_stream(self.sam4log.conv_stream)
                 print('Start write thread')
                 self.loggerDS.start_write_data_thread()
                 self.__info_record_bu.setText(self.__recording_status[1])

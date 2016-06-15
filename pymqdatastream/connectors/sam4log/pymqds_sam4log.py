@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys
 import os
 import pymqdatastream
@@ -199,6 +199,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
     def add_raw_data_stream(self):
         """
         
+        Adds a stream containing the raw data read from sam4log. 
+
+        Args: None
+            
+        Returns:
+            raw_stream: the raw data stream 
         
         """
         
@@ -210,6 +216,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         name = 'raw'
 
         stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=[rawvar])
+        self.raw_stream = stream
         self.raw_stream_thread = threading.Thread(target=self.push_raw_stream_data,args = (self.Streams[-1],))
         self.raw_stream_thread.daemon = True
         self.raw_stream_thread.start()

@@ -252,10 +252,11 @@ class LoggerDataStream(pymqdatastream.DataStream):
 class LoggerFile(object):
     """
 
-
+    A file in which data is stored. Fileformat is to be documented
+    TODO: Change fileformat to COBS instead of newline with try except approach?
 
     """
-    def __init__(self,filename,mode,logging_level=logging.WARNING):
+    def __init__(self,filename,mode = 'rb',logging_level=logging.WARNING):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging_level)
         self.filename = None
@@ -323,7 +324,7 @@ class LoggerFile(object):
         # Test if we have a list with the first member beeing a log_number
         try:
             log_stream_number = data[0]            
-            loggerstream_ind = self.loggerstream_num2ind[log_stream_number]
+            loggerstream_ind = self._loggerstream_num2ind[log_stream_number]
             print('log number:', log_stream_number)
             self.write(data)
             return
@@ -358,7 +359,7 @@ class LoggerFile(object):
             self.f.write(ubdata)
         if(self.fill_loggerstreamdata):
             log_stream_number = data[0]            
-            loggerstream_ind = self.loggerstream_num2ind[log_stream_number]
+            loggerstream_ind = self._loggerstream_num2ind[log_stream_number]
             self.loggerstreams[loggerstream_ind].add_data(data[1])
 
             
@@ -395,7 +396,7 @@ class LoggerFile(object):
         for i,num in enumerate(log_stream_numbers):
             loggerstream_index[num] = i
 
-        self.loggerstream_num2ind = loggerstream_index
+        self._loggerstream_num2ind = loggerstream_index
         
 
 
@@ -410,7 +411,11 @@ class LoggerStreamData(object):
         """
         self.header = header
         variables = self.header['info']['variables']
-        self.variables = variables
+        datastream_var0 = pymqdatastream.StreamVariable(unit='number',datatype='int',name='pymqds_packetnumber')
+        datastream_var1 = pymqdatastream.StreamVariable(unit='second',datatype='float',name='pymqds_packet_sent_time')
+        datastream_var2 = pymqdatastream.StreamVariable(unit='second',datatype='float',name='pymqds_packet_recv_time')        
+        self.variables = [datastream_var0, datastream_var1, datastream_var2]
+        self.variables.extend(variables)
         self.data = []
 
     def add_data(self,data):
