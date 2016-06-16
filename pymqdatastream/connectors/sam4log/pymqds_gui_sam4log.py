@@ -180,6 +180,24 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             ad_layoutH.addWidget(ad_lcd)
             ad_layoutV.addWidget(ad_widget_tmp)
 
+        #
+        # Add a qtable for realtime data showing of voltage/packets number/counter
+        #
+        self._ad_table = QtWidgets.QTableWidget()
+        self._ad_table.setColumnCount(2)
+        self._ad_table.setRowCount(10)
+        self._ad_table.verticalHeader().setVisible(False)
+        self._ad_table.setItem(0,
+                               0, QtWidgets.QTableWidgetItem( ' Packet number' ))
+        self._ad_table.setItem(1,
+                               0, QtWidgets.QTableWidgetItem( ' Counter' ))
+        for i in range(0,8):
+            adname='LTC2442 ' + str(i)
+            self._ad_table.setItem(i+2,
+                                0, QtWidgets.QTableWidgetItem( adname ))        
+
+        self._ad_table.setHorizontalHeaderLabels(['Name','Data','subscribed'])
+
 
         # The main layout
         layout.addWidget(self.combo_serial,0,0)
@@ -194,7 +212,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.show_comdata,2,2,2,2)
 
         layout.addWidget(self._infosaveloadplot_widget,0,4)
-        layout.addWidget(self._ad_widget,2,4,2,1)        
+        layout.addWidget(self._ad_widget,2,4,2,1)
+        layout.addWidget(self._ad_table,4,4,2,1)                
 
 
         self.setCentralWidget(self.mainwidget)
