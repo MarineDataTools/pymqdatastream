@@ -479,7 +479,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 pass                
 
 
-    def convert_raw_data_format2(self, deque, stream, dt = 0.5):
+    def convert_raw_data_format2(self, deque, stream, dt = 0.2):
         """
 
         Converts raw data of the format 2, which is popped from the deque

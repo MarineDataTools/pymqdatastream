@@ -149,37 +149,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         #
         # Add eight lcd numbers for the adc data
         #
+
+        self.__ad_choose_bu = QtWidgets.QPushButton('Choose LTCs')
+        self.__ad_choose_bu.clicked.connect(self._open_ad_widget)
+
+        self._ad_widget = None
         
-        self._ad_widget = QtWidgets.QWidget()
-        ad_layoutV = QtWidgets.QVBoxLayout(self._ad_widget)
-
-
-        self.__ad_apply_bu = QtWidgets.QPushButton('Apply')
-        self.__ad_reset_bu = QtWidgets.QPushButton('Reset')
-        self.__ad_apply_bu.clicked.connect(self.__ad_check)
-        self.__ad_reset_bu.clicked.connect(self.__ad_update_check_state)
-        ad_widget_tmp = QtWidgets.QWidget()
-        ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
-        ad_layoutH.addWidget(self.__ad_apply_bu)
-        ad_layoutH.addWidget(self.__ad_reset_bu)        
-
-        ad_layoutV.addWidget(ad_widget_tmp)        
-
-        
-        self._ad_lcds = []
-        self._ad_check = []        
-        for i in range(8):
-            ad_lcd = QtWidgets.QLCDNumber(self)
-            ad_lcd.setDigitCount(8)
-            ad_check = QtWidgets.QCheckBox('AD ' + str(i))
-            self._ad_lcds.append(ad_lcd)
-            self._ad_check.append(ad_check)
-            ad_widget_tmp = QtWidgets.QWidget()
-            ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
-            ad_layoutH.addWidget(ad_check)            
-            ad_layoutH.addWidget(ad_lcd)
-            ad_layoutV.addWidget(ad_widget_tmp)
-
         #
         # Add a qtable for realtime data showing of voltage/packets number/counter
         #
@@ -212,8 +187,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.show_comdata,2,2,2,2)
 
         layout.addWidget(self._infosaveloadplot_widget,0,4)
-        layout.addWidget(self._ad_widget,2,4,2,1)
-        layout.addWidget(self._ad_table,4,4,2,1)                
+        layout.addWidget(self.__ad_choose_bu,1,4,1,1)
+        layout.addWidget(self._ad_table,2,4,2,1)
 
 
         self.setCentralWidget(self.mainwidget)
@@ -243,7 +218,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
 
         self.intraqueuetimer = QtCore.QTimer(self)
-        self.intraqueuetimer.setInterval(100)
+        self.intraqueuetimer.setInterval(200)
         self.intraqueuetimer.timeout.connect(self.__poll_intraqueue)
         self.intraqueuetimer.start()                        
 
@@ -282,7 +257,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self.sam4log.add_raw_data_stream()
                 time.sleep(0.2)
                 self.sam4log.init_sam4logger(flag_adcs = [0,2,4])
-                self.__ad_update_check_state()
                 time.sleep(0.2)                
                 self.sam4log.start_converting_raw_data()
                 self.status = 1
@@ -328,8 +302,57 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
 
                 self.show_textdata.appendPlainText(str(data_str))
+
+
+    def _open_ad_widget(self):
+        """
+
+        Opens the ad checkbox widget
+
+        """
+
+        self._ad_widget = QtWidgets.QWidget()
+        ad_layoutV = QtWidgets.QVBoxLayout(self._ad_widget)
+        self._ad_widget.destroyed.connect(self._close_ad_widget)
+        self._ad_widget.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.__ad_apply_bu = QtWidgets.QPushButton('Apply')
+        self.__ad_reset_bu = QtWidgets.QPushButton('Reset')
+        self.__ad_apply_bu.clicked.connect(self.__ad_check)
+        self.__ad_reset_bu.clicked.connect(self.__ad_update_check_state)
+        ad_widget_tmp = QtWidgets.QWidget()
+        ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
+        ad_layoutH.addWidget(self.__ad_apply_bu)
+        ad_layoutH.addWidget(self.__ad_reset_bu)        
+
+        ad_layoutV.addWidget(ad_widget_tmp)        
+
+        
+        self._ad_lcds = []
+        self._ad_check = []        
+        for i in range(8):
+            ad_lcd = QtWidgets.QLCDNumber(self)
+            ad_lcd.setDigitCount(8)
+            ad_check = QtWidgets.QCheckBox('AD ' + str(i))
+            self._ad_lcds.append(ad_lcd)
+            self._ad_check.append(ad_check)
+            ad_widget_tmp = QtWidgets.QWidget()
+            ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
+            ad_layoutH.addWidget(ad_check)            
+            ad_layoutH.addWidget(ad_lcd)
+            ad_layoutV.addWidget(ad_widget_tmp)
             
 
+        self.__ad_update_check_state()
+        self._ad_widget.show()
+
+    def _close_ad_widget(self):
+        """
+
+
+        """
+        print('Close')
+        self._ad_widget = None
+        
     def __ad_check(self):
         """
 
@@ -345,6 +368,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.sam4log.init_sam4logger(flag_adcs,data_format=2)
         print(flag_adcs)
 
+        
     def __ad_update_check_state(self):
         """
 
@@ -363,14 +387,29 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         """
         data = []
+        # Get all data
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
             #print('Hallo!',data)
 
-        #show the last dataset
+        ##show the last dataset
+        #if(len(data)>0):
+        #    for i,n in enumerate(self.sam4log.flag_adcs):
+        #        self._ad_lcds[n].display(data[-1][i+2])
+
+        print(self._ad_widget)
+
+        #show the last dataset in the table
         if(len(data)>0):
+            # Packet number
+            item = QtWidgets.QTableWidgetItem(str(data[-1][0]))
+            self._ad_table.setItem(0, 1, item)
+            # Counter
+            item = QtWidgets.QTableWidgetItem(str(data[-1][1]))
+            self._ad_table.setItem(1, 1, item)
             for i,n in enumerate(self.sam4log.flag_adcs):
-                self._ad_lcds[n].display(data[-1][i+2])
+                item = QtWidgets.QTableWidgetItem(str(data[-1][i+2]))
+                self._ad_table.setItem(n+2, 1, item )  
 
 
     def __combo_format(self):
