@@ -49,6 +49,18 @@ class NMEA0183DataStream(pymqdatastream.DataStream):
         # Add a deque in which the NMEA0183 object is putting the data
         self.NMEA0183grabber.add_serial_device(device)
 
+    def add_NMEA_stream(self,address,port):
+        """
+        Adds a TCP stream
+
+        Args:
+            address:
+            port:
+        """
+        # Add a deque in which the NMEA0183 object is putting the data
+        self.NMEA0183grabber.add_tcp_stream(address,port)
+        
+
     def add_raw_NMEA_stream(self):
         """
 
@@ -150,7 +162,10 @@ class NMEA0183DataStream(pymqdatastream.DataStream):
 
 if __name__ == '__main__':
     s = NMEA0183DataStream()
-    s.add_NMEA_device('/dev/ttyUSB0')
+    #s.add_NMEA_device('/dev/ttyUSB0')
+
+    s.add_NMEA_stream("192.168.236.72",10007)
+    
     s.add_raw_NMEA_stream()
     s.add_latlon_NMEA_stream()    
 
