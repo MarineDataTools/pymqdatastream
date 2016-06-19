@@ -71,8 +71,9 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
     choose some plotting parameters
 
     """
-    def __init__(self,Datastream,hide_myself = False):
-        datastream_qt_service.DataStreamSubscribeWidget.__init__(self,Datastream, hide_myself)
+    def __init__(self,*args,**kwargs):
+        super(DataStreamChoosePlotWidget, self).__init__(*args,**kwargs)
+        #datastream_qt_service.DataStreamSubscribeWidget.__init__(self,Datastream, hide_myself)
         self.button_subscribe.setText('Add Stream')
         self.button_subscribe.clicked.connect(self.handle_button_subscribed)
         self.button_unsubscribe.setText('Remove Stream')
@@ -342,7 +343,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         list_status = []
         self.color_ind = 0
         # Datastream stuff
-        self.datastream_subscribe = DataStreamChoosePlotWidget(self.Datastream,hide_myself = True)
+        self.datastream_subscribe = DataStreamChoosePlotWidget(self.Datastream,hide_myself = True, stream_type='pubstream')
 
         # The pyqtgraph stuff
         self.pyqtgraph_line = []

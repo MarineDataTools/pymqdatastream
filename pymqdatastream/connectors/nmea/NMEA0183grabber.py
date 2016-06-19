@@ -124,6 +124,7 @@ class NMEA0183Grabber(object):
             serial_dict['thread']       = threading.Thread(target=self.read_nmea_sentences_tcp,args = (serial_dict,))
             serial_dict['thread'].daemon = True
             serial_dict['thread'].start()
+            print('1')            
             self.serial.append(serial_dict)            
         except Exception as e:
             logger.debug(funcname + ': Exception: ' + str(e))
@@ -150,7 +151,7 @@ class NMEA0183Grabber(object):
             except socket.error:
                 pass
             else: 
-                print("recv:", data,"times",len(data), 'address',address)
+                #print("recv:", data,"times",len(data), 'address',address)
                 raw_data += raw_data + data.decode('utf-8')
 
                 for i,value in enumerate(raw_data):
@@ -322,7 +323,11 @@ class NMEA0183Grabber(object):
         
         
 def main():
+    """
 
+    Main routine
+
+    """
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--log_stream', '-l')
@@ -361,11 +366,9 @@ def main():
             logger.debug('main():',e)
 
 
-
     try:
         addr = args.address
         port = int(args.port)
-        print('addresss',addr,'port',port)
         s.add_tcp_stream(addr,port)
     except Exception as e:
         logger.debug('main(): no addres/port given')

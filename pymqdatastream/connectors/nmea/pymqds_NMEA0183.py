@@ -102,6 +102,9 @@ class NMEA0183DataStream(pymqdatastream.DataStream):
         Addings an interpreted stream which is grabbing GPGLL and time strings
         to get a time,lat,lon information
 
+        Return:
+            stream: pymdatastream stream
+
         """
 
         self.deques.append(collections.deque(maxlen=self.dequelen))
@@ -121,7 +124,10 @@ class NMEA0183DataStream(pymqdatastream.DataStream):
         self.thread.append(NMEA_latlon_thread)
         self.thread[-1].daemon = True
         self.thread[-1].start()
+        
+        return stream
 
+        
     def push_latlon_NMEA_data(self,stream, deque):
         """
         """
@@ -144,14 +150,14 @@ class NMEA0183DataStream(pymqdatastream.DataStream):
                         #print('lat/lon!')
                         nmea_time = data_nmea.timestamp.strftime("%H%M%S")
                         tstr_unix = tstr + nmea_time
-                        print('fsdf',tstr_unix)
+                        #print('unix time',tstr_unix)
                         tfloat_unix = calendar.timegm(time.strptime(tstr_unix,"%Y%m%d%H%M%S"))
                         lat = data_nmea.latitude
                         lon = data_nmea.longitude
-                        print(nmea_time)
-                        print(tfloat_unix,time.gmtime(tfloat_unix))
-                        print(data_nmea.latitude)
-                        print(data_nmea.longitude)
+                        #print(nmea_time)
+                        #print(tfloat_unix,time.gmtime(tfloat_unix))
+                        #print(data_nmea.latitude)
+                        #print(data_nmea.longitude)
                         stream.pub_data([[nmea_time,tfloat_unix,lon,lat],])
 
                 except Exception as e:

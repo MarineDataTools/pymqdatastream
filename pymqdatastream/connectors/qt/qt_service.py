@@ -145,7 +145,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
     hide_myself: bool, does not show the datastream
     Args:
         Datastream: datastream object
-        Hide_myself: hides the own datastream object
+        Hide_myself: bool, hides the own datastream object [default=False]
         show_statistic: Showing some statistics
         update_subscribed_streams: update the subscribed streams, useful in combination with show_statistics = True
         stream_type: Types of streams to show (subscription is still only to pubstreams)
@@ -160,6 +160,10 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         self.show_statistics = show_statistics
         self.update_subscribed_streams = update_subscribed_streams
         self.multiple_subscription = multiple_subscription
+        if( not(isinstance(stream_type,list))) :
+            stream_type = [stream_type,]
+
+        self.stream_type = stream_type
         # Address list
         self.address_list = pymqdatastream.standard_datastream_control_addresses
 
@@ -215,7 +219,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
         # Fill the list with datastream objects
         remote_datastreams = self.query_datastreams(self.address_list[0:2])
-        self.populate_with_datastreams(remote_datastreams, stream_type = stream_type)
+        self.populate_with_datastreams(remote_datastreams)
 
         # Define some signals, these list can be filled with functions which
         # TODO: This could be updated/improved by using Signals/Blinker
@@ -264,7 +268,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         return datastreams_remote
 
 
-    def populate_with_datastreams(self,datastream_list,stream_type = None, data_type = None, variables = None):
+    def populate_with_datastreams(self,datastream_list, data_type = None, variables = None):
         """
         
         Args:
@@ -277,21 +281,17 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
         # Check if the datastream has the asked stream types and remove
         # streams not fitting from list
-
-        if( not(isinstance(stream_type,list))) :
-            stream_type = [stream_type,]
             
         # Dont remove any stream
-        if(stream_type[0] == None):
+        if(self.stream_type[0] == None):
             pass
         else:
             datastream_list_filter = []
             for dstream in datastream_list:
                 break_loop = False
-                for stype in stream_type:
+                for stype in self.stream_type:
                     for i,stream in enumerate(dstream.Streams):
                         if(stream.stream_type == stype):
-                            
                             break_loop = True
                             datastream_list_filter.append(dstream)
                             break
@@ -308,7 +308,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
             datastream_name = dstream.get_name_str(strtype = 'simple_newline')
             status_tree = addParent(self.treeWidget.invisibleRootItem(), 0, datastream_name, 'data Clients')
             for i,stream in enumerate(dstream.Streams):
-                for stype in stream_type:
+                for stype in self.stream_type:
                     if((stream.stream_type == stype) | (stype == None)):
                         name = str(i) + ' ' + stream.name
                         stream_item = addChild(status_tree, 0, name, 'data Clients')

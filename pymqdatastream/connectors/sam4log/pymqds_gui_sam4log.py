@@ -22,6 +22,7 @@ import pymqds_sam4log
 
 
 
+
 def serial_ports():
     """ Lists serial port names
 
@@ -435,7 +436,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         print('Plotting')
         # http://stackoverflow.com/questions/29556291/multiprocessing-with-qt-works-in-windows-but-not-linux
         # this does not work with python 2.7 
-        multiprocessing.set_start_method('spawn')
+        multiprocessing.set_start_method('spawn',force=True)        
         self.__plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy)
         self.__plotxyprocess.start()
 
