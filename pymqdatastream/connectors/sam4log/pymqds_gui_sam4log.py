@@ -153,9 +153,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.__info_plot_bu.clicked.connect(self.__plot_clicked)
         self.__info_record_bu.clicked.connect(self.__record_clicked)
 
-        info_layout.addWidget(self.__info_record_bu,0,0)
-        info_layout.addWidget(self.__info_record_info,1,0)
-        info_layout.addWidget(self.__info_plot_bu,2,0)
+        info_layout.addWidget(self.__info_record_bu,0,1)
+        info_layout.addWidget(self.__info_record_info,1,1)
+        info_layout.addWidget(self.__info_plot_bu,0,0)
 
 
         #
@@ -199,23 +199,23 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         for i in range(self._ad_table.rowCount()):
             height += self._ad_table.rowHeight(i)
             
-        print(height,hheight)
         self._ad_table.setFixedHeight(height + hheight + fwidth)
         
 
         # The main layout
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
-        layout.addWidget(self._show_data_bu,4,4)
+        layout.addWidget(self._show_data_bu,2,0)
+        layout.addWidget(self.__ad_choose_bu,2,1)        
         layout.addWidget(self.serial_open_bu,0,2)
         layout.addWidget(self.bytesreadlcd,0,3)
+        layout.addWidget(self._infosaveloadplot_widget,5,0,1,4)
 
-        layout.addWidget(self._infosaveloadplot_widget,3,3)
-        layout.addWidget(self.__ad_choose_bu,1,4,1,1)
-        layout.addWidget(self._ad_table,2,0,2,4)
-        layout.addWidget(QtWidgets.QLabel('Command'),4,0) # Command
-        layout.addWidget(self.send_le,4,1,1,2) # Command
-        layout.addWidget(send_bu,4,3) # Command
+        layout.addWidget(self._ad_table,3,0,2,2)
+        # Command widgets
+        layout.addWidget(QtWidgets.QLabel('Command'),1,0) # Command
+        layout.addWidget(self.send_le,1,1,1,2) # Command
+        layout.addWidget(send_bu,1,3) # Command
 
 
 
