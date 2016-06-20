@@ -105,6 +105,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.serial_open_bu = QtWidgets.QPushButton('open')
         self.serial_open_bu.clicked.connect(self.clicked_open_bu)
 
+        # Widget to show info about how much bytes have been received
+        self._bin_info = QtWidgets.QWidget()
+        binlayout = QtWidgets.QGridLayout(self._bin_info)
         self.bytesreadlcd = QtWidgets.QLCDNumber(self)
         self.bytesreadlcd.setDigitCount(15)
         self.bytesreadlcd.display(200)
@@ -115,10 +118,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         send_bu.clicked.connect(self.clicked_send_bu)
 
         # Show the raw data of the logger
+        self._show_data_widget = QtWidgets.QWidget()
+        self._show_data_layout = QtWidgets.QGridLayout(self._show_data_widget)
         self.show_textdata = QtWidgets.QPlainTextEdit()
         self.show_textdata.setReadOnly(True)
         self.check_show_textdata = QtWidgets.QCheckBox('Show data')
         self.check_show_textdata.setChecked(True)
+        self._show_data_bu = QtWidgets.QPushButton('Show data')
+        self._show_data_bu.clicked.connect(self._clicked_show_data_bu)
         self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
         # Textdataformat of the show_textdata widget 0 str, 1 hex
         self.__textdataformat = 0 
@@ -128,6 +135,10 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.combo_format.activated.connect(self.__combo_format)
         self.show_comdata = QtWidgets.QPlainTextEdit()
         self.show_comdata.setReadOnly(True)
+
+        self._show_data_layout.addWidget(self.combo_format,0,0)
+        self._show_data_layout.addWidget(self.show_textdata,1,0)
+        self._show_data_layout.addWidget(self.show_comdata,1,1)
 
 
         #
@@ -143,8 +154,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.__info_record_bu.clicked.connect(self.__record_clicked)
 
         info_layout.addWidget(self.__info_record_bu,0,0)
-        info_layout.addWidget(self.__info_record_info,1,0,1,2)
-        info_layout.addWidget(self.__info_plot_bu,0,1)
+        info_layout.addWidget(self.__info_record_info,1,0)
+        info_layout.addWidget(self.__info_plot_bu,2,0)
 
 
         #
@@ -158,8 +169,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         
         #
         # Add a qtable for realtime data showing of voltage/packets number/counter
+        #http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
         #
         self._ad_table = QtWidgets.QTableWidget()
+        #self._ad_table.setMinimumSize(300, 300)
+        #self._ad_table.setMaximumSize(300, 300)        
         self._ad_table.setColumnCount(2)
         self._ad_table.setRowCount(10)
         self._ad_table.verticalHeader().setVisible(False)
@@ -173,23 +187,36 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                                 0, QtWidgets.QTableWidgetItem( adname ))        
 
         self._ad_table.setHorizontalHeaderLabels(['Name','Data','subscribed'])
-
+        # Make width and height of the table such that all entries can be seen
+        vwidth = self._ad_table.verticalHeader().width()
+        hwidth = self._ad_table.horizontalHeader().length()
+        fwidth = self._ad_table.frameWidth() * 2
+        swidth = self._ad_table.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
+        self._ad_table.setFixedWidth(vwidth + hwidth + fwidth)
+        self._ad_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        height = 0
+        hheight = self._ad_table.horizontalHeader().height()
+        for i in range(self._ad_table.rowCount()):
+            height += self._ad_table.rowHeight(i)
+            
+        print(height,hheight)
+        self._ad_table.setFixedHeight(height + hheight + fwidth)
+        
 
         # The main layout
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
-        layout.addWidget(self.combo_format,1,1)
-        layout.addWidget(self.check_show_textdata,1,0)
+        layout.addWidget(self._show_data_bu,4,4)
         layout.addWidget(self.serial_open_bu,0,2)
         layout.addWidget(self.bytesreadlcd,0,3)
-        layout.addWidget(self.send_le,1,2)
-        layout.addWidget(send_bu,1,3)
-        layout.addWidget(self.show_textdata,2,0,2,2)
-        layout.addWidget(self.show_comdata,2,2,2,2)
 
-        layout.addWidget(self._infosaveloadplot_widget,0,4)
+        layout.addWidget(self._infosaveloadplot_widget,3,3)
         layout.addWidget(self.__ad_choose_bu,1,4,1,1)
-        layout.addWidget(self._ad_table,2,4,2,1)
+        layout.addWidget(self._ad_table,2,0,2,4)
+        layout.addWidget(QtWidgets.QLabel('Command'),4,0) # Command
+        layout.addWidget(self.send_le,4,1,1,2) # Command
+        layout.addWidget(send_bu,4,3) # Command
+
 
 
         self.setCentralWidget(self.mainwidget)
@@ -226,8 +253,20 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
     def close_application(self):
         print('Goodbye!')
+        # Closing potentially open widgets
+        try:
+            self._show_data_widget_opened.close()
+        except:
+            pass
+
+        try:
+            self._ad_widget.close()
+        except:
+            pass
+            
         self.close()
 
+        
     def test_ports(self):
         """
         
@@ -304,7 +343,23 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
                 self.show_textdata.appendPlainText(str(data_str))
 
+                
+    def _clicked_show_data_bu(self):
+        """
+        """
+        
+        t = self._show_data_bu.text()
+        print('Click ' + str(t))
+        if True:
+            if(t == 'Show data'):
+                self._show_data_widget_opened = self._show_data_widget
+                self._show_data_widget_opened.show()
+                self._show_data_bu.setText('Hide data')
+            if(t == 'Hide data'):
+                self._show_data_widget_opened.close()
+                self._show_data_bu.setText('Show data')                
 
+                
     def _open_ad_widget(self):
         """
 
@@ -346,6 +401,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.__ad_update_check_state()
         self._ad_widget.show()
 
+        
     def _close_ad_widget(self):
         """
 
@@ -353,6 +409,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         """
         print('Close')
         self._ad_widget = None
+
         
     def __ad_check(self):
         """
@@ -381,6 +438,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         for i in flag_adcs:
             self._ad_check[i].setChecked(True)
 
+            
     def __poll_intraqueue(self):
         """
 
@@ -391,14 +449,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # Get all data
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
-            #print('Hallo!',data)
-
-        ##show the last dataset
-        #if(len(data)>0):
-        #    for i,n in enumerate(self.sam4log.flag_adcs):
-        #        self._ad_lcds[n].display(data[-1][i+2])
-
-        print(self._ad_widget)
 
         #show the last dataset in the table
         if(len(data)>0):
