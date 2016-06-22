@@ -1,32 +1,33 @@
 #!/usr/bin/env python3
 import time
 import numpy as np
-import json
-import logging
-import threading
-import os,sys
-import argparse
 import pymqdatastream
-import random
-import string
 
 
 if __name__ == '__main__':
 
     # Create a sending and a receiving datastream
-    sendDS = pymqdatastream.DataStream(name = 'test_send', logging_level='DEBUG')
-    recvDS = pymqdatastream.DataStream(name = 'test_reicv', logging_level='DEBUG')
+    sendDS = pymqdatastream.DataStream(name = 'test_send', \
+                                       logging_level='DEBUG')
+    recvDS = pymqdatastream.DataStream(name = 'test_reicv', \
+                                       logging_level='DEBUG')
 
-    # Adding publisher sockets to the sending datastream and add variables
+    # Adding publisher sockets to the sending
+    # datastream and add variables
     sendDS.add_pub_socket()
-    timevar = pymqdatastream.StreamVariable(name = 'unix time',unit = 'seconds',datatype = 'float')
-    datavar = pymqdatastream.StreamVariable(name = 'random',datatype = 'float', unit = 'something')
+    timevar = pymqdatastream.StreamVariable(name = 'unix time',\
+                                            unit = 'seconds',\
+                                            datatype = 'float')
+    datavar = pymqdatastream.StreamVariable(name = 'random',\
+                                            datatype = 'float',\
+                                            unit = 'something')
     variables = [timevar,datavar]
     name = 'some_data'
-    sendDS.add_pub_stream(socket = sendDS.sockets[-1],name=name,variables=variables)
+    sendDS.add_pub_stream(socket = sendDS.sockets[-1],\
+                          name=name,variables=variables)
     sendstream = sendDS.Streams[-1]
     num_elements = 3
-
+    
     # Subscribe the stream
     recvstream = recvDS.subscribe_stream(sendstream)
 
