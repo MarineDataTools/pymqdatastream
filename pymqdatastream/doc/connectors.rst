@@ -6,7 +6,7 @@ A list of connectors
 Logger
 ======
 
-.. automodule:: pymqdatastream.connectors.logger.pymqds_logger
+.. automodule:: pymqdatastream.connectors.logger.pymqds_slogger
    :members:
    :undoc-members:
    :show-inheritance:

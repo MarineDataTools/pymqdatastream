@@ -58,7 +58,7 @@ author = u'Peter Holtermann'
 # The short X.Y version.
 fversion = open('../VERSION')
 version_str = fversion.read().strip()
-version = unicode(version_str)
+version = version_str
 # The full version, including alpha/beta/rc tags.
 release = version
 
