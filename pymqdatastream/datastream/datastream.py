@@ -11,6 +11,11 @@ This module is the basis of pymqdatastream. Here the three classes datastream,
 Stream and zmq_sockets are defined. Each datastream object consists of at least
 one Stream of type "control". Each Stream is connected to a zmq_socket.
 
+TODO: 
+
+* remove sockets from DataStream object
+* Do socket init into Stream object, Streams should now their sockets, DataStreams not
+
 
 """
 
@@ -63,10 +68,11 @@ else:
 # Pubstream: Add a thread, which is regularly reading the deque and sending the data
 class zmq_socket(object):
     """
-    A class of a zmq socket for the actual connection
+    A class of a zmq socket for the actual connection. The main ingredien of this objects is a zmq_socket
+    which is in self.zmq_socket.
     
     Args:
-       socket_type (str): socket type of stream object: e.g. 'control', 'remote_control', 'pubstream', 'substream'
+       socket_type (str): socket type of stream object: e.g. 'control', 'remote_control', 'pubstream', 'substream',
         
           * control: A control socket (zmq.REP) used to communicate the basic informations between the datastream objects
           * remote_control: A socket to send requests via a zmq.REQ socket to a control socket. This socket is used to receive informations of a remote control socket
@@ -77,7 +83,7 @@ class zmq_socket(object):
 
        address (str): zmq address string, e.g. address = 'tcp://127.0.0.1:20000'
        deque:
-       control_socket_reply_function:
+       socket_reply_function:
        filter_uuid (str): message filter for the subscribe sockets, default '', only use it if a 'substream' socket is created
        connect (bool): If True a zmq bind will be done [default=True]
        remote (bool): If True the socket is remote and information is of informative type
@@ -86,7 +92,7 @@ class zmq_socket(object):
 
 
     """
-    def __init__(self,socket_type, address = '', deque = None, control_socket_reply_function = None, filter_uuid = '', connect = True, remote = False, statistic = False, logging_level='INFO'):
+    def __init__(self,socket_type, address = '', deque = None, socket_reply_function = None, filter_uuid = '', connect = True, remote = False, statistic = False, logging_level='INFO'):
         """
         """
         funcname = self.__class__.__name__ + '.__init__()'
@@ -127,13 +133,13 @@ class zmq_socket(object):
 
         # Test which kind of socket is to initialize
         # The sockets which will need a zmq 'bind'
-        if(socket_type == 'control'):
+        if(socket_type == 'control' or socket_type == 'repstream'):
             self.zmq_socket_type = zmq.REP
             # Init the function of the control socket reply thread 
-            if(control_socket_reply_function == None):
-                self.control_socket_reply_function = self.process_client_request_bare
+            if(socket_reply_function == None):
+                self.socket_reply_function = self.process_client_request_bare
             else:
-                self.control_socket_reply_function = control_socket_reply_function
+                self.socket_reply_function = socket_reply_function
 
             # bind the socket if its a local socket
             if((connect == True) and (remote == False)):
@@ -145,6 +151,7 @@ class zmq_socket(object):
                         # There is now a socket, lets start a blocking thread for reading and answering control requests/replies
                         # http://stackoverflow.com/questions/2846653/python-multithreading-for-dummies
                         self.logger.debug(funcname + ': Start request reply thread')
+                        self.thread_queue = queue.Queue()
                         self.reply_thread = threading.Thread(target=self.wait_for_request_and_reply)
                         self.reply_thread.daemon = True
                         self.reply_thread.start()
@@ -182,23 +189,19 @@ class zmq_socket(object):
             self.zmq_socket_type = zmq.REQ
             if((connect == True) and (remote == False)):
                 ret = self.connect_socket(filter_uuid = '')
+                self.send_req = self._send_req
+                self.get_rep = self._get_rep
 
             return
 
-        #
+        
         # 'reqstream'
         elif(socket_type == 'reqstream'):
             self.zmq_socket_type = zmq.REQ
             if((connect == True) and (remote == False)):
                 ret = self.connect_socket(filter_uuid = '')
-
-        #
-        # 'repstream'
-        elif(socket_type == 'repstream'):
-            self.zmq_socket_type = zmq.REP
-            if((connect == True) and (remote == False)):
-                ret = self.bind_socket(self.zmq_socket_type,self.address)                
-
+                self.send_req = self._send_req
+                self.get_rep = self._get_rep
                 
         else:
             raise Exception("unknown socket_type:", socket_type)
@@ -284,7 +287,7 @@ class zmq_socket(object):
         zmq_socket_type = self.zmq_socket_type
         try:
             self.logger.debug(funcname + ': Connecting to address: ' + address)
-            # A socket to receive incoming requests about status etc.
+            # Finally lets connect a socket
             self.zmq_socket       = self.context.socket(zmq_socket_type)
             if(zmq_socket_type == zmq.SUB):
                 self.logger.debug(funcname + ': Using filter_uuid: ' + filter_uuid)
@@ -355,8 +358,7 @@ class zmq_socket(object):
     
     def wait_for_request_and_reply(self, dt_wait = 0.05):
         """
-        Here requests about
-        the status and information of the object itself will be
+        Here requests of a zmq.REQ socket will be processed
         answered NOTE: zmq sockets are not thread safe, the
         control_socket should not be used anywhere else except in this
         thread! TODO: Init control socket here!
@@ -379,7 +381,7 @@ class zmq_socket(object):
                 self.logger.debug(funcname + ': got request:')
                 self.logger.debug(funcname + ':' + request.decode('utf-8'))
                 self.logger.debug(funcname + ': process_reply')            
-                reply = self.control_socket_reply_function(request)
+                reply = self.socket_reply_function(request)
                 self.logger.debug(funcname + ': Replying')
                 self.zmq_socket.send(reply)
                 if(self.do_statistic):
@@ -395,12 +397,13 @@ class zmq_socket(object):
                     poller.unregister(self.zmq_socket)
                     self.zmq_socket.close()
                     self.connected = False
+                    self.thread_queue = None                    
                     self.logger.debug(funcname + ': Closing')
                     return True                    
                 except queue.Empty:
                     pass
-                except:
-                    print('Unexpected error')
+                except Exception as e:
+                    logger.warning(funcname + ' ' +str(e))
             
         self.logger.debug(funcname + ': Stop replying now!')
         
@@ -498,8 +501,8 @@ class zmq_socket(object):
                     return True                    
                 except queue.Empty:
                     pass
-                except:
-                    print('Unexpected error')
+                except Excpetion as e:
+                    self.logger.warning('Exception: ' + str(e))
         
         
     def start_pub_data_thread(self):
@@ -561,7 +564,37 @@ class zmq_socket(object):
         info_dict['connected'] = self.connected
         
         return info_dict
-    
+
+
+    def _send_req(self,data):
+        """
+        Sends data via a request socket
+        """
+        self.zmq_socket.send(data)
+
+    def _get_rep(self,dt_wait = 0.05):
+        """
+        Reads data from a req/rep socket using a poller which waits dt_wait seconds
+        """
+        poller = zmq.Poller()
+        poller.register(self.zmq_socket, zmq.POLLIN)
+        
+        if poller.poll(dt_wait*1000): #
+            tpong = time.time()
+            reply = self.zmq_socket.recv()
+            poller.unregister(self.zmq_socket)
+            return [tpong,reply]
+
+        else:
+            poller.unregister(self.zmq_socket)            
+            return [None,None]
+
+    def close(self):
+        """
+        Cleanup
+        """
+        self.zmq_socket.close()                    
+
     
     def __str__(self):
         ret_str = self.__class__.__name__ + ';uuid:' + self.uuid +\
@@ -623,6 +656,10 @@ class Stream(object):
             stream_type_short = 'ctrl'
         elif(stream_type == 'pubstream'):
             stream_type_short = 'pubs'
+        elif(stream_type == 'substream'):
+            stream_type_short = 'subs'            
+        elif(stream_type == 'repstream'):
+            stream_type_short = 'reps'            
         else:
             stream_type_short = 'Stream'
             
@@ -645,9 +682,13 @@ class Stream(object):
             if(isinstance(socket,zmq_socket)):
                 self.socket.append(socket)
 
-        if(self.stream_type == 'control'): # Control stream
+        elif(self.stream_type == 'control'): # Control stream
             self.logger.debug(funcname + ': Creating control stream' )    
             self.socket = socket
+
+        elif(self.stream_type == 'repstream'): # Control stream
+            self.logger.debug(funcname + ': Creating repstream stream' )    
+            self.socket = socket            
 
         # Do some statistic if wished
         self.do_statistic = False
@@ -656,14 +697,14 @@ class Stream(object):
             self.statistic = {}
             self.statistic['packets sent'] = 0
             
-                
+        
     def publish_stream(self,socket):
         """
         Publishes the stream to the socket uuid
         Args: 
             socket: zmq_socket object
         """
-        funcname = self.__class__.__name__ + '.publish_stream()'        
+        funcname = '.publish_stream()'        
         if(self.stream_type == 'substream'):
             self.socket.append(socket)
             self.logger.debug(funcname + ': created socket')
@@ -676,7 +717,7 @@ class Stream(object):
 
         Pops one dataset stored in Stream.deque and sends it via the
         published sockets
-        NOT USED ANYMORE, REMOVED SOON
+        NOT USED ANYMORE, REMOVED SOON, replaced by pub_data
         
         Args: None
         Returns: None
@@ -693,7 +734,7 @@ class Stream(object):
     def pub_data(self, data):
         """
 
-        Encodes and publishes the data
+        Encodes and publishes the data together with the uuid of the stream as a list: [self.uuid,data]
         Args:
             data: Data
 
@@ -742,11 +783,10 @@ class Stream(object):
         return data
 
     
-    def connect_substream(self,stream,ind_socket = 0,statistic = False):
+    def connect_stream(self,stream,ind_socket = 0,statistic = False):
         """
         
-        Connects a substream stream to the remote socket and initializes
-        read data threads and so on 
+        Connects a stream by creating a zmq_socket and connecting it to the remote socket
         
         Args: 
             stream: Stream to connect to
@@ -755,7 +795,7 @@ class Stream(object):
         Returns:
             nothing
         """
-        funcname = self.__class__.__name__ + '.connect_substream()'
+        funcname = '.connect_stream()'
         # connect the stream sockets if it is a substream
         self.logger.debug(funcname)
         # check for correct stream type
@@ -771,8 +811,17 @@ class Stream(object):
                     raise Exception(funcname + "no socket available for subscription")
 
             else:
-                self.logger.warning(funcname + ': cannot connect, stream type is not of type substream')
-                
+                self.logger.warning(funcname + \
+                                    ': cannot connect, stream type is not of type substream. Type connect stream:'\
+                                    + str(stream.stream_type) + ', type self:' + str(self.stream_type))
+
+        if(stream.stream_type == 'repstream'):
+            if(self.stream_type == 'reqstream'):
+                pass
+            else:
+                self.logger.warning(funcname + \
+                                    ': cannot connect, stream type is not of type reqstream. Type connect stream:'\
+                                    + str(stream.stream_type) + ', type self:' + str(self.stream_type))                
         else:
             self.logger.warning(funcname + ': stream type to connect to is not of type pubstream')
 
@@ -789,7 +838,7 @@ class Stream(object):
         """
         Disconnects this stream if it is a substream from the remote stream
         """
-        funcname = self.__class__.__name__ + '.disconnect_substream()'
+        funcname = '.disconnect_substream()'
         self.logger.debug(funcname)
         if(self.stream_type == 'substream'):
             self.logger.debug(funcname + ': disconnecting socket')            
@@ -844,7 +893,8 @@ class Stream(object):
                       ';stream_type:' + self.stream_type + \
                       ';variables:' + str(self.variables) + \
                       ';data_type:' + str(self.data_type) + \
-                      ';data_format:' + str(self.data_format)            
+                      ';data_format:' + str(self.data_format)
+            
         if((info_type == 'all') | (info_type == 'socket')):
             if(not(self.socket == None)):
                 if(isinstance(self.socket,list)):
@@ -935,6 +985,7 @@ class DataStream(object):
     """
     
     The DataStream object
+
     
     Args:
        address: The address the control sockets is bound to default = None: Searches for the next free sockets on predefined ports
@@ -949,7 +1000,7 @@ class DataStream(object):
     def __init__(self,address = None, remote = False, name = 'datastream',logging_level = 'INFO'):
         funcname = '.__init__()'
         # Init a logger
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__ + '_' + name)
         self.logging_level = logging_level
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
@@ -976,7 +1027,7 @@ class DataStream(object):
 
 
             # Create control socket
-            control_socket = zmq_socket(socket_type = 'control', address = addresses, control_socket_reply_function = self.control_socket_reply)
+            control_socket = zmq_socket(socket_type = 'control', address = addresses, socket_reply_function = self.control_socket_reply)
             self.address = control_socket.address
             self.sockets.append(control_socket)
 
@@ -999,22 +1050,21 @@ class DataStream(object):
             self.logger.debug('Datastream.get_datastream_info(): Exception:' + str(e))
             return [False,None]
 
-        poller = zmq.Poller()
-        poller.register(socket.zmq_socket, zmq.POLLIN)
         # First ping the datastream object, to get a packet speed idea
         self.logger.debug(funcname + ': ping')
         tping = time.time()
         request = {'ping':'','uuid':self.uuid,'tping':tping}
         request_json = json.dumps(request).encode('utf-8')
-        socket.zmq_socket.send(request_json)
-        if poller.poll(dt_wait*1000): #
-            tpong = time.time()
-            reply = socket.zmq_socket.recv()
-            reply = reply.decode('utf-8')
-            self.logger.debug(funcname + ':Got data:'+ reply)
+        socket.send_req(request_json)
+        reply = socket.get_rep() # This is with a poller, so it can block depending on dt_wait
+        if(reply[0] != None): # Got a reply
+            tpong = reply[0]
+            reply_data = reply[1]
+            reply_data = reply_data.decode('utf-8')            
+            self.logger.debug(funcname + ':Got data: '+ str(reply))
             # Try to decode the reply
             try:
-                reply_dict = json.loads(reply)
+                reply_dict = json.loads(reply_data)
             except Exception as e :
                 self.logger.warning(funcname + ': Exception:' + str(e))
                 return [False,None]
@@ -1035,15 +1085,16 @@ class DataStream(object):
         self.logger.debug(funcname + ': get info')
         request = {'get':'info'}
         request_json = json.dumps(request).encode('utf-8')
-        socket.zmq_socket.send(request_json)
-        if poller.poll(dt_wait*1000): #
-            tpong = time.time()
-            reply = socket.zmq_socket.recv()
-            reply = reply.decode('utf-8')
-            self.logger.debug(funcname + ': Got data:' + reply)
+        #socket.zmq_socket.send(request_json)
+        socket.send_req(request_json)
+        reply = socket.get_rep() # This is with a poller, so it can block depending on dt_wait
+        if(reply[0] != None): # Got a reply
+            reply_data = reply[1]
+            reply_data = reply_data.decode('utf-8')
+            self.logger.debug(funcname + ': Got data:' + reply_data)
             # Try to decode the reply
             try:
-                reply_dict = json.loads(reply)
+                reply_dict = json.loads(reply_data)
             except Exception as e :
                 self.logger.debug(funcname + ': Exception JSON :' + str(e))
                 return [False,None]
@@ -1051,8 +1102,8 @@ class DataStream(object):
             self.logger.debug(funcname + ': Timeout processing auth request to REQ at: ' + address)
             return [False,None]
 
-        
-        socket.zmq_socket.close()
+
+        socket.close()
         return [True,reply_dict]
 
     
@@ -1092,7 +1143,7 @@ class DataStream(object):
 
         return None
 
-    def create_pub_stream(self,adress = None, variables = None, name = None, statistic = False):
+    def create_pub_stream(self,address = None, variables = None, name = None, statistic = False):
         """
         Creates a new pubstream
         This function is a combination of
@@ -1102,14 +1153,45 @@ class DataStream(object):
         """
         
         self.add_pub_socket(address = address)
-        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, statistic=statistic)        
+        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, statistic=statistic)
 
+
+    def create_rep_stream(self,address = None, variables = None, name = 'rep', statistic = False, socket_reply_function = None):
+        """
+
+        Creates a new reply stream
+        Args:
+            address:
+
+        """
+        funcname = '.create_rep_stream()'
+        self.logger.debug(funcname)
+        if(socket_reply_function == None):
+            raise Exception("Need a reply function")
+        
+        if(address == None): # If no address has been defined
+            address = standard_datastream_publish_addresses
+
+        #self.logger.debug(funcname + ': ' + str(address))
+        
+        rep_socket = zmq_socket(socket_type = 'repstream',address = address, socket_reply_function = socket_reply_function, logging_level=logging.DEBUG)
+        print(rep_socket)
+        self.sockets.append(rep_socket)
+
+        stream = Stream(stream_type = 'repstream',socket = rep_socket, variables = variables, name = name, statistic = statistic, logging_level = self.logging_level)
+
+        self.Streams.append(stream)
+        
+        return stream
+        
+    
     def add_stream(self,Stream):
         """
         Adds a Stream to the datastream object
         """
         self.Streams.append(Stream)
 
+        
     def rem_stream(self,disstream):
         """
 
@@ -1131,7 +1213,6 @@ class DataStream(object):
                     self.Streams.pop(i)
                     return True                    
                     
-
 
         return False
 
@@ -1161,13 +1242,17 @@ class DataStream(object):
         if(stream != None):
             self.logger.debug(funcname + ': subscribing to stream:' + str(stream))
             subscribe_stream = Stream('substream')
-            ret = subscribe_stream.connect_substream(stream)
-            if(subscribe_stream.socket.connected == True):
-                self.logger.debug(funcname + ': successfully subscribed stream:' + str(stream))
-                self.add_stream(subscribe_stream)
-                return subscribe_stream
+            ret = subscribe_stream.connect_stream(stream)
+            if(subscribe_stream.socket != None): # When succesfully connected, socket is not None anymore
+                if(subscribe_stream.socket.connected == True):
+                    self.logger.debug(funcname + ': successfully subscribed stream:\n' + str(stream))
+                    self.add_stream(subscribe_stream)
+                    return subscribe_stream
+                else:
+                    self.logger.debug(funcname + ': failed to subscribe stream:\n' + str(stream))
+                    return None
             else:
-                self.logger.debug(funcname + ': failed to subscribe stream:' + str(stream))
+                self.logger.debug(funcname + ': failed to subscribe stream:\n' + str(stream))
                 return None
         # If we have a address we have to create a remote datastream
         # object and a remote stream object first

@@ -14,6 +14,7 @@ Contents:
    example
    datastream
    connectors
+   changelog
 
 
 Indices and tables
