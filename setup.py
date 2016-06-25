@@ -15,6 +15,7 @@ setup(name='pymqdatastream',
       packages=['pymqdatastream'],
       scripts = ['pymqdatastream/connectors/test/pymqds_rand.py',\
                  'pymqdatastream/connectors/test/pymqds_bare.py',\
+                 'pymqdatastream/connectors/test/pymqds_bare_reqrep.py',\
                  'pymqdatastream/connectors/pyqtgraph/pymqds_plotxy.py',\
                  'pymqdatastream/connectors/basic/pymqds_scan.py',\
                  'pymqdatastream/connectors/sam4log/pymqds_sam4log.py',\

@@ -147,7 +147,8 @@ class zmq_socket(object):
 
                 if(ret):
                     self.logger.debug(funcname + ': succeeded')
-                    if(self.socket_type == 'control'):
+                    #if(self.socket_type == 'control'):
+                    if(True):
                         # There is now a socket, lets start a blocking thread for reading and answering control requests/replies
                         # http://stackoverflow.com/questions/2846653/python-multithreading-for-dummies
                         self.logger.debug(funcname + ': Start request reply thread')
@@ -189,8 +190,8 @@ class zmq_socket(object):
             self.zmq_socket_type = zmq.REQ
             if((connect == True) and (remote == False)):
                 ret = self.connect_socket(filter_uuid = '')
-                self.send_req = self._send_req
-                self.get_rep = self._get_rep
+                self.send_req = self._send_req_
+                self.get_rep = self._get_rep_
 
             return
 
@@ -200,8 +201,8 @@ class zmq_socket(object):
             self.zmq_socket_type = zmq.REQ
             if((connect == True) and (remote == False)):
                 ret = self.connect_socket(filter_uuid = '')
-                self.send_req = self._send_req
-                self.get_rep = self._get_rep
+                self.send_req = self._send_req_
+                self.get_rep = self._get_rep_
                 
         else:
             raise Exception("unknown socket_type:", socket_type)
@@ -566,13 +567,15 @@ class zmq_socket(object):
         return info_dict
 
 
-    def _send_req(self,data):
+    def _send_req_(self,data):
         """
         Sends data via a request socket
         """
+        print('Sending data',data)
         self.zmq_socket.send(data)
 
-    def _get_rep(self,dt_wait = 0.05):
+        
+    def _get_rep_(self,dt_wait = 0.05):
         """
         Reads data from a req/rep socket using a poller which waits dt_wait seconds
         """
@@ -663,7 +666,12 @@ class Stream(object):
         else:
             stream_type_short = 'Stream'
             
-        if( (remote == False) and ( (stream_type == 'control') or (stream_type == 'pubstream')) ):
+        # Create a uuid for streams 
+        if( (remote == False) and \
+            ( (stream_type == 'control') or \
+              (stream_type == 'pubstream') or \
+              (stream_type == 'repstream') \
+            ) ):
             self.uuid = 'pymqds_' + __datastream_version__ + '_' + \
                         stream_type_short + ':' + str(uuid_module.uuid1())
             self.uuid_utf8 = self.uuid.encode('utf-8')
@@ -815,15 +823,20 @@ class Stream(object):
                                     ': cannot connect, stream type is not of type substream. Type connect stream:'\
                                     + str(stream.stream_type) + ', type self:' + str(self.stream_type))
 
-        if(stream.stream_type == 'repstream'):
+        elif(stream.stream_type == 'repstream'):
             if(self.stream_type == 'reqstream'):
-                pass
+                if(True):
+                    self.logger.debug(funcname + ': Connecting reqstream at address' + str(stream.socket.address))
+                    self.uuid = stream.uuid
+                    self.variables = stream.variables
+                    self.name = stream.name
+                    self.socket = zmq_socket(socket_type = self.stream_type,address = stream.socket.address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level)
             else:
                 self.logger.warning(funcname + \
                                     ': cannot connect, stream type is not of type reqstream. Type connect stream:'\
                                     + str(stream.stream_type) + ', type self:' + str(self.stream_type))                
         else:
-            self.logger.warning(funcname + ': stream type to connect to is not of type pubstream')
+            raise Exception(funcname + " stream type to connect to is of unknown type")
 
 
     def reconnect_substream(self):
@@ -1241,7 +1254,16 @@ class DataStream(object):
         
         if(stream != None):
             self.logger.debug(funcname + ': subscribing to stream:' + str(stream))
-            subscribe_stream = Stream('substream')
+            if(stream.stream_type == 'pubstream'):
+                self.logger.debug(funcname + ': created a substream for subscription')
+                subscribe_stream = Stream('substream')
+            elif(stream.stream_type == 'repstream'):
+                self.logger.debug(funcname + ': created a reqstream for subscription')
+                subscribe_stream = Stream('reqstream')
+            else:
+                raise Exception('Unknown stream type, dont know how to subscribe ...')
+            
+            # Connect the stream
             ret = subscribe_stream.connect_stream(stream)
             if(subscribe_stream.socket != None): # When succesfully connected, socket is not None anymore
                 if(subscribe_stream.socket.connected == True):
