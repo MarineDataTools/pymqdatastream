@@ -145,16 +145,22 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', '-v', action='count')
     args = parser.parse_args()
     if(args.verbose == None):
-        logger.setLevel(logging.CRITICAL)
-        pymqdatastream.logger.setLevel(logging.CRITICAL)
+        logger.info('logging level: CRITICAL')
+        logging_level = logging.CRITICAL
     elif(args.verbose == 1):
-        logger.setLevel(logging.INFO)
-        pymqdatastream.logger.setLevel(logging.INFO)
-    elif(args.verbose == 2):
-        logger.setLevel(logging.DEBUG)
-        pymqdatastream.logger.setLevel(logging.DEBUG)        
+        logger.info('logging level: INFO ')        
+        logging_level = logging.INFO
+    elif(args.verbose >= 2):
+        logger.info('logging level: DEBUG ')
+        logging_level = logging.DEBUG
+    else:
+        logging_level = logging.INFO
 
-    RDS = RandDataStream(name = 'random')
+
+    logger.setLevel(logging_level)
+    pymqdatastream.logger.setLevel(logging_level)
+
+    RDS = RandDataStream(name = 'random',logging_level = logging_level)
     RDS.add_random_stream()
     
     for i in range(16):

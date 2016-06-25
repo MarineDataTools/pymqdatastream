@@ -15,7 +15,8 @@ TODO:
 
 * remove sockets from DataStream object
 * Do socket init into Stream object, Streams should now their sockets, DataStreams not
-
+* put zmw_socket=None and use local socket for wait_for_request_and_reply()
+  to make it thread save, similar to start_poll_substream_thread()
 
 """
 
@@ -83,7 +84,7 @@ class zmq_socket(object):
 
        address (str): zmq address string, e.g. address = 'tcp://127.0.0.1:20000'
        deque:
-       socket_reply_function:
+       socket_reply_function: For control and rep socket a reply function to process the reply is needed
        filter_uuid (str): message filter for the subscribe sockets, default '', only use it if a 'substream' socket is created
        connect (bool): If True a zmq bind will be done [default=True]
        remote (bool): If True the socket is remote and information is of informative type
@@ -376,15 +377,17 @@ class zmq_socket(object):
             self.logger.debug(funcname + ': process_reply_loop')
             if poller.poll(dt_wait*1000): #
                 #recv = socket.recv_multipart()
-                request = self.zmq_socket.recv() # Waiting for a request (blocking)
+                ubjson_request = self.zmq_socket.recv() # Waiting for a request (blocking)
+                request = ubjson.loadb(ubjson_request)
                 if(self.do_statistic):
                     self.statistic['packets_received'] += 1
                 self.logger.debug(funcname + ': got request:')
-                self.logger.debug(funcname + ':' + request.decode('utf-8'))
-                self.logger.debug(funcname + ': process_reply')            
+                self.logger.debug(funcname + ':' + str(request))
+                self.logger.debug(funcname + ': process_reply')
                 reply = self.socket_reply_function(request)
                 self.logger.debug(funcname + ': Replying')
-                self.zmq_socket.send(reply)
+                ubjson_reply = ubjson.dumpb(reply)
+                self.zmq_socket.send(ubjson_reply)
                 if(self.do_statistic):
                     self.statistic['packets_sent'] += 1
                 self.logger.debug(funcname + ': done replying')
@@ -569,22 +572,31 @@ class zmq_socket(object):
 
     def _send_req_(self,data):
         """
-        Sends data via a request socket
+        Serialising data with ubjson (dumpb) via a request socket
+        Args:
+           data (ubjson serialisible python object): The data to be send
         """
-        print('Sending data',data)
-        self.zmq_socket.send(data)
+        
+        ubjson_data = ubjson.dumpb(data)
+        self.zmq_socket.send(ubjson_data)
 
         
     def _get_rep_(self,dt_wait = 0.05):
-        """
-        Reads data from a req/rep socket using a poller which waits dt_wait seconds
+        """Reads data from a req/rep socket using a poller which waits
+        dt_wait seconds desialising it with ubjson 
+        Args:
+           dt_wait (float): wait time for the reply 
+        Returns:
+           [tpong,reply]: list with tpong, the time the packet was received and the reply message
+
         """
         poller = zmq.Poller()
         poller.register(self.zmq_socket, zmq.POLLIN)
         
         if poller.poll(dt_wait*1000): #
             tpong = time.time()
-            reply = self.zmq_socket.recv()
+            ubjson_reply = self.zmq_socket.recv()
+            reply = ubjson.loadb(ubjson_reply)
             poller.unregister(self.zmq_socket)
             return [tpong,reply]
 
@@ -592,6 +604,7 @@ class zmq_socket(object):
             poller.unregister(self.zmq_socket)            
             return [None,None]
 
+        
     def close(self):
         """
         Cleanup
@@ -1056,7 +1069,7 @@ class DataStream(object):
         TODO: This is not thread safe, as it is using the threaded
         control socket, CHANGE
         """
-        funcname = '.get_datastream_info()'
+        funcname = 'get_datastream_info()'
         try:
             socket = zmq_socket(socket_type = 'remote_control', address = address)
         except Exception as e :
@@ -1067,20 +1080,13 @@ class DataStream(object):
         self.logger.debug(funcname + ': ping')
         tping = time.time()
         request = {'ping':'','uuid':self.uuid,'tping':tping}
-        request_json = json.dumps(request).encode('utf-8')
-        socket.send_req(request_json)
+        socket.send_req(request)
         reply = socket.get_rep() # This is with a poller, so it can block depending on dt_wait
         if(reply[0] != None): # Got a reply
             tpong = reply[0]
             reply_data = reply[1]
-            reply_data = reply_data.decode('utf-8')            
+            reply_dict = reply_data
             self.logger.debug(funcname + ':Got data: '+ str(reply))
-            # Try to decode the reply
-            try:
-                reply_dict = json.loads(reply_data)
-            except Exception as e :
-                self.logger.warning(funcname + ': Exception:' + str(e))
-                return [False,None]
         else:
             self.logger.debug(funcname + ': Timeout processing auth request to REQ at: ' + address)
             return [False,None]
@@ -1097,20 +1103,11 @@ class DataStream(object):
         # Now get the datastream info
         self.logger.debug(funcname + ': get info')
         request = {'get':'info'}
-        request_json = json.dumps(request).encode('utf-8')
-        #socket.zmq_socket.send(request_json)
-        socket.send_req(request_json)
+        socket.send_req(request)
         reply = socket.get_rep() # This is with a poller, so it can block depending on dt_wait
         if(reply[0] != None): # Got a reply
-            reply_data = reply[1]
-            reply_data = reply_data.decode('utf-8')
-            self.logger.debug(funcname + ': Got data:' + reply_data)
-            # Try to decode the reply
-            try:
-                reply_dict = json.loads(reply_data)
-            except Exception as e :
-                self.logger.debug(funcname + ': Exception JSON :' + str(e))
-                return [False,None]
+            reply_dict = reply[1]
+            self.logger.debug(funcname + ': Got data:' + str(reply_data))
         else:
             self.logger.debug(funcname + ': Timeout processing auth request to REQ at: ' + address)
             return [False,None]
@@ -1301,42 +1298,37 @@ class DataStream(object):
         Replies to request of the control function
         """
         funcname = '.control_socket_reply()'
-        request = request.decode('utf-8') # Convert the byte data to a utf-8 string
         self.logger.debug(funcname + ': Got request:' + str(request))
-        try:
-            requests = json.loads(request)
-        except:
-            self.logger.debug(funcname + ': Could not decode json request:' + str(request))
-            return ''.encode('utf-8')
-
+        
         # Check the type of request
-        if 'ping' in requests:
+        if 'ping' in request:
             tpong = time.time()
-            uuid = requests['uuid']
+            uuid = request['uuid']
             self.logger.debug(funcname + ': got ping from uuid: ' + uuid)
             rep = {'pong':'','uuid':self.uuid,'tpong':tpong}
-            rep_json = json.dumps(rep).encode('utf-8')
-            return rep_json
+            return rep
 
-        elif 'pong' in requests:
-            rep_json = json.dumps('').encode('utf-8')
-            return rep_json
+        elif 'pong' in request:
+            return ''
 
-        elif 'connected' in requests:
-            con_address = requests['connected']
+        elif 'connected' in request:
+            con_address = request['connected']
             self.logger.debug(funcname + ': connected with: ' + con_address)
-            return ''.encode('utf-8')
+            #return ''.encode('utf-8')
+            return ''
 
-        elif 'pong' in requests:
-            rep_json = json.dumps('').encode('utf-8')
-            return rep_json
+        elif 'pong' in request:
+            #rep_json = json.dumps('').encode('utf-8')
+            #return rep_json
+            return ''
 
 
-        elif 'get' in requests:
-            if 'info' in requests['get']:
+        elif 'get' in request:
+            if 'info' in request['get']:
                 info_dict = self.get_info()
-                rep_json = json.dumps(info_dict).encode('utf-8')
-                return rep_json
+                #rep_json = json.dumps(info_dict).encode('utf-8')
+                #return rep_json
+                return info_dict
 
         else:
             self.logger.debug(funcname + ': unknown request')
@@ -1346,9 +1338,9 @@ class DataStream(object):
         """
         returns a stream object with the given uuid
         Args:
-        uuid: uuid string
-        returns:
-        Stream object or None if nothing was found
+            uuid: uuid string
+        Returns:
+            Stream object or None if nothing was found
         """
         funcname = '.get_stream_from_uuid()'
         [pure_uuid,address] = uuid.rsplit('::')

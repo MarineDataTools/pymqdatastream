@@ -7,7 +7,7 @@ import pymqdatastream
 
 def reply_function(request):
     #reply = b'Hallo, this is a reply to the request' + str(request)
-    reply = b'Hallo, this is a reply to the request'
+    reply = b'Hallo, this is a reply to the request: ' + request
     return reply
 
 
@@ -18,12 +18,12 @@ if __name__ == '__main__':
                                        logging_level='DEBUG')
     recvDS = pymqdatastream.DataStream(name = 'test_reicv', \
                                        logging_level='DEBUG')
-
+    
     # Create a reply stream
     stream = recvDS.create_rep_stream(socket_reply_function = reply_function)
     
     print(stream)
-
+    
     reqstream = sendDS.subscribe_stream(stream)
     reqstream.socket.send_req(b'Hallo!')
     reply = reqstream.socket.get_rep() # This is with a poller, so it can block depending on dt_wait
