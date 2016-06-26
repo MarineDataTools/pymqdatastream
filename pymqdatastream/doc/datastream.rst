@@ -1,7 +1,7 @@
 Datastream module
 ==================
 
-Hallo!
+This is the datastream module.
 
 .. automodule:: pymqdatastream.datastream.datastream
    :members:

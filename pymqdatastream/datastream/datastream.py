@@ -11,12 +11,13 @@ This module is the basis of pymqdatastream. Here the three classes datastream,
 Stream and zmq_sockets are defined. Each datastream object consists of at least
 one Stream of type "control". Each Stream is connected to a zmq_socket.
 
-TODO: 
-
-* remove sockets from DataStream object
-* Do socket init into Stream object, Streams should now their sockets, DataStreams not
-* put zmw_socket=None and use local socket for wait_for_request_and_reply()
-  to make it thread save, similar to start_poll_substream_thread()
+.. note::
+   TODO: 
+   
+   * remove sockets from DataStream object
+   * Do socket init into Stream object, Streams should now their sockets, DataStreams not
+   * put zmw_socket=None and use local socket for wait_for_request_and_reply()
+     to make it thread save, similar to start_poll_substream_thread()
 
 """
 
@@ -675,7 +676,7 @@ class Stream(object):
         elif(stream_type == 'substream'):
             stream_type_short = 'subs'            
         elif(stream_type == 'repstream'):
-            stream_type_short = 'reps'            
+            stream_type_short = 'reps'
         else:
             stream_type_short = 'Stream'
             
@@ -688,7 +689,7 @@ class Stream(object):
             self.uuid = 'pymqds_' + __datastream_version__ + '_' + \
                         stream_type_short + ':' + str(uuid_module.uuid1())
             self.uuid_utf8 = self.uuid.encode('utf-8')
-        else:
+        else: # substreams, reqstreams do get the uuid from the counterparts
             self.uuid = ''
             
         self.name = name
@@ -760,54 +761,93 @@ class Stream(object):
             data: Data
 
         """
-
+        funcname = 'pub_data()'
         # Check if its only one dataset or many
         # TODO this has to be changed
         #if(len(data) == len(self.variables)):
         #    # put it into a list
         #    data = [data,]
+        if(self.stream_type == 'pubstream'):
+            if(self.do_statistic):
+                self.statistic['packets sent'] += 1
+            for socket in self.socket:
+                data = [self.uuid, data] # Add the uuid
+                socket.pub_data(data)        
 
-        if(self.do_statistic):
-            self.statistic['packets sent'] += 1
-        for socket in self.socket:
-            data = [self.uuid, data] # Add the uuid
-            socket.pub_data(data)        
-
+            return True
+        else:
+            raise Exception(funcname + ": wrong stream type") 
 
     def pop_data(self, n=1):
         """
 
-        Pops data from the deque
+        Pops data from the deque which is received by the 
+        :func:`pymqdatastream.zmq_socket.poll_substream_thread`.
 
         Args:
             n: Number of packets to return (-1 for all)
 
         Returns:
             data: A list of received packets
+
+        Raises:
+           Exception if stream_type is not 'substream'
         """
-        data = []
-        ndata = len(self.deque)
-        if(n > ndata):
-            n = ndata
-        if(n == -1):
-            n = ndata
+        funcname = 'pop_data()'
+        if(self.stream_type == 'substream'):
+            data = []
+            ndata = len(self.deque)
+            if(n > ndata):
+                n = ndata
+            if(n == -1):
+                n = ndata
+
+            while True:
+                if(n > 0):
+                    n -= 1
+                else:
+                    break
+
+                rawdata_recv = self.deque.pop()
+                data.append(rawdata_recv)
+
+            return data
+        else:
+            raise Exception(funcname + ": wrong stream type, cannot pop data")
+
+
+    def reqrep(self,request,dt_wait=0.05):
+        """
+        
+        Init a request->reply pattern if this stream is a reqstream, otherwise return an error
+
+        Args:
+           request: The request to be send
+           dt_wait (float): wait in seconds for the reply datastream to answer
+
+        Returns:
+           The response data to the sent request together
+           with the time the response was received from 
+           the zmq_socket as a list of the form [time, reply]: 
+           
+        """
+        funcname = 'reqrep()'
+        if(self.stream_type == 'reqstream'):
+            self.socket.send_req(request)
+            reply = self.socket.get_rep() # This is with a poller, so it can block depending on dt_wait
+            return reply
+        else:
+            raise Exception(funcname + ": wrong stream type, cannot request data")            
             
-        while True:
-            if(n > 0):
-                n -= 1
-            else:
-                break
-
-            rawdata_recv = self.deque.pop()
-            data.append(rawdata_recv)
-                
-        return data
-
     
     def connect_stream(self,stream,ind_socket = 0,statistic = False):
         """
         
-        Connects a stream by creating a zmq_socket and connecting it to the remote socket
+        Connects a stream by creating a "fitting" zmq_socket and connecting it to the remote socket.
+
+        fitting socket means: 
+           * stream.stream_type == 'pubstream', type = substream
+           * stream.stream_type == 'repstream', type = reqstream
         
         Args: 
             stream: Stream to connect to
@@ -859,17 +899,36 @@ class Stream(object):
         funcname = self.__class__.__name__ + '.reconnect_substream()'
         self.logger.debug(funcname)
         self.socket.reconnect_subsocket()
-            
+
+
+    def disconnect(self):
+        """
+        Disconnects this stream 
+        """            
+
+        funcname = '.disconnect_substream()'
+        if(self.stream_type == 'substream'):
+            self.logger.debug(funcname + ': disconnecting substream')
+            self.disconnect_substream()
+        elif(self.stream_type == 'reqstream'):
+            self.logger.debug(funcname + ': disconnecting reqstream')
+            pass
+        else:
+            pass
+
+        
     def disconnect_substream(self):
         """
-        Disconnects this stream if it is a substream from the remote stream
+
+        Disconnects this stream if it is a substream subscribed to a remote stream
+
         """
         funcname = '.disconnect_substream()'
         self.logger.debug(funcname)
         if(self.stream_type == 'substream'):
             self.logger.debug(funcname + ': disconnecting socket')            
             self.socket.stop_poll_substream_thread()
-            self.logger.debug(funcname + ': disconnecting socket done')            
+            self.logger.debug(funcname + ': disconnecting socket done')
 
             
     def get_info_dict(self):

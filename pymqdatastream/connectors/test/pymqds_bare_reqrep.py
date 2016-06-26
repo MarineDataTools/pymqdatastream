@@ -7,7 +7,7 @@ import pymqdatastream
 
 def reply_function(request):
     #reply = b'Hallo, this is a reply to the request' + str(request)
-    reply = b'Hallo, this is a reply to the request: ' + request
+    reply = 'Hallo, this is a reply to the request: ' + request
     return reply
 
 
@@ -25,8 +25,7 @@ if __name__ == '__main__':
     print(stream)
     
     reqstream = sendDS.subscribe_stream(stream)
-    reqstream.socket.send_req(b'Hallo!')
-    reply = reqstream.socket.get_rep() # This is with a poller, so it can block depending on dt_wait
+    reply = reqstream.reqrep('Hallo')
     print('Reply',reply)
 
             
