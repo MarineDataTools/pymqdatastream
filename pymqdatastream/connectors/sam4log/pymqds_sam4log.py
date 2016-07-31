@@ -480,16 +480,51 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
 
     def convert_raw_data_format2(self, deque, stream, dt = 0.2):
-        """
-
-        Converts raw data of the format 2, which is popped from the deque
+        """Converts raw data of the format 2, which is popped from the deque
         given as argument 
+        The data is sends in binary packages using the the consistent overhead
+        byte stuffing (`COBS
+        <https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing>`_)
+        algorithm.
+        After decoding cobs the binary data has the following content
+
+        ==== ====
+        Byte Usage
+        ==== ====
+        0    0xAD (Packet type)
+        1    FLAG LTC (see comment)
+        2    LTC COMMAND 0 (as send to the AD Converter)
+        3    LTC COMMAND 1
+        5    LTC COMMAND 2
+        6    counter msb
+        ...   
+        13   counter lsb
+        14   clock 50 khz msb
+        ...    
+        21   clock 50 khz lsb
+        22   LTC2442 0 msb
+        23   LTC2442 1 
+        24   LTC2442 2 lsb 
+        .    3 bytes per activated LTC2442
+
+        ==== ====
+
+        FLAG LTC: Every bit is dedicted to one of the eight physically
+        available LTC2442 and is set to one if activated
+
+        Args:
+            deque:
+            stream:
+            dt: Time interval for polling [s]
+        Returns:
+            []: List of data
 
         """
         funcname = self.__class__.__name__ + '.convert_raw_data_format2()'
         self.logger.debug(funcname)
         ad0_converted = 0
         data_str = b''
+        ind_ltc = [0,0,0,0,0,0,0,0]
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
             time.sleep(dt)
@@ -506,8 +541,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 #    print(me.span(0))
                 #    self.commands.append(me.group(0))
                     
-            #print('Hallo!!!')
-            #print(data_str)
+            print('data_str')
+            print(data_str)
             #print(type(data_str))
             #print('Hallo!!! ENDE')            
             data_split = data_str.split(b'\x00')
@@ -518,34 +553,41 @@ class sam4logDataStream(pymqdatastream.DataStream):
                    data_str = data_split[-1]
 
                 for data_cobs in data_split:
-                    #print('Cobs data:')
-                    #print(data_cobs)
+                    print('Cobs data:')
+                    print(data_cobs)
                     try:
                         #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
                         if(len(data_cobs) > 3):
                             data_decobs = cobs.decode(data_cobs)
-                            #print('decobs data:')
-                            #print(data_decobs)
-                            #print(data_decobs[0],type(data_decobs[0]))                            
+                            print('decobs data:')
+                            print(data_decobs)
+                            print(data_decobs[0],type(data_decobs[0]))                            
                             packet_ident    = data_decobs[0]
                             #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
                             if(packet_ident == 0xad):
-                                #print('JA')
+                                print('JA')
                                 #packet_flag_ltc = ord(data_decobs[1]) # python2
                                 packet_flag_ltc = data_decobs[1]
                                 num_ltcs        = bin(packet_flag_ltc).count("1")
+                                # Convert ltc flat bits into indices
+                                # If this is slow, this is a hot cython candidate
+                                for i in range(8):
+                                    ind_ltc[i] = (packet_flag_ltc >> i) & 1
+                                    
                                 packet_size = 5 + 8 + 8 + num_ltcs * 3
                                 #packet_com_ltc0 = ord(data_decobs[2]) # python2
                                 #packet_com_ltc1 = ord(data_decobs[3]) # python2
                                 #packet_com_ltc2 = ord(data_decobs[4]) # python2
                                 packet_com_ltc0 = data_decobs[2]
                                 packet_com_ltc1 = data_decobs[3]
-                                packet_com_ltc2 = data_decobs[4]                                
+                                packet_com_ltc2 = data_decobs[4]
+                                # Decode the command
+                                speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
                                 ind = 5
-                                #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
-                                #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
-                                #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
-                                #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
+                                self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
+                                self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
+                                self.logger.debug(funcname + ': packet_size ' + str(packet_size))
+                                self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
                                 if(len(data_decobs) == packet_size):
                                     packet_num_bin  = data_decobs[ind:ind+8]
                                     #packet_num      = int(packet_num_bin.encode('hex'), 16) # python2
@@ -554,7 +596,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                     packet_time_bin  = data_decobs[ind:ind+8]
                                     #packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0 # python2
                                     packet_time     = int(packet_time_bin.hex(), 16)/10000.0 # python3
-                                    data_packet = [packet_num,packet_time]
+                                    #data_packet = [packet_num,packet_time]
+                                    data_packet = {'num':packet_num,'50khz':packet_time}
+                                    data_packet['spd'] = speed
+                                    data_packet['ch'] = channel
+                                    data_packet['ind'] = ind_ltc
+                                    data_packet['V'] = [9999.99] * num_ltcs
                                     ind += 8
                                     #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
                                     #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
@@ -568,10 +615,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                             #print('data_ltc:',data_ltc.encode('hex'))
                                             conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
                                             #print(conv)
-                                            data_packet.append(conv['V'][0])
+                                            data_packet['V'][i] = conv['V'][0]
                                             self.packets_converted += 1
-                                        else:
-                                            data_packet.append(9999.99)
+                                        #else:
+                                        #    data_packet.append(9999.99)
 
                                     data_stream.append(data_packet)
                                         

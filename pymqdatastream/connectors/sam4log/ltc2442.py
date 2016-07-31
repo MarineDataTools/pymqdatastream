@@ -1,17 +1,89 @@
-# Python functions to convert LTC2442 data to voltages
-#
-# Peter Holtermann
+"""
+
+
+Supporting functions for the (`LTC2442
+<http://www.linear.com/product/LTC2442>`_) converter.
+
+
+"""
+
 
 
 from numpy import *
+
+
+
+# Channels
+# From table 3 of the datasheet
+# address = [SGL,ODD/SIGN,A2,A1,A0]
+# channels = [CH0,CH1,CH2,CH3,COM]
+channels = []
+address  = []
+address.append([0,0,0,0,0])
+channels.append([+1,-1,0,0,0])
+address.append([0,0,0,0,1])
+channels.append([0,0,+1,-1,0])
+address.append([0,1,0,0,0])
+channels.append([-1,+1,0,0,0])
+address.append([0,1,0,0,1])
+channels.append([0,0,-1,+1,0])
+address.append([1,0,0,0,0])
+channels.append([+1,0,0,0,-1])
+address.append([1,0,0,0,1])
+channels.append([0,0,+1,0,-1])
+address.append([1,1,0,0,0])
+channels.append([0,+1,0,0,-1])
+address.append([1,1,0,0,1])
+channels.append([0,0,0,+1,-1])
+# Speeds
+# From table 4 of the datasheet
+# [OSR3,OSR2,OSR1,OSR0,TWOX, Conversion speed (internal clock)]
+modes = []
+speeds = []
+modes.append([0,0,0,0,0])
+speeds.append(NaN)    # 'keep previous resolution'
+modes.append([0,0,0,1,0])
+speeds.append(3.52e3)
+modes.append([0,0,1,0,0])
+speeds.append(1.76e3)
+modes.append([0,0,1,1,0])
+speeds.append(879)
+modes.append([0,1,0,0,0])
+speeds.append(439)
+modes.append([0,1,0,1,0])
+speeds.append(220)
+modes.append([0,1,1,0,0])
+speeds.append(110)
+modes.append([0,1,1,1,0])
+speeds.append(55)
+modes.append([1,0,0,0,0])
+speeds.append(27.5)
+modes.append([1,0,0,1,0])
+speeds.append(13.73)
+modes.append([1,1,1,1,0])
+speeds.append(6.875)
+
+modes = asarray(modes)
 
 def random_data():
     rand_number = np.random.bytes(4)
     return rand_number
 
-def interprete_ltc2442_command(command):
+def interprete_ltc2442_command(command,channel_naming = 0):
     """
+    
+    
     LTC2442 command to human readable form ...
+
+    Args:
+       command: a list of bytes 
+       channel_naming: The way the channels are named (0: standard; 1: SAM4LOG naming)
+                       TODO: Explain what the difference is
+
+    Returns:
+       [speed,channels]: conversion speed in Hz, channels = [CH0,CH1,CH2,CH3,COM]
+    
+    
     """
     COM_ONE   = (command[0]>>7)     & 0x01 #
     COM_ZERO  = (command[0]>>6)     & 0x01 #
@@ -34,10 +106,39 @@ def interprete_ltc2442_command(command):
     print('A2 A1 A0 ',A2,A1,A0)
     print('OSR3 OSR2 OSR1 OSR0 ',OSR3,OSR2,OSR1,OSR0)
     print('TWOX ',TWOX)
+    # Test which speed we have
+    com       = [OSR3,OSR2,OSR1,OSR0,TWOX]
+    com2      = asarray([com] * 11)
+    tmp       = (modes ^ com2)
+    ind_speed = where(sum(tmp,1) == 0)[0]
+    print(speeds[ind_speed])
+    # Test which channels have been measured
+    addr      = [SGL,ODD,A2,A1,A0]
+    addr2     = asarray([addr] * 8)
+    tmp       = ( address ^ addr2)
+    ind_addr  = where(sum(tmp,1) == 0)[0]
+    print(channels[ind_addr])
+    speed = speeds[ind_speed]
+    channel = channels[ind_addr]
+    
+    if(channel_naming == 1):
+        if(addr == [1,0,0,0,0]):
+            return [speed,0]
+        if(addr == [1,1,0,0,0]):
+            return [speed,1]
+        if(addr == [1,0,0,0,1]):
+            return [speed,2]
+        if(addr == [1,1,0,0,1]):
+            return [speed,3]                        
+    else:
+        return [speed,channel]
+
     
 def test_convert_binary():
     """
-    Feeds convert_binary with bit combinations documented in the datasheet
+
+    Feeds convert_binary() with bit combinations documented in the datasheet
+
     """
     #test_7 = chr(0x2F) + chr(0xFF) + chr(0xFF) + chr(0xFF)
     test_7 = b'\x2F\xFF\xFF\xFF'                                

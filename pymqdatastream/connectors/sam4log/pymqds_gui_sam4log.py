@@ -169,12 +169,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         
         #
         # Add a qtable for realtime data showing of voltage/packets number/counter
-        #http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
+        # http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
         #
         self._ad_table = QtWidgets.QTableWidget()
         #self._ad_table.setMinimumSize(300, 300)
         #self._ad_table.setMaximumSize(300, 300)        
-        self._ad_table.setColumnCount(2)
+        self._ad_table.setColumnCount(5)
         self._ad_table.setRowCount(10)
         self._ad_table.verticalHeader().setVisible(False)
         self._ad_table.setItem(0,
@@ -186,7 +186,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self._ad_table.setItem(i+2,
                                 0, QtWidgets.QTableWidgetItem( adname ))        
 
-        self._ad_table.setHorizontalHeaderLabels(['Name','Data','subscribed'])
+        self._ad_table.setHorizontalHeaderLabels(['Name','Ch 0','Ch 1','Ch 2','Ch 3'])
         # Make width and height of the table such that all entries can be seen
         vwidth = self._ad_table.verticalHeader().width()
         hwidth = self._ad_table.horizontalHeader().length()
@@ -211,7 +211,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.bytesreadlcd,0,3)
         layout.addWidget(self._infosaveloadplot_widget,5,0,1,4)
 
-        layout.addWidget(self._ad_table,3,0,2,2)
+        layout.addWidget(self._ad_table,3,0,2,4)
         # Command widgets
         layout.addWidget(QtWidgets.QLabel('Command'),1,0) # Command
         layout.addWidget(self.send_le,1,1,1,2) # Command
@@ -442,7 +442,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def __poll_intraqueue(self):
         """
 
-        Polling the intraque to fill the ad lcd numbers with data
+        Polling the intraque , and displays the data in self._ad_table
 
         """
         data = []
@@ -450,8 +450,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
 
-        #show the last dataset in the table
+        # show the last dataset in the table
         if(len(data)>0):
+            # Get channel
             # Packet number
             item = QtWidgets.QTableWidgetItem(str(data[-1][0]))
             self._ad_table.setItem(0, 1, item)

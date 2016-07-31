@@ -25,10 +25,10 @@ sam4log
    :show-inheritance:
    :special-members: __init__
 
-cobs_packet
+LTC2442_packet
 +++++++++++
 		     
-.. automodule:: pymqdatastream.connectors.sam4log.cobs_packet
+.. automodule:: pymqdatastream.connectors.sam4log.ltc2442
    :members:
    :undoc-members:
    :show-inheritance:
