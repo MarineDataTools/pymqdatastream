@@ -98,26 +98,26 @@ def interprete_ltc2442_command(command,channel_naming = 0):
     OSR1      = (command[1]>>5)     & 0x01 #
     OSR0      = (command[1]>>4)     & 0x01 #
     TWOX      = (command[1]>>3)     & 0x01 #                    
-    print('COM_ONE ',COM_ONE)
-    print('COM_ZERO ',COM_ZERO)
-    print('EN ',EN)
-    print('SGL ',SGL)
-    print('ODD ',ODD)
-    print('A2 A1 A0 ',A2,A1,A0)
-    print('OSR3 OSR2 OSR1 OSR0 ',OSR3,OSR2,OSR1,OSR0)
-    print('TWOX ',TWOX)
+    #print('COM_ONE ',COM_ONE)
+    #print('COM_ZERO ',COM_ZERO)
+    #print('EN ',EN)
+    #print('SGL ',SGL)
+    #print('ODD ',ODD)
+    #print('A2 A1 A0 ',A2,A1,A0)
+    #print('OSR3 OSR2 OSR1 OSR0 ',OSR3,OSR2,OSR1,OSR0)
+    #print('TWOX ',TWOX)
     # Test which speed we have
     com       = [OSR3,OSR2,OSR1,OSR0,TWOX]
     com2      = asarray([com] * 11)
     tmp       = (modes ^ com2)
     ind_speed = where(sum(tmp,1) == 0)[0]
-    print(speeds[ind_speed])
+    #print(speeds[ind_speed])
     # Test which channels have been measured
     addr      = [SGL,ODD,A2,A1,A0]
     addr2     = asarray([addr] * 8)
     tmp       = ( address ^ addr2)
     ind_addr  = where(sum(tmp,1) == 0)[0]
-    print(channels[ind_addr])
+    #print(channels[ind_addr])
     speed = speeds[ind_speed]
     channel = channels[ind_addr]
     

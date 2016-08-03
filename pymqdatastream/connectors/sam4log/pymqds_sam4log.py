@@ -40,6 +40,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.logger.debug(funcname)
         self.dequelen = 10000 # Length of the deque used to store data
         self.flag_adcs = [] # List of adcs to be send by the logger hardware
+        self.device_info = None
         self.print_serial_data = False
         self.serial_thread_queue = queue.Queue()
         self.serial_thread_queue_ans = queue.Queue()
@@ -51,7 +52,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.intraqueue = collections.deque(maxlen=self.dequelen) # Queue for for internal processing, e.g. printing of processed data
         # Two queues to start/stop the raw_data conversion threads
         self.conversion_thread_queue = queue.Queue()
-        self.conversion_thread_queue_ans = queue.Queue()        
+        self.conversion_thread_queue_ans = queue.Queue()
+        # List of conversion streams
+        self.conv_streams = []
+        # A list with Nones or the streams dedicated for the channels
+        self.channel_streams = None
         self.commands = []
 
         # The data format
@@ -256,7 +261,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.convert_raw_data = self.convert_raw_data_format2
 
 
-    def init_sam4logger(self,flag_adcs,data_format=2):
+    def init_sam4logger(self,flag_adcs,data_format=2,channels=[0]):
         """
     
         Function to set specific settings on the logger
@@ -280,6 +285,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.init_data_format_functions()
         self.send_serial_data('format ' + str(data_format) + '\n')
         time.sleep(0.1)
+        self.send_serial_data('channels ' + '\n')
+        time.sleep(0.1)        
         self.print_serial_data = False
         self.send_serial_data('start\n')
 
@@ -288,30 +295,83 @@ class sam4logDataStream(pymqdatastream.DataStream):
         """
         
         Queries the logger and sets the importent parameters to the values read
+        TODO: Do something if query fails
 
-        Args:
-        
         Returns:
-            something useful
+            bool: True if we found a sam4logger, False otherwise
+
         
         """
         
         funcname = self.__class__.__name__ + '.query_sam4logger()'
         self.logger.debug(funcname)        
-        self.send_serial_data('stop\n')
-
-
         self.print_serial_data = False
         self.send_serial_data('stop\n')
         time.sleep(0.1)
         # Flush the serial queue now
         deque = self.deques_raw_serial[0]
         while(len(deque) > 0):
-            data = deque.pop()                
+            data = deque.pop()
+
+
+        #
+        # Send stop and info to check if we got some data which is a sam4log
+        #
+        FLAG_IS_SAM4LOG = False
+        self.send_serial_data('stop\n')
+        time.sleep(0.1)        
+        self.send_serial_data('info\n')
+        time.sleep(0.1)        
+        data_str = ''        
+        while(len(deque) > 0):
+            data = deque.pop()
+            try:
+                data_str += data.decode(encoding='utf-8')
+            except Exception as e:
+                self.logger.debug(funcname + ': Exception:' + e)
+                return False
+
+        return_str = data_str
+        # Parse the received data for a valid reply
+        if( '>>>stop' in data_str ):
+            FLAG_IS_SAM4LOG=True
+            self.logger.debug(funcname + ': Found a valid stop reply')
+            for line in data_str.split('\n'):
+                print(line)
+                if( ' board version:' in line ):
+                    # Expecting a string like this:
+                    # >>> --  board version: 9.00 --
+                    boardversion = line.rsplit(' ',maxsplit=2)
+                    try:
+                        boardversion = boardversion[1]
+                    except:                    
+                        self.logger.debug(funcname + ': No valid version string')
+                    print('Board version:',boardversion)           
+                elif( 'version:' in line ):
+                    # Expecting a string like this:
+                    # >>> --  version: 0.30 --
+                    firmwareversion = line.rsplit(' ',maxsplit=2)
+                    try:
+                        firmwareversion = firmwareversion[1]
+                    except:
+                        self.logger.debug(funcname + ': No valid version string')
+                    print('Firmware version:',firmwareversion)
+                
+            
+        if(FLAG_IS_SAM4LOG==False):
+            self.logger.warning(funcname + ': Device does not seem to be a sam4log')
+            return False
+        else:
+            self.device_info = {}
+            self.device_info['board'] = boardversion
+            self.device_info['firmware'] = firmwareversion            
+            
         self.send_serial_data('format\n')
         time.sleep(0.1)
         self.send_serial_data('ad\n')
         time.sleep(0.1)
+        self.send_serial_data('channels\n')
+        time.sleep(0.1)        
         self.print_serial_data = False                
         self.send_serial_data('start\n')
 
@@ -319,30 +379,46 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data_str = ''
         while(len(deque) > 0):
             data = deque.pop()
-            data_str += data.decode('utf-8')
+            data_str += data.decode(encoding='utf-8')
+            #data_str += data
 
-
+        print(data_str)
+        #print('Data str:' + data_str)
         # Parse the data
         print('Info is')
         #data_str= ">>>format\n>>> is a command with length 7\n>>>format is 2\n>>>ad\n>>> is a command with length 3\n>>>adcs: 0 2 4\n"
         # Look for a format string ala ">>>format is 2"
         data_format = None
         format_str = ''
-        for i,me in enumerate(re.finditer(r'>>>format is.*\n',data_str)):
+        for i,me in enumerate(re.finditer(r'>>>format:.*\n',data_str)):
             format_str = me.group()
 
         adc_str = ''
         for i,me in enumerate(re.finditer(r'>>>adcs:.*\n',data_str)):
-            adc_str = me.group()            
+            adc_str = me.group()
 
+        channel_str = ''
+        for i,me in enumerate(re.finditer(r'>>>channel sequence:.*\n',data_str)):
+            channel_str = me.group()                        
+
+        print('Channel str:' + channel_str)
         data_format = [int(s) for s in re.findall(r'\b\d+\b', format_str)][-1]
         data_adcs = [int(s) for s in re.findall(r'\b\d+\b', adc_str)]
+        data_channel_seq = [int(s) for s in re.findall(r'\b\d+\b', channel_str)]
+
+        self.device_info['format'] = data_format
+        self.device_info['adcs'] = data_adcs
+        self.device_info['channel_seq'] = data_channel_seq
+        # Create a list for each channel and fill it later with streams
+        self.channel_streams = [None] * (max(data_channel_seq) + 1)
         
         # Update the local parameters
-        self.logger.debug(funcname + ': format:' + str(data_format) + ' adcs:' + str(data_adcs))
+        self.logger.debug(funcname + ': format:' + str(data_format) + ' adcs:' + str(data_adcs) + ' channel sequence:' + str(data_channel_seq))
+        # TODO, replace by device_info dict
         self.data_format = data_format
         self.init_data_format_functions()
         self.flag_adcs = data_adcs
+        return True
         
         
     def start_converting_raw_data(self):
@@ -360,30 +436,36 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         funcname = self.__class__.__name__ + '.start_converting_raw_data()'
         self.logger.debug(funcname)
-        deque = collections.deque(maxlen=self.dequelen)
-        self.deques_raw_serial.append(deque)
-        # Adding a stream with all ltcs
-        timevar = pymqdatastream.StreamVariable('time','seconds','float')
-        packetvar = pymqdatastream.StreamVariable('packet','number','int')
-        variables = [packetvar,timevar]
-        
-        for ad in self.flag_adcs:
-            datavar = pymqdatastream.StreamVariable('ad ' + str(ad),'V','float')
-            variables.append(datavar)
 
-        name = 'sam4log'
-        self.conv_stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
-        self.logger.debug(funcname + ': Starting thread')
-        # Analyse data format, choose the right conversion functions and start a conversion thread
-        self.init_data_format_functions()
-        self.packets_converted = 0
+        if(self.device_info != None):
+            deque = collections.deque(maxlen=self.dequelen)
+            self.deques_raw_serial.append(deque)
+            for ch in self.device_info['channel_seq']:
+                self.logger.debug(funcname + ': Adding pub stream for channel:' + str(ch))
+                # Adding a stream with all ltcs for each channel
+                timevar = pymqdatastream.StreamVariable('time','seconds','float')
+                packetvar = pymqdatastream.StreamVariable('packet','number','int')
+                variables = [packetvar,timevar]
 
-        self.convert_thread = threading.Thread(target=self.convert_raw_data,args = (deque, self.conv_stream))
-        self.convert_thread.daemon = True
-        self.convert_thread.start()            
-        self.logger.debug(funcname + ': Starting thread done')
-        
-        return self.conv_stream
+                for ad in self.flag_adcs:
+                    datavar = pymqdatastream.StreamVariable('ad ' + str(ad) + ' ch ' + str(ch),'V','float')
+                    variables.append(datavar)
+
+                name = 'sam4log ad ch' + str(ch)
+                self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables))
+                self.channel_streams[ch] = self.conv_streams[-1]
+                
+            self.logger.debug(funcname + ': Starting thread')
+            # Analyse data format, choose the right conversion functions and start a conversion thread
+            self.init_data_format_functions()
+            self.packets_converted = 0
+
+            self.convert_thread = threading.Thread(target=self.convert_raw_data,args = (deque,))
+            self.convert_thread.daemon = True
+            self.convert_thread.start()            
+            self.logger.debug(funcname + ': Starting thread done')
+
+            return self.conv_streams
     
 
     def stop_converting_raw_data(self):
@@ -397,12 +479,18 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.conversion_thread_queue.put('stop')
         data = self.conversion_thread_queue_ans.get()
         self.logger.debug('Got data from conversion thread, thread stopped')
-        self.rem_stream(self.conv_stream)
-        self.conv_stream = None
+
+        self.channel_streams = None        
+        for stream in self.conv_streams:
+            self.rem_stream(stream)
+            
+        self.conv_streams = []
+        # A list with Nones or the streams dedicated for the channels
         self.packets_converted = 0
 
-        
-    def convert_raw_data_format0(self, deque, streams, dt = 0.5):
+
+    # Warning, this does not work anymore (at the moment) due to new streams!
+    def convert_raw_data_format0(self, deque, dt = 0.5):
         """
         Converts raw data of the format 0, which is popped from the deque given as argument
         036:0>450003;16;30
@@ -467,7 +555,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             if(len(data0)>0):
                 streams[0].pub_data(data0)
                 self.intraqueue.appendleft(data0)
-
+                #self.channel_streams[ch]
 
             # Try to read from the queue, if something was read, quit
             try:
@@ -479,8 +567,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 pass                
 
 
-    def convert_raw_data_format2(self, deque, stream, dt = 0.2):
-        """Converts raw data of the format 2, which is popped from the deque
+    def convert_raw_data_format2(self, deque, dt = 0.2):
+        """
+
+        Converts raw data of the format 2, which is popped from the deque
         given as argument 
         The data is sends in binary packages using the the consistent overhead
         byte stuffing (`COBS
@@ -524,11 +614,14 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.logger.debug(funcname)
         ad0_converted = 0
         data_str = b''
-        ind_ltc = [0,0,0,0,0,0,0,0]
+        ind_ltcs = [0,0,0,0,0,0,0,0]
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
+            # Create an empty list for every channel
+            #http://stackoverflow.com/questions/8713620/appending-items-to-a-list-of-lists-in-python
+            nstreams = (max(self.device_info['channel_seq']) + 1)
+            data_stream = [[] for _ in range(nstreams) ]
             time.sleep(dt)
-            data_stream = []
             while(len(deque) > 0):
                 data = deque.pop()
                 data_str += data
@@ -541,8 +634,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 #    print(me.span(0))
                 #    self.commands.append(me.group(0))
                     
-            print('data_str')
-            print(data_str)
+            #print('data_str')
+            #print(data_str)
             #print(type(data_str))
             #print('Hallo!!! ENDE')            
             data_split = data_str.split(b'\x00')
@@ -553,83 +646,82 @@ class sam4logDataStream(pymqdatastream.DataStream):
                    data_str = data_split[-1]
 
                 for data_cobs in data_split:
-                    print('Cobs data:')
-                    print(data_cobs)
+                    #print('Cobs data:')
+                    #print(data_cobs)
                     try:
                         #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
                         if(len(data_cobs) > 3):
                             data_decobs = cobs.decode(data_cobs)
-                            print('decobs data:')
-                            print(data_decobs)
-                            print(data_decobs[0],type(data_decobs[0]))                            
+                            #print('decobs data:')
+                            #print(data_decobs)
+                            #print(data_decobs[0],type(data_decobs[0]))                            
                             packet_ident    = data_decobs[0]
                             #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
                             if(packet_ident == 0xad):
-                                print('JA')
+                                #print('JA')
                                 #packet_flag_ltc = ord(data_decobs[1]) # python2
                                 packet_flag_ltc = data_decobs[1]
                                 num_ltcs        = bin(packet_flag_ltc).count("1")
                                 # Convert ltc flat bits into indices
                                 # If this is slow, this is a hot cython candidate
                                 for i in range(8):
-                                    ind_ltc[i] = (packet_flag_ltc >> i) & 1
+                                    ind_ltcs[i] = (packet_flag_ltc >> i) & 1
                                     
+                                ind_ltc = ind_ltcs
                                 packet_size = 5 + 8 + 8 + num_ltcs * 3
-                                #packet_com_ltc0 = ord(data_decobs[2]) # python2
-                                #packet_com_ltc1 = ord(data_decobs[3]) # python2
-                                #packet_com_ltc2 = ord(data_decobs[4]) # python2
                                 packet_com_ltc0 = data_decobs[2]
                                 packet_com_ltc1 = data_decobs[3]
                                 packet_com_ltc2 = data_decobs[4]
                                 # Decode the command
                                 speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
                                 ind = 5
-                                self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
-                                self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
-                                self.logger.debug(funcname + ': packet_size ' + str(packet_size))
-                                self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
+                                #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
+                                #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
+                                #self.logger.debug(funcname + ': Ind ltc '  + str(ind_ltc))
+                                #self.logger.debug(funcname + ': channel '  + str(channel))                                
+                                #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
+                                #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
                                 if(len(data_decobs) == packet_size):
                                     packet_num_bin  = data_decobs[ind:ind+8]
-                                    #packet_num      = int(packet_num_bin.encode('hex'), 16) # python2
                                     packet_num      = int(packet_num_bin.hex(), 16) # python3
                                     ind += 8
                                     packet_time_bin  = data_decobs[ind:ind+8]
-                                    #packet_time     = int(packet_time_bin.encode('hex'), 16)/10000.0 # python2
                                     packet_time     = int(packet_time_bin.hex(), 16)/10000.0 # python3
-                                    #data_packet = [packet_num,packet_time]
+                                    data_list = [packet_num,packet_time]
                                     data_packet = {'num':packet_num,'50khz':packet_time}
                                     data_packet['spd'] = speed
                                     data_packet['ch'] = channel
-                                    data_packet['ind'] = ind_ltc
+                                    data_packet['ind'] = ind_ltcs
                                     data_packet['V'] = [9999.99] * num_ltcs
                                     ind += 8
                                     #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
                                     #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
-                                    for i in range(0,num_ltcs*3,3):
+                                    for n,i in enumerate(range(0,num_ltcs*3,3)):
                                         data_ltc = data_decobs[ind+i:ind+i+3]
-                                        #data_ltc += chr(int('88',16)) # python2 
                                         data_ltc += 0x88.to_bytes(1,'big') # python3
-                                        #print(data_decobs.hex(),ind)
-                                        #print(data_ltc.hex(),len(data_ltc))
                                         if(len(data_ltc) == 4):
-                                            #print('data_ltc:',data_ltc.encode('hex'))
                                             conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
                                             #print(conv)
-                                            data_packet['V'][i] = conv['V'][0]
+                                            data_packet['V'][n] = conv['V'][0]
+                                            # This could make trouble if the list is too short ...
+                                            data_list.append(conv['V'][0])
                                             self.packets_converted += 1
                                         #else:
                                         #    data_packet.append(9999.99)
+                                    data_stream[channel].append(data_list)
 
-                                    data_stream.append(data_packet)
                                         
                     except cobs.DecodeError:
                         self.logger.debug(funcname + ': COBS DecodeError')
                         pass
-        
-            if(len(data_stream)>0):
-                stream.pub_data(data_stream)
-                self.intraqueue.appendleft(data_stream)
-                #print(data_stream)
+
+            # Lets publish the converted data!
+            for i in range(len(self.channel_streams)):
+                if(len(data_stream[i])>0):
+                    self.channel_streams[i].pub_data(data_stream[i])
+                    # Put a different format into the intraqueue,
+                    # since the channels are seperate datastreams
+                    self.intraqueue.appendleft(data_packet)
 
             # Try to read from the queue, if something was read, quit
             try:
@@ -638,7 +730,78 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 self.conversion_thread_queue_ans.put('stopping')
                 break
             except queue.Empty:
-                pass                
+                pass
+
+
+    def convert_raw_data_format3(self, deque, dt = 0.5):
+        """
+        Converts raw data of the format 3, which is popped from the deque given as argument
+        Example:
+        00000000692003;00000000000342;2;0;+2.04882227;4;-9.99999999
+        10 khz counter; num package;channel;num ad;Volt ad; ...
+
+        """
+        funcname = self.__class__.__name__ + '.convert_raw_data_format3()'
+        self.logger.debug(funcname)
+        ad0_converted = 0
+        data_str = ''
+        while True:
+            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
+            data0 = []            
+            time.sleep(dt)
+            while(len(deque) > 0):
+                data = deque.pop()
+                data_str += data
+                
+                #logger.debug(funcname + ': str: ' + str(data_str))  
+                [data_str,data_netstr] = netstring.get_netstring(data_str)
+                #logger.debug(funcname + ': raw: ' + str(data_str))
+                #logger.debug(funcname + ': net: ' + str(data_netstr))
+                for nstr in data_netstr:
+                    if(nstr[0:2] == '0>'):
+                        print(nstr)
+                        d_split = nstr.split('\n')
+                        # Remove empty last packet
+                        if(len(d_split[-1]) == 0):
+                            d_split.pop(-1)
+                            
+                        d_split0 = d_split[0].split(';')
+                        timer10khz = float(d_split0[0][2:])
+                        timer_seconds = timer10khz / 10000.0
+                        channel = int(d_split0[1])
+                        cnv_speed = int(d_split0[2])                        
+                        num_ltcs = len(d_split) - 1
+                        self.logger.debug(funcname + ': num_ltcs:' + str(num_ltcs)) 
+                        data_tmp = [timer_seconds]
+                        for nltc in range(num_ltcs):
+                            d_split_ltc = d_split[1+nltc].split(';')
+                            print('Hallo',d_split_ltc)
+                            data_num_ltc = int(d_split_ltc[0])
+                            data_V = float(d_split_ltc[2])
+                            data_tmp.append(data_V)
+                            
+                        data0.append(data_tmp)
+                        self.packets_converted += 1
+                    else:
+                        self.logger.debug(funcname + ': no a valid format 0 string:')
+
+
+            # Push the read data
+            ti = time.time()
+            
+            if(len(data0)>0):
+                streams[0].pub_data(data0)
+                self.intraqueue.appendleft(data0)
+                #self.channel_streams[ch]
+
+            # Try to read from the queue, if something was read, quit
+            try:
+                data = self.conversion_thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self.conversion_thread_queue_ans.put('stopping')
+                break
+            except queue.Empty:
+                pass                            
             
 
                 

@@ -59,6 +59,48 @@ def serial_ports():
 baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
 
 
+class sam4logInfo(QtWidgets.QWidget):
+    """
+    Widget display status informations of a sam4log device
+    """
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
+        self.f_version = QtWidgets.QLabel('Firmware: ?')
+        self.b_version = QtWidgets.QLabel('Board: ?')
+        self.adcs = QtWidgets.QLabel('ADCS: ?')                
+        self.ch_seq = QtWidgets.QLabel('Channels: ?')
+        self.data_format = QtWidgets.QLabel('Format: ?')        
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(self.b_version)
+        layout.addWidget(self.f_version)
+        layout.addWidget(self.adcs)
+        layout.addWidget(self.ch_seq)
+        layout.addWidget(self.data_format)        
+        self.setLayout(layout)        
+
+    def update(self,status):
+        """
+        Updates the widget with status dictionary
+        """
+
+        boardstr = 'Board: ' + status['board']
+        firmstr = 'Firmware: ' + status['firmware']
+        chstr = 'Channels: '
+        for ch in status['channel_seq']:
+            chstr += str(ch)
+        formatstr = 'Format: ' + str(status['format'])
+        adcstr = 'ADCS: '
+        for adc in status['adcs']:
+            adcstr += str(adc)
+            
+        self.b_version.setText(boardstr)
+        self.f_version.setText(firmstr)
+        self.ch_seq.setText(chstr)
+        self.adcs.setText(adcstr)
+        self.data_format.setText(formatstr)
+        pass
+
+
 
 def _start_pymqds_plotxy():
     """
@@ -95,6 +137,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.mainwidget = QtWidgets.QWidget()
         layout = QtWidgets.QGridLayout(self.mainwidget)
 
+        self.deviceinfo = sam4logInfo()
+
         # Serial interface stuff
         self.combo_serial = QtWidgets.QComboBox(self)
         self.combo_baud   = QtWidgets.QComboBox(self)
@@ -102,7 +146,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self.combo_baud.addItem(str(b))
 
         self.combo_baud.setCurrentIndex(len(baud)-1)
-        self.serial_open_bu = QtWidgets.QPushButton('open')
+        self.serial_open_bu = QtWidgets.QPushButton('query')
         self.serial_open_bu.clicked.connect(self.clicked_open_bu)
 
         # Widget to show info about how much bytes have been received
@@ -205,17 +249,18 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # The main layout
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
-        layout.addWidget(self._show_data_bu,2,0)
-        layout.addWidget(self.__ad_choose_bu,2,1)        
+        layout.addWidget(self.deviceinfo,1,0,1,4)        
+        layout.addWidget(self._show_data_bu,3,0)
+        layout.addWidget(self.__ad_choose_bu,3,1)        
         layout.addWidget(self.serial_open_bu,0,2)
         layout.addWidget(self.bytesreadlcd,0,3)
-        layout.addWidget(self._infosaveloadplot_widget,5,0,1,4)
+        layout.addWidget(self._infosaveloadplot_widget,6,0,1,4)
 
-        layout.addWidget(self._ad_table,3,0,2,4)
+        layout.addWidget(self._ad_table,4,0,2,4)
         # Command widgets
-        layout.addWidget(QtWidgets.QLabel('Command'),1,0) # Command
-        layout.addWidget(self.send_le,1,1,1,2) # Command
-        layout.addWidget(send_bu,1,3) # Command
+        layout.addWidget(QtWidgets.QLabel('Command'),2,0) # Command
+        layout.addWidget(self.send_le,2,1,1,2) # Command
+        layout.addWidget(send_bu,2,3) # Command
 
 
 
@@ -288,12 +333,21 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         t = self.serial_open_bu.text()
         print('Click ' + str(t))
         if True:
-            if(t == 'open'):
+            if(t == 'query'):
                 ser = str(self.combo_serial.currentText())
                 b = int(self.combo_baud.currentText())
-                self.serial_open_bu.setText('close')
                 print('Opening port' + ser + ' with baudrate ' + str(b))
-                self.sam4log.add_serial_device(ser,baud=b)
+                self.sam4log.add_serial_device(ser,baud=b)                
+                if(self.sam4log.query_sam4logger() == True):
+                    self.deviceinfo.update(self.sam4log.device_info)
+                    self.serial_open_bu.setText('open')
+                    
+            elif(t == 'open'):
+                #ser = str(self.combo_serial.currentText())
+                #b = int(self.combo_baud.currentText())
+                self.serial_open_bu.setText('close')
+                #print('Opening port' + ser + ' with baudrate ' + str(b))
+                #self.sam4log.add_serial_device(ser,baud=b)
                 self.sam4log.add_raw_data_stream()
                 time.sleep(0.2)
                 self.sam4log.init_sam4logger(flag_adcs = [0,2,4])
@@ -303,7 +357,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             else:
                 self.sam4log.stop_serial_data()
                 self.sam4log.stop_converting_raw_data()
-                self.serial_open_bu.setText('open')
+                self.serial_open_bu.setText('query')
                 self.status = 0
 
         else:
@@ -453,22 +507,26 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # show the last dataset in the table
         if(len(data)>0):
             # Get channel
-            # Packet number
-            item = QtWidgets.QTableWidgetItem(str(data[-1][0]))
-            self._ad_table.setItem(0, 1, item)
+            ch = data['ch']
+            num = data['num']
+            c50khz = data['50khz']
+            V = data['V']
+            # Packet number            
+            item = QtWidgets.QTableWidgetItem(str(num))
+            self._ad_table.setItem(0, ch + 1, item)
             # Counter
-            item = QtWidgets.QTableWidgetItem(str(data[-1][1]))
-            self._ad_table.setItem(1, 1, item)
-            for i,n in enumerate(self.sam4log.flag_adcs):
-                item = QtWidgets.QTableWidgetItem(str(data[-1][i+2]))
-                self._ad_table.setItem(n+2, 1, item )  
+            item = QtWidgets.QTableWidgetItem(str(c50khz))
+            self._ad_table.setItem(1, ch + 1, item)
+            for n,i in enumerate(self.sam4log.flag_adcs):
+                item = QtWidgets.QTableWidgetItem(str(V[n]))
+
+                self._ad_table.setItem(i+2, ch+1, item )  
 
 
     def __combo_format(self):
         """
         """
         f = self.combo_format.currentText()
-        print(f)            
         if(f == 'utf-8'):
             self.__textdataformat = 0
         if(f == 'hex'):
