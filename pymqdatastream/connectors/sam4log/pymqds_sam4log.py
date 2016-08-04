@@ -260,8 +260,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
         if(self.data_format == 2):
             self.convert_raw_data = self.convert_raw_data_format2
 
+        if(self.data_format == 3):
+            self.convert_raw_data = self.convert_raw_data_format3
 
-    def init_sam4logger(self,flag_adcs,data_format=2,channels=[0]):
+
+    def init_sam4logger(self,flag_adcs,data_format=3,channels=[0]):
         """
     
         Function to set specific settings on the logger
@@ -406,6 +409,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data_adcs = [int(s) for s in re.findall(r'\b\d+\b', adc_str)]
         data_channel_seq = [int(s) for s in re.findall(r'\b\d+\b', channel_str)]
 
+        self.device_info['counterfreq'] = 10000.0 # TODO, this should come frome the firmware
         self.device_info['format'] = data_format
         self.device_info['adcs'] = data_adcs
         self.device_info['channel_seq'] = data_channel_seq
@@ -686,7 +690,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                     packet_num      = int(packet_num_bin.hex(), 16) # python3
                                     ind += 8
                                     packet_time_bin  = data_decobs[ind:ind+8]
-                                    packet_time     = int(packet_time_bin.hex(), 16)/10000.0 # python3
+                                    packet_time     = int(packet_time_bin.hex(), 16)/self.device_info['counterfreq']
                                     data_list = [packet_num,packet_time]
                                     data_packet = {'num':packet_num,'50khz':packet_time}
                                     data_packet['spd'] = speed
@@ -721,6 +725,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     self.channel_streams[i].pub_data(data_stream[i])
                     # Put a different format into the intraqueue,
                     # since the channels are seperate datastreams
+                    # TODO, this is only the last, have to create a list!
                     self.intraqueue.appendleft(data_packet)
 
             # Try to read from the queue, if something was read, quit
@@ -733,7 +738,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 pass
 
 
-    def convert_raw_data_format3(self, deque, dt = 0.5):
+    def convert_raw_data_format3(self, deque, dt = 0.2):
         """
         Converts raw data of the format 3, which is popped from the deque given as argument
         Example:
@@ -744,54 +749,50 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.convert_raw_data_format3()'
         self.logger.debug(funcname)
         ad0_converted = 0
-        data_str = ''
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
-            data0 = []            
+            nstreams = (max(self.device_info['channel_seq']) + 1)
+            # Create a list of data to be submitted for each stream
+            data_stream = [[] for _ in range(nstreams) ] 
+            data_str = ''
             time.sleep(dt)
             while(len(deque) > 0):
                 data = deque.pop()
-                data_str += data
-                
-                #logger.debug(funcname + ': str: ' + str(data_str))  
-                [data_str,data_netstr] = netstring.get_netstring(data_str)
-                #logger.debug(funcname + ': raw: ' + str(data_str))
-                #logger.debug(funcname + ': net: ' + str(data_netstr))
-                for nstr in data_netstr:
-                    if(nstr[0:2] == '0>'):
-                        print(nstr)
-                        d_split = nstr.split('\n')
-                        # Remove empty last packet
-                        if(len(d_split[-1]) == 0):
-                            d_split.pop(-1)
-                            
-                        d_split0 = d_split[0].split(';')
-                        timer10khz = float(d_split0[0][2:])
-                        timer_seconds = timer10khz / 10000.0
-                        channel = int(d_split0[1])
-                        cnv_speed = int(d_split0[2])                        
-                        num_ltcs = len(d_split) - 1
-                        self.logger.debug(funcname + ': num_ltcs:' + str(num_ltcs)) 
-                        data_tmp = [timer_seconds]
-                        for nltc in range(num_ltcs):
-                            d_split_ltc = d_split[1+nltc].split(';')
-                            print('Hallo',d_split_ltc)
-                            data_num_ltc = int(d_split_ltc[0])
-                            data_V = float(d_split_ltc[2])
-                            data_tmp.append(data_V)
-                            
-                        data0.append(data_tmp)
-                        self.packets_converted += 1
-                    else:
-                        self.logger.debug(funcname + ': no a valid format 0 string:')
+                data_str += data.decode(encoding='utf-8')
+                #data_list = [packet_num,packet_time]
+                data_packets = []
+                for line in data_str.splitlines():
+                    data_split = line.split(';')
+                    packet_time = int(data_split[0])/self.device_info['counterfreq']
+                    packet_num = int(data_split[1])
+                    channel = int(data_split[2])
+                    ad_data = data_split[3:]
+                    # Fill the data list
+                    data_list = [packet_num,packet_time]                    
+                    # Fill the data packet dictionary
+                    data_packet = {}
+                    data_packet = {'num':packet_num,'50khz':packet_time}
+                    data_packet['ch'] = channel
+                    data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
+                    for n,i in enumerate(range(0,len(ad_data)-1,2)):
+                        V = float(ad_data[i+1])
+                        data_packet['V'][n] = V
+                        data_list.append(V)
 
-
+                    data_packets.append(data_packet)
+                    data_stream[channel].append(data_list)
             # Push the read data
             ti = time.time()
             
-            if(len(data0)>0):
-                streams[0].pub_data(data0)
-                self.intraqueue.appendleft(data0)
+            #if(len(data0)>0):
+            #    streams[0].pub_data(data0)
+
+            for i in range(len(self.channel_streams)):
+                if(len(data_stream[i])>0):
+                    self.channel_streams[i].pub_data(data_stream[i])            
+
+            for data_packet in data_packets:
+                self.intraqueue.appendleft(data_packet)
                 #self.channel_streams[ch]
 
             # Try to read from the queue, if something was read, quit
