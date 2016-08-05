@@ -47,7 +47,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
         self.bytes_read = 0
         self.serial = None # The device to be connected to
-        # Two initial queues, the first is for internal use (init logger), the second is for the raw stream
+        # Two initial queues, the first is for internal use (init logger, query_sam4log), the second is for the raw stream
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen),collections.deque(maxlen=self.dequelen)]
         self.intraqueue = collections.deque(maxlen=self.dequelen) # Queue for for internal processing, e.g. printing of processed data
         # Two queues to start/stop the raw_data conversion threads
@@ -199,8 +199,49 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data = self.serial_thread_queue_ans.get()
         self.logger.debug('Got data, thread stopped')
         self.serial.close()
+
         
-    
+    def log_serial_data(self,filename):
+        """
+        Saves the raw serial data into filename
+        """
+        funcname = self.__class__.__name__ + '._log_serial_data()'        
+        deque = collections.deque(maxlen=self.dequelen)
+        self.deques_raw_serial.append(deque)
+        self._log_thread_queue = queue.Queue()
+        self._log_thread_queue_ans = queue.Queue()
+        self.logfile = open(filename,'wb')
+        self._logfile_thread = threading.Thread(target=self._logging_thread,args=(deque,self.logfile))
+        self._logfile_thread.daemon = True
+        self._logfile_thread.start()
+
+        
+    def stop_log_serial_data(self):
+        """
+        """
+        self._log_thread_queue.put('stop')
+        data = self.conversion_thread_queue_ans.get()
+        self.logger.debug('Got data from conversion thread; thread stopped.')
+        self.logfile.close()
+
+        
+    def _logging_thread(deque,logfile,dt = 0.2):
+        funcname = self.__class__.__name__ + '._logging_thread()'        
+        while True:
+            time.sleep(dt)
+            # Try to read from the queue, if something was read, quit
+            while(len(deque) > 0):
+                data = deque.pop()
+                logfile.write(data)
+            try:
+                data = self._log_thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self._log_thread_queue_ans.put('stopping')
+                break
+            except queue.Empty:
+                pass                                        
+
+        
     def add_raw_data_stream(self):
         """
         
