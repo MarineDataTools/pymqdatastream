@@ -180,12 +180,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
         """
         funcname = self.__class__.__name__ + '.send_serial_data()'
         if(self.serial != None):
-            print('Sending:' + str(data))
+            self.logger.debug(funcname + ': Sending to device:' + str(data))
             # Python2 work with that
             self.serial.write(str(data).encode('utf-8'))
-            print('done')
+            self.logger.debug(funcname + ': Sending done')
         else:
-            self.logger.debug(funcname + ':Serial port is not open.')
+            self.logger.warning(funcname + ':Serial port is not open.')
 
 
     def stop_serial_data(self):
@@ -194,10 +194,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
         Closes the serial port and does a cleanup of running threads etc.
 
         """
-        self.logger.debug('Stopping')
+        funcname = self.__class__.__name__ + '.stop_serial_data()'
+        self.logger.debug(funcname + ': Stopping')
         self.serial_thread_queue.put('stop')
         data = self.serial_thread_queue_ans.get()
-        self.logger.debug('Got data, thread stopped')
+        self.logger.debug(funcname + ': Got data, thread stopped')
         self.serial.close()
 
         
@@ -220,14 +221,15 @@ class sam4logDataStream(pymqdatastream.DataStream):
         """
         """
         self._log_thread_queue.put('stop')
-        data = self.conversion_thread_queue_ans.get()
+        data = self._log_thread_queue_ans.get()
         self.logger.debug('Got data from conversion thread; thread stopped.')
         self.logfile.close()
 
         
-    def _logging_thread(deque,logfile,dt = 0.2):
+    def _logging_thread(self,deque,logfile,dt = 0.2):
         funcname = self.__class__.__name__ + '._logging_thread()'        
         while True:
+            logfile.flush()                            
             time.sleep(dt)
             # Try to read from the queue, if something was read, quit
             while(len(deque) > 0):
@@ -305,7 +307,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.convert_raw_data = self.convert_raw_data_format3
 
 
-    def init_sam4logger(self,flag_adcs,data_format=3,channels=[0]):
+    def init_sam4logger(self,adcs,data_format=3,channels=[0],speed=30):
         """
     
         Function to set specific settings on the logger
@@ -319,19 +321,29 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.print_serial_data = True        
         self.send_serial_data('stop\n')
         time.sleep(0.1)
-        self.flag_adcs = flag_adcs
+        self.flag_adcs = adcs
         cmd = 'send ad'
         for ad in self.flag_adcs:
             cmd += ' %d' %ad
         self.send_serial_data(cmd + '\n')
+        self.logger.debug(funcname + ' sending:' + cmd)
         time.sleep(0.1)
         self.data_format = data_format
         self.init_data_format_functions()
-        self.send_serial_data('format ' + str(data_format) + '\n')
+        cmd = 'format ' + str(data_format) + '\n'
+        self.send_serial_data(cmd)
+        self.logger.debug(funcname + ' sending:' + cmd)
         time.sleep(0.1)
-        self.send_serial_data('channels ' + '\n')
+        cmd = 'channels '
+        for ch in channels:
+            cmd += ' %d' %ch
+        self.send_serial_data(cmd + '\n')
+        self.logger.debug(funcname + ' sending:' + cmd)
         time.sleep(0.1)        
         self.print_serial_data = False
+
+        # Update the device_info struct etc.
+        self.query_sam4logger()
         self.send_serial_data('start\n')
 
 
@@ -815,10 +827,15 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     data_packet = {'num':packet_num,'50khz':packet_time}
                     data_packet['ch'] = channel
                     data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
-                    for n,i in enumerate(range(0,len(ad_data)-1,2)):
-                        V = float(ad_data[i+1])
-                        data_packet['V'][n] = V
-                        data_list.append(V)
+                    # Test if the lengths are same
+                    if(len(ad_data) == len(self.device_info['adcs'] * 2)):
+                        for n,i in enumerate(range(0,len(ad_data)-1,2)):
+                            V = float(ad_data[i+1])
+                            data_packet['V'][n] = V
+                            data_list.append(V)
+                    else:
+                       logger.debug(funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])))
+                       
 
                     data_packets.append(data_packet)
                     data_stream[channel].append(data_list)

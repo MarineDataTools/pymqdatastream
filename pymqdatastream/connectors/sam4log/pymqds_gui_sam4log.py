@@ -9,6 +9,7 @@ import numpy as np
 import logging
 import threading
 import os,sys
+import ntpath
 import serial
 import glob
 import collections
@@ -55,10 +56,139 @@ def serial_ports():
             pass
     return result
 
-
+# Serial baud rates
 baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
 
 
+
+class sam4logConfig(QtWidgets.QWidget):
+    """
+    Configuration widget for the sam4log
+    """
+    # Conversion speeds of the device
+
+    def __init__(self,sam4log=None):
+        QtWidgets.QWidget.__init__(self)
+        layout = QtWidgets.QGridLayout()
+        self._query_bu = QtWidgets.QPushButton('query')
+        self._convspeed_combo = QtWidgets.QComboBox(self)
+        # TODO rewrite in Hz
+        self.speeds = [2,4,6,8,12,30]        
+        for speed in self.speeds:
+            self._convspeed_combo.addItem(str(speed))
+
+
+        # Create an adc checkbox widget
+
+        self._ad_apply_bu = QtWidgets.QPushButton('Send to device')
+        self._ad_apply_bu.clicked.connect(self._setup_device)
+        self._ad_reset_bu = QtWidgets.QPushButton('Reset changes')
+        #self._ad_apply_bu.clicked.connect(self._ad_check)
+        #self._ad_reset_bu.clicked.connect(self._ad_update_check_state)
+        self._ad_widget_check = QtWidgets.QWidget()
+        ad_layoutV = QtWidgets.QHBoxLayout(self._ad_widget_check)
+
+
+        self._ad_check = []        
+        for i in range(8):
+            ad_check = QtWidgets.QCheckBox('AD ' + str(i))
+            self._ad_check.append(ad_check)
+            ad_layoutV.addWidget(ad_check)
+
+
+        # Create a channel sequence widget
+        channels = ['0','1','2','3','-']
+        self._ad_seq_check = QtWidgets.QWidget()
+        ad_seq_layoutV = QtWidgets.QVBoxLayout(self._ad_seq_check)
+        _ad_seq_check_tmp = QtWidgets.QWidget()
+        ad_seq_layoutH = QtWidgets.QHBoxLayout(_ad_seq_check_tmp)
+        self._seq_combo = []
+        for i in range(8):
+            seq_combo = QtWidgets.QComboBox()
+            self._seq_combo.append(seq_combo)
+            for ch in channels:
+                seq_combo.addItem(ch)
+            
+            ad_seq_layoutH.addWidget(seq_combo)
+
+
+        _ad_seq_check_tmp2 = QtWidgets.QWidget()
+        ad_seq_layoutH2 = QtWidgets.QHBoxLayout(_ad_seq_check_tmp2)
+        ad_seq_layoutH2.addWidget(QtWidgets.QLabel('Sequence'))
+        
+        ad_seq_layoutV.addWidget(_ad_seq_check_tmp)
+        ad_seq_layoutV.addWidget(_ad_seq_check_tmp2)
+
+        # The main layout
+        layout.addWidget(self._query_bu,0,0)
+        layout.addWidget(self._convspeed_combo,0,1)
+
+
+
+        layout.addWidget(self._ad_widget_check,1,0,1,3)
+        layout.addWidget(self._ad_seq_check,2,0,1,3)        
+        layout.addWidget(self._ad_reset_bu,3,0)                
+        layout.addWidget(self._ad_apply_bu,3,1)
+
+        self.setLayout(layout)
+
+        print('updating')
+        # TODO do something if there is nothing
+        self.sam4log = sam4log
+        self._update_status()
+
+
+    def _update_status(self):
+        """
+        Updates all the information buttons
+        """
+        
+        status = self.sam4log.device_info
+        # Channels
+        #self.combo_baud.setCurrentIndex(len(baud)-1)
+        for i,ch in enumerate(status['channel_seq']):
+            self._seq_combo[i].setCurrentIndex(ch)
+
+        # Fill the rest with None
+        for i in range(i+1,8):
+            self._seq_combo[i].setCurrentIndex(4)
+
+
+        #
+        # ADCS
+        #
+        for i,ad_check in enumerate(self._ad_check):            
+            ad_check.setChecked(False)
+            
+        for i,adc in enumerate(status['adcs']):            
+            self._ad_check[adc].setChecked(True)
+
+            
+    def _setup_device(self):
+        speed = int(self._convspeed_combo.currentText())
+
+        print('Speed',speed)
+        
+        adcs = []
+        for i,ad_check in enumerate(self._ad_check):            
+            if(ad_check.isChecked()):
+                adcs.append(i)
+
+        print('ADCS List:',adcs)
+
+        chs = []
+        for i,seq_combo in enumerate(self._seq_combo):
+            ind = seq_combo.currentIndex()
+            if(ind < 4):
+                chs.append(ind)
+            else:
+                break
+
+        print('Chs List:',chs)
+        self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed )
+        self._update_status()
+
+            
 class sam4logInfo(QtWidgets.QWidget):
     """
     Widget display status informations of a sam4log device
@@ -149,6 +279,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.serial_open_bu = QtWidgets.QPushButton('query')
         self.serial_open_bu.clicked.connect(self.clicked_open_bu)
 
+        self._s4l_settings_bu = QtWidgets.QPushButton('settings')
+        self._s4l_settings_bu.clicked.connect(self._clicked_settings_bu)
+
         # Widget to show info about how much bytes have been received
         self._bin_info = QtWidgets.QWidget()
         binlayout = QtWidgets.QGridLayout(self._bin_info)
@@ -172,11 +305,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._show_data_bu.clicked.connect(self._clicked_show_data_bu)
         self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
         # Textdataformat of the show_textdata widget 0 str, 1 hex
-        self.__textdataformat = 0 
+        self._textdataformat = 0 
         self.combo_format = QtWidgets.QComboBox()
         self.combo_format.addItem('utf-8')
         self.combo_format.addItem('hex')        
-        self.combo_format.activated.connect(self.__combo_format)
+        self.combo_format.activated.connect(self._combo_format)
         self.show_comdata = QtWidgets.QPlainTextEdit()
         self.show_comdata.setReadOnly(True)
 
@@ -190,24 +323,24 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         #
         self._infosaveloadplot_widget = QtWidgets.QWidget()
         info_layout = QtWidgets.QGridLayout(self._infosaveloadplot_widget)
-        self.__recording_status = ['Record','Stop recording']        
-        self.__info_record_bu = QtWidgets.QPushButton(self.__recording_status[0])
-        self.__info_record_info = QtWidgets.QLabel('Status: Not recording')
-        self.__info_plot_bu = QtWidgets.QPushButton('Plot')
-        self.__info_plot_bu.clicked.connect(self.__plot_clicked)
-        self.__info_record_bu.clicked.connect(self.__record_clicked)
+        self._recording_status = ['Record','Stop recording']        
+        self._info_record_bu = QtWidgets.QPushButton(self._recording_status[0])
+        self._info_record_info = QtWidgets.QLabel('Status: Not recording')
+        self._info_plot_bu = QtWidgets.QPushButton('Plot')
+        self._info_plot_bu.clicked.connect(self._plot_clicked)
+        self._info_record_bu.clicked.connect(self._record_clicked)
 
-        info_layout.addWidget(self.__info_record_bu,0,1)
-        info_layout.addWidget(self.__info_record_info,1,1)
-        info_layout.addWidget(self.__info_plot_bu,0,0)
+        info_layout.addWidget(self._info_record_bu,0,1)
+        info_layout.addWidget(self._info_record_info,1,1)
+        info_layout.addWidget(self._info_plot_bu,0,0)
 
 
         #
         # Add eight lcd numbers for the adc data
         #
 
-        self.__ad_choose_bu = QtWidgets.QPushButton('Choose LTCs')
-        self.__ad_choose_bu.clicked.connect(self._open_ad_widget)
+        self._ad_choose_bu = QtWidgets.QPushButton('Choose LTCs')
+        self._ad_choose_bu.clicked.connect(self._open_ad_widget)
 
         self._ad_widget = None
         
@@ -249,11 +382,13 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # The main layout
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
-        layout.addWidget(self.deviceinfo,1,0,1,4)        
-        layout.addWidget(self._show_data_bu,3,0)
-        layout.addWidget(self.__ad_choose_bu,3,1)        
         layout.addWidget(self.serial_open_bu,0,2)
-        layout.addWidget(self.bytesreadlcd,0,3)
+        layout.addWidget(self.bytesreadlcd,0,3)        
+        layout.addWidget(self._s4l_settings_bu,1,3)
+        layout.addWidget(self.deviceinfo,1,0,1,3)        
+        layout.addWidget(self._show_data_bu,3,0)
+        layout.addWidget(self._ad_choose_bu,3,1)        
+
         layout.addWidget(self._infosaveloadplot_widget,6,0,1,4)
 
         layout.addWidget(self._ad_table,4,0,2,4)
@@ -292,7 +427,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         self.intraqueuetimer = QtCore.QTimer(self)
         self.intraqueuetimer.setInterval(200)
-        self.intraqueuetimer.timeout.connect(self.__poll_intraqueue)
+        self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()                        
 
 
@@ -306,6 +441,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         try:
             self._ad_widget.close()
+        except:
+            pass
+
+        try:
+            self._settings_widget.close()
         except:
             pass
             
@@ -326,6 +466,13 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         for port in ports_good:
             self.combo_serial.addItem(str(port))
 
+
+    def _clicked_settings_bu(self):
+        """
+        """
+        print('Settings')
+        self._settings_widget = sam4logConfig(self.sam4log)
+        self._settings_widget.show()
 
     def clicked_open_bu(self):
         """
@@ -350,7 +497,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 #self.sam4log.add_serial_device(ser,baud=b)
                 self.sam4log.add_raw_data_stream()
                 time.sleep(0.2)
-                self.sam4log.init_sam4logger(flag_adcs = [0,2,4])
+                self.sam4log.init_sam4logger(adcs = [0,2,4])
                 time.sleep(0.2)                
                 self.sam4log.start_converting_raw_data()
                 self.status = 1
@@ -383,14 +530,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         while(len(self.rawdata_deque) > 0):
             data = self.rawdata_deque.pop()
             if(self.check_show_textdata.isChecked()):            
-                if(self.__textdataformat == 0):
+                if(self._textdataformat == 0):
                     try:
                         # This works for python3
                         data_str = data.decode('utf-8')
                     except UnicodeDecodeError:
                         # This works for python3                        
                         data_str = data.hex()
-                elif(self.__textdataformat == 1):
+                elif(self._textdataformat == 1):
                     # This works for python3
                     data_str = data.hex()
 
@@ -413,7 +560,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self._show_data_widget_opened.close()
                 self._show_data_bu.setText('Show data')                
 
-                
+    # TODO, this should be removed soon
     def _open_ad_widget(self):
         """
 
@@ -425,14 +572,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         ad_layoutV = QtWidgets.QVBoxLayout(self._ad_widget)
         self._ad_widget.destroyed.connect(self._close_ad_widget)
         self._ad_widget.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        self.__ad_apply_bu = QtWidgets.QPushButton('Apply')
-        self.__ad_reset_bu = QtWidgets.QPushButton('Reset')
-        self.__ad_apply_bu.clicked.connect(self.__ad_check)
-        self.__ad_reset_bu.clicked.connect(self.__ad_update_check_state)
+        self._ad_apply_bu = QtWidgets.QPushButton('Apply')
+        self._ad_reset_bu = QtWidgets.QPushButton('Reset')
+        self._ad_apply_bu.clicked.connect(self._ad_check)
+        self._ad_reset_bu.clicked.connect(self._ad_update_check_state)
         ad_widget_tmp = QtWidgets.QWidget()
         ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
-        ad_layoutH.addWidget(self.__ad_apply_bu)
-        ad_layoutH.addWidget(self.__ad_reset_bu)        
+        ad_layoutH.addWidget(self._ad_apply_bu)
+        ad_layoutH.addWidget(self._ad_reset_bu)        
 
         ad_layoutV.addWidget(ad_widget_tmp)        
 
@@ -452,7 +599,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             ad_layoutV.addWidget(ad_widget_tmp)
             
 
-        self.__ad_update_check_state()
+        self._ad_update_check_state()
         self._ad_widget.show()
 
         
@@ -465,7 +612,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._ad_widget = None
 
         
-    def __ad_check(self):
+    def _ad_check(self):
         """
 
         Function called to change the adcs transmitted from the logger 
@@ -481,7 +628,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         print(flag_adcs)
 
         
-    def __ad_update_check_state(self):
+    def _ad_update_check_state(self):
         """
 
         Check the flag state in the sam4log class and updates the check
@@ -493,7 +640,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self._ad_check[i].setChecked(True)
 
             
-    def __poll_intraqueue(self):
+    def _poll_intraqueue(self):
         """
 
         Polling the intraque , and displays the data in self._ad_table
@@ -523,19 +670,19 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self._ad_table.setItem(i+2, ch+1, item )  
 
 
-    def __combo_format(self):
+    def _combo_format(self):
         """
         """
         f = self.combo_format.currentText()
         if(f == 'utf-8'):
-            self.__textdataformat = 0
+            self._textdataformat = 0
         if(f == 'hex'):
-            self.__textdataformat = 1
+            self._textdataformat = 1
 
-        print(self.__textdataformat)
+        print(self._textdataformat)
 
 
-    def __plot_clicked(self):
+    def _plot_clicked(self):
         """
         
         Starts a plotting process ( at the moment pymqds_plotxy )
@@ -546,11 +693,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # http://stackoverflow.com/questions/29556291/multiprocessing-with-qt-works-in-windows-but-not-linux
         # this does not work with python 2.7 
         multiprocessing.set_start_method('spawn',force=True)        
-        self.__plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy)
-        self.__plotxyprocess.start()
+        self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy)
+        self._plotxyprocess.start()
 
         
-    def __record_clicked(self):
+    def _record_clicked(self):
         """
         
         Starts a recording process ( )
@@ -558,23 +705,48 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         """
         
 
-        t = self.__info_record_bu.text()
+        t = self._info_record_bu.text()
         print('Click ' + str(t))
-        if(t == self.__recording_status[0]):
+        if(t == self._recording_status[0]):
             print('Record')            
-            fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "UBJSON (*.ubjson);; All files (*)");
+            fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
             if(len(fname[0]) > 0):
-                self.__info_record_info.setText('Status: logfile: ' + fname[0])
-                self.loggerDS = pymqdatastream.slogger.LoggerDataStream(logging_level = logging.DEBUG, filename = fname[0], name = 'sam4log logger')
-                logstream = self.loggerDS.log_stream(self.sam4log.raw_stream)
-                logstream = self.loggerDS.log_stream(self.sam4log.conv_stream)
-                print('Start write thread')
-                self.loggerDS.start_write_data_thread()
-                self.__info_record_bu.setText(self.__recording_status[1])
-        if(t == self.__recording_status[1]):
+                print(fname)
+                filename = ntpath.basename(fname[0])
+                path = ntpath.dirname(fname[0]) 
+                fname_end = fname[1].split('*.')[-1]
+                fname_end = fname_end.replace(')','')
+                if( fname_end in filename ):
+                    print( fname_end + ' already defined')
+                else:
+                    filename = filename + '.' + fname_end
+
+                filename_full = path + '/' +filename
+                self._info_record_info.setText('Status: logfile: ' + filename)
+                self.sam4log.log_serial_data(filename_full)
+                self._info_record_bu.setText(self._recording_status[1])
+        if(t == self._recording_status[1]):
             print('Stop record')            
-            ret = self.loggerDS.stop_poll_data_thread()
-            self.__info_record_bu.setText(self.__recording_status[0])
+            ret = self.sam4log.stop_log_serial_data()
+            self._info_record_bu.setText(self._recording_status[0])
+            
+        # The more complex slogger object, disable for the moment
+        if False:
+            if(t == self._recording_status[0]):
+                print('Record')            
+                fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "UBJSON (*.ubjson);; All files (*)");
+                if(len(fname[0]) > 0):
+                    self._info_record_info.setText('Status: logfile: ' + fname[0])
+                    self.loggerDS = pymqdatastream.slogger.LoggerDataStream(logging_level = logging.DEBUG, filename = fname[0], name = 'sam4log logger')
+                    logstream = self.loggerDS.log_stream(self.sam4log.raw_stream)
+                    logstream = self.loggerDS.log_stream(self.sam4log.conv_stream)
+                    print('Start write thread')
+                    self.loggerDS.start_write_data_thread()
+                    self._info_record_bu.setText(self._recording_status[1])
+            if(t == self._recording_status[1]):
+                print('Stop record')            
+                ret = self.loggerDS.stop_poll_data_thread()
+                self._info_record_bu.setText(self._recording_status[0])
             
 
 
