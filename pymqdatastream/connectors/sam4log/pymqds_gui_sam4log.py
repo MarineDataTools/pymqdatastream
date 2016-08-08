@@ -21,7 +21,9 @@ import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
 import pymqdatastream.connectors.pyqtgraph.pymqds_plotxy as pymqds_plotxy
 import pymqds_sam4log
 
-
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+logger = logging.getLogger('pymqds_gui_sam4log')
+logger.setLevel(logging.DEBUG)
 
 
 def serial_ports():
@@ -60,6 +62,48 @@ def serial_ports():
 baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
 
 
+class sam4logInfo(QtWidgets.QWidget):
+    """
+    Widget display status informations of a sam4log device
+    """
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
+        self.f_version = QtWidgets.QLabel('Firmware: ?')
+        self.b_version = QtWidgets.QLabel('Board: ?')
+        self.adcs = QtWidgets.QLabel('ADCS: ?')                
+        self.ch_seq = QtWidgets.QLabel('Channels: ?')
+        self.data_format = QtWidgets.QLabel('Format: ?')        
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(self.b_version)
+        layout.addWidget(self.f_version)
+        layout.addWidget(self.adcs)
+        layout.addWidget(self.ch_seq)
+        layout.addWidget(self.data_format)        
+        self.setLayout(layout)        
+
+    def update(self,status):
+        """
+        Updates the widget with status dictionary
+        """
+
+        boardstr = 'Board: ' + status['board']
+        firmstr = 'Firmware: ' + status['firmware']
+        chstr = 'Channels: '
+        for ch in status['channel_seq']:
+            chstr += str(ch)
+        formatstr = 'Format: ' + str(status['format'])
+        adcstr = 'ADCS: '
+        for adc in status['adcs']:
+            adcstr += str(adc)
+            
+        self.b_version.setText(boardstr)
+        self.f_version.setText(firmstr)
+        self.ch_seq.setText(chstr)
+        self.adcs.setText(adcstr)
+        self.data_format.setText(formatstr)
+        pass
+
+
 
 class sam4logConfig(QtWidgets.QWidget):
     """
@@ -70,21 +114,30 @@ class sam4logConfig(QtWidgets.QWidget):
     def __init__(self,sam4log=None):
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QGridLayout()
-        self._query_bu = QtWidgets.QPushButton('query')
+
+        # Conversion speed
         self._convspeed_combo = QtWidgets.QComboBox(self)
         # TODO rewrite in Hz
         self.speeds = [2,4,6,8,12,30]        
         for speed in self.speeds:
             self._convspeed_combo.addItem(str(speed))
 
+        # Data format
+        self.formats = [2,3]        
+        self._dataformat_combo = QtWidgets.QComboBox(self)
+        for dformat in self.formats:
+            self._dataformat_combo.addItem(str(dformat))        
 
-        # Create an adc checkbox widget
 
+
+        self._query_bu = QtWidgets.QPushButton('Query')
+        self._query_bu.clicked.connect(self._query)
         self._ad_apply_bu = QtWidgets.QPushButton('Send to device')
         self._ad_apply_bu.clicked.connect(self._setup_device)
-        self._ad_reset_bu = QtWidgets.QPushButton('Reset changes')
-        #self._ad_apply_bu.clicked.connect(self._ad_check)
-        #self._ad_reset_bu.clicked.connect(self._ad_update_check_state)
+        self._ad_close_bu = QtWidgets.QPushButton('Close')
+        self._ad_close_bu.clicked.connect(self._close)
+
+        # Create an adc checkbox widget
         self._ad_widget_check = QtWidgets.QWidget()
         ad_layoutV = QtWidgets.QHBoxLayout(self._ad_widget_check)
 
@@ -114,21 +167,28 @@ class sam4logConfig(QtWidgets.QWidget):
 
         _ad_seq_check_tmp2 = QtWidgets.QWidget()
         ad_seq_layoutH2 = QtWidgets.QHBoxLayout(_ad_seq_check_tmp2)
-        ad_seq_layoutH2.addWidget(QtWidgets.QLabel('Sequence'))
-        
+        #ad_seq_layoutH2.addWidget(QtWidgets.QLabel('Define channel sequence'))
+        #ad_seq_layoutV.addWidget(_ad_seq_check_tmp2)
         ad_seq_layoutV.addWidget(_ad_seq_check_tmp)
-        ad_seq_layoutV.addWidget(_ad_seq_check_tmp2)
+
+
+        self.deviceinfo = sam4logInfo()
+
 
         # The main layout
-        layout.addWidget(self._query_bu,0,0)
+        layout.addWidget(QtWidgets.QLabel('Set speed'),0,0)
         layout.addWidget(self._convspeed_combo,0,1)
+        layout.addWidget(QtWidgets.QLabel('Set data format'),0,2)
+        layout.addWidget(self._dataformat_combo,0,3)
+        layout.addWidget(QtWidgets.QLabel('Choose LTC2442 ADCS '),1,0)
+        layout.addWidget(self._ad_widget_check,2,0,1,4)
+        layout.addWidget(QtWidgets.QLabel('Define channel sequence'),3,0)
+        layout.addWidget(self._ad_seq_check,4,0,1,4)
+        layout.addWidget(self.deviceinfo,5,0,1,4)
+        layout.addWidget(self._query_bu,6,0)
+        layout.addWidget(self._ad_apply_bu,6,1)        
+        layout.addWidget(self._ad_close_bu,6,2)
 
-
-
-        layout.addWidget(self._ad_widget_check,1,0,1,3)
-        layout.addWidget(self._ad_seq_check,2,0,1,3)        
-        layout.addWidget(self._ad_reset_bu,3,0)                
-        layout.addWidget(self._ad_apply_bu,3,1)
 
         self.setLayout(layout)
 
@@ -136,6 +196,7 @@ class sam4logConfig(QtWidgets.QWidget):
         # TODO do something if there is nothing
         self.sam4log = sam4log
         self._update_status()
+        self.deviceinfo.update(self.sam4log.device_info)
 
 
     def _update_status(self):
@@ -188,48 +249,18 @@ class sam4logConfig(QtWidgets.QWidget):
         print('init sam4logger')
         self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed )
         self._update_status()
+        self.deviceinfo.update(self.sam4log.device_info)        
+
+    def _query(self):
+        self.sam4log.query_sam4logger()
+        self._update_status()
+        self.deviceinfo.update(self.sam4log.device_info)        
+
+    def _close(self):
+        self.close()
 
             
-class sam4logInfo(QtWidgets.QWidget):
-    """
-    Widget display status informations of a sam4log device
-    """
-    def __init__(self):
-        QtWidgets.QWidget.__init__(self)
-        self.f_version = QtWidgets.QLabel('Firmware: ?')
-        self.b_version = QtWidgets.QLabel('Board: ?')
-        self.adcs = QtWidgets.QLabel('ADCS: ?')                
-        self.ch_seq = QtWidgets.QLabel('Channels: ?')
-        self.data_format = QtWidgets.QLabel('Format: ?')        
-        layout = QtWidgets.QHBoxLayout()
-        layout.addWidget(self.b_version)
-        layout.addWidget(self.f_version)
-        layout.addWidget(self.adcs)
-        layout.addWidget(self.ch_seq)
-        layout.addWidget(self.data_format)        
-        self.setLayout(layout)        
 
-    def update(self,status):
-        """
-        Updates the widget with status dictionary
-        """
-
-        boardstr = 'Board: ' + status['board']
-        firmstr = 'Firmware: ' + status['firmware']
-        chstr = 'Channels: '
-        for ch in status['channel_seq']:
-            chstr += str(ch)
-        formatstr = 'Format: ' + str(status['format'])
-        adcstr = 'ADCS: '
-        for adc in status['adcs']:
-            adcstr += str(adc)
-            
-        self.b_version.setText(boardstr)
-        self.f_version.setText(firmstr)
-        self.ch_seq.setText(chstr)
-        self.adcs.setText(adcstr)
-        self.data_format.setText(formatstr)
-        pass
 
 
 
@@ -277,8 +308,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self.combo_baud.addItem(str(b))
 
         self.combo_baud.setCurrentIndex(len(baud)-1)
-        self.serial_open_bu = QtWidgets.QPushButton('query')
+        self.serial_open_bu = QtWidgets.QPushButton('Query')
         self.serial_open_bu.clicked.connect(self.clicked_open_bu)
+
+        self.serial_test_bu = QtWidgets.QPushButton('Test ports')
+        self.serial_test_bu.clicked.connect(self.test_ports)        
 
         self._s4l_settings_bu = QtWidgets.QPushButton('Device Setup')
         self._s4l_settings_bu.setEnabled(False)
@@ -382,10 +416,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         
 
         # The main layout
-        layout.addWidget(self.combo_serial,0,0)
-        layout.addWidget(self.combo_baud,0,1)
-        layout.addWidget(self.serial_open_bu,0,2)
-        layout.addWidget(self.bytesreadlcd,0,3)        
+        layout.addWidget(self.serial_test_bu,0,0)        
+        layout.addWidget(self.combo_serial,0,1)
+        layout.addWidget(self.combo_baud,0,2)
+        layout.addWidget(self.serial_open_bu,0,3)
+        layout.addWidget(self.bytesreadlcd,0,4)        
         layout.addWidget(self._s4l_settings_bu,1,3)
         layout.addWidget(self.deviceinfo,1,0,1,3)        
         layout.addWidget(self._show_data_bu,3,0)
@@ -414,6 +449,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.rawdata_deque = self.sam4log.deques_raw_serial[-1]
         self.test_ports() # Looking for serial ports
 
+        # If the configuration changed call the _update function
+        self.sam4log.init_notification_functions.append(self._update_status_information)
+
 
         self.lcdtimer = QtCore.QTimer(self)
         self.lcdtimer.setInterval(100)
@@ -433,10 +471,10 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.intraqueuetimer.start()
 
 
-    def _update_status_information():
+    def _update_status_information(self):
         """
         """
-
+        print('Update_status_information')
         self.deviceinfo.update(self.sam4log.device_info)
 
 
@@ -489,7 +527,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         t = self.serial_open_bu.text()
         print('Click ' + str(t))
         if True:
-            if(t == 'query'):
+            if(t == 'Query'):
                 ser = str(self.combo_serial.currentText())
                 b = int(self.combo_baud.currentText())
                 print('Opening port' + ser + ' with baudrate ' + str(b))
@@ -497,12 +535,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 if(self.sam4log.query_sam4logger() == True):
                     self.deviceinfo.update(self.sam4log.device_info)
                     self._s4l_settings_bu.setEnabled(True)
-                    self.serial_open_bu.setText('open')
+                    self.serial_open_bu.setText('Open')
                     
-            elif(t == 'open'):
+            elif(t == 'Open'):
                 #ser = str(self.combo_serial.currentText())
                 #b = int(self.combo_baud.currentText())
-                self.serial_open_bu.setText('close')
+                self.serial_open_bu.setText('Close')
                 self._s4l_settings_bu.setEnabled(False)                
                 #print('Opening port' + ser + ' with baudrate ' + str(b))
                 #self.sam4log.add_serial_device(ser,baud=b)
@@ -511,11 +549,15 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self.sam4log.init_sam4logger(adcs = [0,2,4])
                 time.sleep(0.2)                
                 self.sam4log.start_converting_raw_data()
+                self.combo_serial.setEnabled(False)
+                self.combo_baud.setEnabled(False)                
                 self.status = 1
             else:
                 self.sam4log.stop_serial_data()
                 self.sam4log.stop_converting_raw_data()
-                self.serial_open_bu.setText('query')
+                self.serial_open_bu.setText('Query')
+                self.combo_serial.setEnabled(True)
+                self.combo_baud.setEnabled(True)                                
                 self.status = 0
 
         else:

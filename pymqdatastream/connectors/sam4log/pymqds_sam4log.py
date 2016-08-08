@@ -18,7 +18,7 @@ import re
 from cobs import cobs
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
-logger = logging.getLogger('pydatastream_sam4log')
+logger = logging.getLogger('pymqds_sam4log')
 logger.setLevel(logging.DEBUG)
 
 
@@ -36,6 +36,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
         uuid.replace('DataStream','sam4logDataStream')
         self.name = 'sam4log'
         self.uuid = uuid
+        self.status = -1 # -1 init, 0 opened serial port, 1 converting
+        self.init_notification_functions = [] # A list of functions to be called after the logger has been initialized/reinitialized
         funcname = self.__class__.__name__ + '.__init__()'
         self.logger.debug(funcname)
         self.dequelen = 10000 # Length of the deque used to store data
@@ -127,6 +129,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.serial_thread.daemon = True
             self.serial_thread.start()            
             self.logger.debug(funcname + ': Starting thread done')
+            self.status = 0
         else:
         #except Exception as e:
             self.logger.debug(funcname + ': Exception: ' + str(e))            
@@ -200,6 +203,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data = self.serial_thread_queue_ans.get()
         self.logger.debug(funcname + ': Got data, thread stopped')
         self.serial.close()
+        self.status = -1
 
         
     def log_serial_data(self,filename):
@@ -317,40 +321,49 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         """
         funcname = self.__class__.__name__ + '.init_sam4logger()'
-        self.logger.debug(funcname)        
-        self.print_serial_data = True        
-        self.send_serial_data('stop\n')
-        time.sleep(0.1)
-        self.flag_adcs = adcs
-        cmd = 'send ad'
-        for ad in self.flag_adcs:
-            cmd += ' %d' %ad
-        self.send_serial_data(cmd + '\n')
-        self.logger.debug(funcname + ' sending:' + cmd)
-        time.sleep(0.1)
-        self.data_format = data_format
-        self.init_data_format_functions()
-        cmd = 'format ' + str(data_format) + '\n'
-        self.send_serial_data(cmd)
-        self.logger.debug(funcname + ' sending:' + cmd)
-        time.sleep(0.1)
-        cmd = 'channels '
-        for ch in channels:
-            cmd += ' %d' %ch
-        self.send_serial_data(cmd + '\n')
-        self.logger.debug(funcname + ' sending:' + cmd)
-        time.sleep(0.1)        
-        self.print_serial_data = False
 
-        # Update the device_info struct etc.
-        self.query_sam4logger()
-        self.send_serial_data('start\n')
+        self.logger.debug(funcname)
+        if(self.status >= 0):
+            if(self.status >= 1): # Already converting
+                self.logger.debug(funcname + ': Stop converting raw data')
+                self.stop_converting_raw_data()
+                
+            self.print_serial_data = True        
+            self.send_serial_data('stop\n')
+            time.sleep(0.1)
+            self.flag_adcs = adcs
+            cmd = 'send ad'
+            for ad in self.flag_adcs:
+                cmd += ' %d' %ad
+            self.send_serial_data(cmd + '\n')
+            self.logger.debug(funcname + ' sending:' + cmd)
+            time.sleep(0.1)
+            self.data_format = data_format
+            self.init_data_format_functions()
+            cmd = 'format ' + str(data_format) + '\n'
+            self.send_serial_data(cmd)
+            self.logger.debug(funcname + ' sending:' + cmd)
+            time.sleep(0.1)
+            cmd = 'channels '
+            for ch in channels:
+                cmd += ' %d' %ch
+            self.send_serial_data(cmd + '\n')
+            self.logger.debug(funcname + ' sending:' + cmd)
+            time.sleep(0.1)        
+            self.print_serial_data = False
 
+            # Update the device_info struct etc.
+            self.query_sam4logger()
+            self.send_serial_data('start\n')
+            for fun in self.init_notification_functions:
+                fun()
+        else:
+            self.logger.debug(funcname + ': No serial port opened')
 
     def query_sam4logger(self):
         """
         
-        Queries the logger and sets the importent parameters to the values read
+        Queries the logger and sets the important parameters to the values read
         TODO: Do something if query fails
 
         Returns:
@@ -521,7 +534,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.convert_thread.daemon = True
             self.convert_thread.start()            
             self.logger.debug(funcname + ': Starting thread done')
-
+            self.status = 1
             return self.conv_streams
     
 
@@ -544,6 +557,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.conv_streams = []
         # A list with Nones or the streams dedicated for the channels
         self.packets_converted = 0
+        self.status = 0
 
 
     # Warning, this does not work anymore (at the moment) due to new streams!
