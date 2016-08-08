@@ -185,6 +185,7 @@ class sam4logConfig(QtWidgets.QWidget):
                 break
 
         print('Chs List:',chs)
+        print('init sam4logger')
         self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed )
         self._update_status()
 
@@ -279,7 +280,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.serial_open_bu = QtWidgets.QPushButton('query')
         self.serial_open_bu.clicked.connect(self.clicked_open_bu)
 
-        self._s4l_settings_bu = QtWidgets.QPushButton('settings')
+        self._s4l_settings_bu = QtWidgets.QPushButton('Device Setup')
+        self._s4l_settings_bu.setEnabled(False)
         self._s4l_settings_bu.clicked.connect(self._clicked_settings_bu)
 
         # Widget to show info about how much bytes have been received
@@ -428,7 +430,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.intraqueuetimer = QtCore.QTimer(self)
         self.intraqueuetimer.setInterval(200)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
-        self.intraqueuetimer.start()                        
+        self.intraqueuetimer.start()
+
+
+    def _update_status_information():
+        """
+        """
+
+        self.deviceinfo.update(self.sam4log.device_info)
 
 
     def close_application(self):
@@ -487,12 +496,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self.sam4log.add_serial_device(ser,baud=b)                
                 if(self.sam4log.query_sam4logger() == True):
                     self.deviceinfo.update(self.sam4log.device_info)
+                    self._s4l_settings_bu.setEnabled(True)
                     self.serial_open_bu.setText('open')
                     
             elif(t == 'open'):
                 #ser = str(self.combo_serial.currentText())
                 #b = int(self.combo_baud.currentText())
                 self.serial_open_bu.setText('close')
+                self._s4l_settings_bu.setEnabled(False)                
                 #print('Opening port' + ser + ' with baudrate ' + str(b))
                 #self.sam4log.add_serial_device(ser,baud=b)
                 self.sam4log.add_raw_data_stream()
