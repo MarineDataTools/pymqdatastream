@@ -227,8 +227,10 @@ class sam4logConfig(QtWidgets.QWidget):
             
     def _setup_device(self):
         speed = int(self._convspeed_combo.currentText())
-
         print('Speed',speed)
+
+        data_format = int(self._dataformat_combo.currentText())
+        print('Data format',data_format)        
         
         adcs = []
         for i,ad_check in enumerate(self._ad_check):            
@@ -247,7 +249,7 @@ class sam4logConfig(QtWidgets.QWidget):
 
         print('Chs List:',chs)
         print('init sam4logger')
-        self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed )
+        self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed,data_format=3)
         self._update_status()
         self.deviceinfo.update(self.sam4log.device_info)        
 

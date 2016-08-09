@@ -339,6 +339,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.send_serial_data(cmd + '\n')
             self.logger.debug(funcname + ' sending:' + cmd)
             time.sleep(0.1)
+            # Due to a bug speed has to be send before data format if speed is 30, check firmware!
+            # Speed
+            cmd = 'speed ' + str(speed)
+            self.send_serial_data(cmd + '\n')
+            self.logger.debug(funcname + ' sending:' + cmd)
+            
             # Data format
             self.data_format = data_format
             self.init_data_format_functions()
@@ -353,10 +359,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.send_serial_data(cmd + '\n')
             self.logger.debug(funcname + ' sending:' + cmd)
             time.sleep(0.1)        
-            # Speed
-            cmd = 'speed ' + str(speed)
-            self.send_serial_data(cmd + '\n')
-            self.logger.debug(funcname + ' sending:' + cmd)
+
 
             self.print_serial_data = False            
             # Update the device_info struct etc.
