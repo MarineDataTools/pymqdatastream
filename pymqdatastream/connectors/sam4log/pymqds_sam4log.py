@@ -331,6 +331,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.print_serial_data = True        
             self.send_serial_data('stop\n')
             time.sleep(0.1)
+            # Which ADCS?
             self.flag_adcs = adcs
             cmd = 'send ad'
             for ad in self.flag_adcs:
@@ -338,20 +339,26 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.send_serial_data(cmd + '\n')
             self.logger.debug(funcname + ' sending:' + cmd)
             time.sleep(0.1)
+            # Data format
             self.data_format = data_format
             self.init_data_format_functions()
             cmd = 'format ' + str(data_format) + '\n'
             self.send_serial_data(cmd)
             self.logger.debug(funcname + ' sending:' + cmd)
             time.sleep(0.1)
+            # Channel sequence
             cmd = 'channels '
             for ch in channels:
                 cmd += ' %d' %ch
             self.send_serial_data(cmd + '\n')
             self.logger.debug(funcname + ' sending:' + cmd)
             time.sleep(0.1)        
-            self.print_serial_data = False
+            # Speed
+            cmd = 'speed ' + str(speed)
+            self.send_serial_data(cmd + '\n')
+            self.logger.debug(funcname + ' sending:' + cmd)
 
+            self.print_serial_data = False            
             # Update the device_info struct etc.
             self.query_sam4logger()
             self.send_serial_data('start\n')
@@ -638,7 +645,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 pass                
 
 
-    def convert_raw_data_format2(self, deque, dt = 0.2):
+    def convert_raw_data_format2(self, deque, dt = 0.1):
         """
 
         Converts raw data of the format 2, which is popped from the deque
@@ -805,7 +812,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 pass
 
 
-    def convert_raw_data_format3(self, deque, dt = 0.2):
+    def convert_raw_data_format3(self, deque, dt = 0.05):
         """
         Converts raw data of the format 3, which is popped from the deque given as argument
         Example:

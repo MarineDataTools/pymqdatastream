@@ -349,9 +349,15 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.show_comdata = QtWidgets.QPlainTextEdit()
         self.show_comdata.setReadOnly(True)
 
-        self._show_data_layout.addWidget(self.combo_format,0,0)
-        self._show_data_layout.addWidget(self.show_textdata,1,0)
-        self._show_data_layout.addWidget(self.show_comdata,1,1)
+        # Command widgets
+        self._show_data_layout.addWidget(QtWidgets.QLabel('Command'),0,0) # Command
+        self._show_data_layout.addWidget(self.send_le,0,1,1,2) # Command
+        self._show_data_layout.addWidget(send_bu,0,3) # Command
+        self._show_data_layout.addWidget(QtWidgets.QLabel('Format'),1,0) # Command        
+        self._show_data_layout.addWidget(self.combo_format,1,1)
+        self._show_data_layout.addWidget(self.show_textdata,2,0,1,4)
+        #self._show_data_layout.addWidget(self.show_comdata,1,1)
+
 
 
         #
@@ -366,20 +372,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._info_plot_bu.clicked.connect(self._plot_clicked)
         self._info_record_bu.clicked.connect(self._record_clicked)
 
-        info_layout.addWidget(self._info_record_bu,0,1)
-        info_layout.addWidget(self._info_record_info,1,1)
-        info_layout.addWidget(self._info_plot_bu,0,0)
+        info_layout.addWidget(self._info_record_bu,0,2)
+        info_layout.addWidget(self._info_record_info,1,2)
+        info_layout.addWidget(self._info_plot_bu,0,1)
+        info_layout.addWidget(self._show_data_bu,0,0)        
 
-
-        #
-        # Add eight lcd numbers for the adc data
-        #
-
-        self._ad_choose_bu = QtWidgets.QPushButton('Choose LTCs')
-        self._ad_choose_bu.clicked.connect(self._open_ad_widget)
-
-        self._ad_widget = None
-        
         #
         # Add a qtable for realtime data showing of voltage/packets number/counter
         # http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
@@ -423,18 +420,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.bytesreadlcd,0,4)        
         layout.addWidget(self._s4l_settings_bu,1,3)
         layout.addWidget(self.deviceinfo,1,0,1,3)        
-        layout.addWidget(self._show_data_bu,3,0)
-        layout.addWidget(self._ad_choose_bu,3,1)        
-
-        layout.addWidget(self._infosaveloadplot_widget,6,0,1,4)
-
-        layout.addWidget(self._ad_table,4,0,2,4)
-        # Command widgets
-        layout.addWidget(QtWidgets.QLabel('Command'),2,0) # Command
-        layout.addWidget(self.send_le,2,1,1,2) # Command
-        layout.addWidget(send_bu,2,3) # Command
-
-
+        
+        #layout.addWidget(self._ad_choose_bu,3,1)        
+        layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
+        layout.addWidget(self._ad_table,4,0,2,5)
+        
 
         self.setCentralWidget(self.mainwidget)
         
@@ -458,15 +448,15 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.lcdtimer.timeout.connect(self.poll_serial_bytes)
         self.lcdtimer.start()
 
-
+        # For showing the raw data
         self.dequetimer = QtCore.QTimer(self)
         self.dequetimer.setInterval(100)
         self.dequetimer.timeout.connect(self.poll_deque)
         self.dequetimer.start()
 
-
+        # Updating the Voltage table
         self.intraqueuetimer = QtCore.QTimer(self)
-        self.intraqueuetimer.setInterval(200)
+        self.intraqueuetimer.setInterval(100)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()
 
@@ -546,7 +536,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 #self.sam4log.add_serial_device(ser,baud=b)
                 self.sam4log.add_raw_data_stream()
                 time.sleep(0.2)
-                self.sam4log.init_sam4logger(adcs = [0,2,4])
+                self.sam4log.query_sam4logger()
+                #self.sam4log.init_sam4logger(adcs = [0,2,4])
                 time.sleep(0.2)                
                 self.sam4log.start_converting_raw_data()
                 self.combo_serial.setEnabled(False)
@@ -613,84 +604,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self._show_data_widget_opened.close()
                 self._show_data_bu.setText('Show data')                
 
-    # TODO, this should be removed soon
-    def _open_ad_widget(self):
-        """
 
-        Opens the ad checkbox widget
-
-        """
-
-        self._ad_widget = QtWidgets.QWidget()
-        ad_layoutV = QtWidgets.QVBoxLayout(self._ad_widget)
-        self._ad_widget.destroyed.connect(self._close_ad_widget)
-        self._ad_widget.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        self._ad_apply_bu = QtWidgets.QPushButton('Apply')
-        self._ad_reset_bu = QtWidgets.QPushButton('Reset')
-        self._ad_apply_bu.clicked.connect(self._ad_check)
-        self._ad_reset_bu.clicked.connect(self._ad_update_check_state)
-        ad_widget_tmp = QtWidgets.QWidget()
-        ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
-        ad_layoutH.addWidget(self._ad_apply_bu)
-        ad_layoutH.addWidget(self._ad_reset_bu)        
-
-        ad_layoutV.addWidget(ad_widget_tmp)        
-
-        
-        self._ad_lcds = []
-        self._ad_check = []        
-        for i in range(8):
-            ad_lcd = QtWidgets.QLCDNumber(self)
-            ad_lcd.setDigitCount(8)
-            ad_check = QtWidgets.QCheckBox('AD ' + str(i))
-            self._ad_lcds.append(ad_lcd)
-            self._ad_check.append(ad_check)
-            ad_widget_tmp = QtWidgets.QWidget()
-            ad_layoutH = QtWidgets.QHBoxLayout(ad_widget_tmp)
-            ad_layoutH.addWidget(ad_check)            
-            ad_layoutH.addWidget(ad_lcd)
-            ad_layoutV.addWidget(ad_widget_tmp)
-            
-
-        self._ad_update_check_state()
-        self._ad_widget.show()
-
-        
-    def _close_ad_widget(self):
-        """
-
-
-        """
-        print('Close')
-        self._ad_widget = None
-
-        
-    def _ad_check(self):
-        """
-
-        Function called to change the adcs transmitted from the logger 
-
-        """
-
-        flag_adcs = []
-        for i,ad in enumerate(self._ad_check):
-            if(ad.isChecked()):
-                flag_adcs.append(i)
-
-        self.sam4log.init_sam4logger(flag_adcs,data_format=2)
-        print(flag_adcs)
-
-        
-    def _ad_update_check_state(self):
-        """
-
-        Check the flag state in the sam4log class and updates the check
-
-        """
-
-        flag_adcs = self.sam4log.flag_adcs
-        for i in flag_adcs:
-            self._ad_check[i].setChecked(True)
 
             
     def _poll_intraqueue(self):
@@ -703,24 +617,22 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # Get all data
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
+            if(len(data)>0):
+                # Get channel
+                ch = data['ch']
+                num = data['num']
+                c50khz = data['50khz']
+                V = data['V']
+                # Packet number            
+                item = QtWidgets.QTableWidgetItem(str(num))
+                self._ad_table.setItem(0, ch + 1, item)
+                # Counter
+                item = QtWidgets.QTableWidgetItem(str(c50khz))
+                self._ad_table.setItem(1, ch + 1, item)
+                for n,i in enumerate(self.sam4log.flag_adcs):
+                    item = QtWidgets.QTableWidgetItem(str(V[n]))
 
-        # show the last dataset in the table
-        if(len(data)>0):
-            # Get channel
-            ch = data['ch']
-            num = data['num']
-            c50khz = data['50khz']
-            V = data['V']
-            # Packet number            
-            item = QtWidgets.QTableWidgetItem(str(num))
-            self._ad_table.setItem(0, ch + 1, item)
-            # Counter
-            item = QtWidgets.QTableWidgetItem(str(c50khz))
-            self._ad_table.setItem(1, ch + 1, item)
-            for n,i in enumerate(self.sam4log.flag_adcs):
-                item = QtWidgets.QTableWidgetItem(str(V[n]))
-
-                self._ad_table.setItem(i+2, ch+1, item )  
+                    self._ad_table.setItem(i+2, ch+1, item )  
 
 
     def _combo_format(self):
