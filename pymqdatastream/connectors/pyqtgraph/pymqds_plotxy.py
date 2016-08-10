@@ -19,7 +19,7 @@ import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
 # Setup logging module
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
-logger = logging.getLogger('pydatastream_plotxy')
+logger = logging.getLogger('pymqds_plotxy')
 logger.setLevel(logging.INFO)
 
 class SetupStreamStyle(QtWidgets.QWidget):
@@ -413,7 +413,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                         ind_start = stream.pyqtgraph_npdata['ind_start']
                         ind_end = stream.pyqtgraph_npdata['ind_end']
                         ind_x = stream.pyqtgraph['ind_x']
-                        ind_y = stream.pyqtgraph['ind_y']                        
+                        ind_y = stream.pyqtgraph['ind_y']
                         for n in range(len(plot_data)):
                             stream.pyqtgraph_cmod += 1
                             if(stream.pyqtgraph_cmod >= stream.pyqtgraph_nplot):
@@ -421,10 +421,9 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                 stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
                                 stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
                                 stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
-
                                 ind_end += 1
                                 if( (ind_end - ind_start ) >= self.buf_tilesize):
-                                    ind_start += 1                                            
+                                    ind_start += 1               
 
                                 xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
                                 yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()

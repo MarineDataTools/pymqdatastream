@@ -55,6 +55,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
         # Two queues to start/stop the raw_data conversion threads
         self.conversion_thread_queue = queue.Queue()
         self.conversion_thread_queue_ans = queue.Queue()
+
+        # Two queues to start/stop the raw_data datastream thread
+        self._raw_data_thread_queue = queue.Queue()
+        self._raw_data_thread_queue_ans = queue.Queue()        
         # List of conversion streams
         self.conv_streams = []
         # A list with Nones or the streams dedicated for the channels
@@ -202,6 +206,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.serial_thread_queue.put('stop')
         data = self.serial_thread_queue_ans.get()
         self.logger.debug(funcname + ': Got data, thread stopped')
+        self._rem_raw_data_stream()
         self.serial.close()
         self.status = -1
 
@@ -263,9 +268,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.add_raw_data_stream()'
         logger.debug(funcname)
         self.add_pub_socket()
-        rawvar = pymqdatastream.StreamVariable(name = 'raw',unit = '',datatype = 'b')
-        variables = ['raw',]
-        name = 'raw'
+        rawvar = pymqdatastream.StreamVariable(name = 'serial binary',unit = '',datatype = 'b')
+        variables = ['serial binary',]
+        name = 'serial binary'
 
         stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=[rawvar])
         self.raw_stream = stream
@@ -274,11 +279,23 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.raw_stream_thread.start()
         return stream
 
+    def _rem_raw_data_stream(self):
+        """
+        Stops the raw_data thread and removes self.raw_data
+        """
+
+        funcname = self.__class__.__name__ + '.rem_raw_data_stream()'
+        self.logger.debug(funcname + ': Stopping conversion thread')
+        self._raw_data_thread_queue.put('stop')
+        data = self._raw_data_thread_queue_ans.get()
+        self.logger.debug(funcname + ': Got data from conversion thread, thread stopped')
+        self.rem_stream(self.raw_stream)
+        
         
     def push_raw_stream_data(self,stream,dt = 0.1):
         """
         
-        
+        Pushes the raw serial data into the raw datastream
         
         """
         
@@ -292,6 +309,15 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 data = deque.pop()
                 data_all.append(data)
                 stream.pub_data(data_all)
+
+            # Try to read from the queue, if something was read, quit
+            try:
+                data = self._raw_data_thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self._raw_data_thread_queue_ans.put('stopping')
+                break
+            except queue.Empty:
+                pass                                
 
                 
     def init_data_format_functions(self):
@@ -551,14 +577,14 @@ class sam4logDataStream(pymqdatastream.DataStream):
     def stop_converting_raw_data(self):
         """
 
-        Stops a raw data conversion thread
+        Stops a raw data conversion thread and removes all streams
 
         """
-        
-        self.logger.debug('Stopping conversion thread')
+        funcname = self.__class__.__name__ + '.stop_converting_raw_data()'
+        self.logger.debug(funcname + ': Stopping conversion thread')
         self.conversion_thread_queue.put('stop')
         data = self.conversion_thread_queue_ans.get()
-        self.logger.debug('Got data from conversion thread, thread stopped')
+        self.logger.debug(funcname + ': Got data from conversion thread, thread stopped')
 
         self.channel_streams = None        
         for stream in self.conv_streams:
@@ -826,6 +852,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.convert_raw_data_format3()'
         self.logger.debug(funcname)
         ad0_converted = 0
+        data_packets = []
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
             nstreams = (max(self.device_info['channel_seq']) + 1)
@@ -838,31 +865,38 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 data_str += data.decode(encoding='utf-8')
                 #data_list = [packet_num,packet_time]
                 data_packets = []
-                for line in data_str.splitlines():
-                    data_split = line.split(';')
-                    packet_time = int(data_split[0])/self.device_info['counterfreq']
-                    packet_num = int(data_split[1])
-                    channel = int(data_split[2])
-                    ad_data = data_split[3:]
-                    # Fill the data list
-                    data_list = [packet_num,packet_time]                    
-                    # Fill the data packet dictionary
-                    data_packet = {}
-                    data_packet = {'num':packet_num,'50khz':packet_time}
-                    data_packet['ch'] = channel
-                    data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
-                    # Test if the lengths are same
-                    if(len(ad_data) == len(self.device_info['adcs'] * 2)):
-                        for n,i in enumerate(range(0,len(ad_data)-1,2)):
-                            V = float(ad_data[i+1])
-                            data_packet['V'][n] = V
-                            data_list.append(V)
-                    else:
-                       logger.debug(funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])))
-                       
+                #for line in data_str.splitlines():
+                data_str_split = data_str.split('\n')
+                if(len(data_str_split[-1]) == 0): # We have a complete last line
+                    data_str = ''
+                else:
+                    data_str = data_str_split[-1]
+                for line in data_str_split:
+                    if(len(line)>0):
+                        data_split = line.split(';')
+                        packet_time = int(data_split[0])/self.device_info['counterfreq']
+                        packet_num = int(data_split[1])
+                        channel = int(data_split[2])
+                        ad_data = data_split[3:]
+                        # Fill the data list
+                        data_list = [packet_num,packet_time]                    
+                        # Fill the data packet dictionary
+                        data_packet = {}
+                        data_packet = {'num':packet_num,'50khz':packet_time}
+                        data_packet['ch'] = channel
+                        data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
+                        # Test if the lengths are same
+                        if(len(ad_data) == len(self.device_info['adcs'] * 2)):
+                            for n,i in enumerate(range(0,len(ad_data)-1,2)):
+                                V = float(ad_data[i+1])
+                                data_packet['V'][n] = V
+                                data_list.append(V)
+                        else:
+                           logger.debug(funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])))
 
-                    data_packets.append(data_packet)
-                    data_stream[channel].append(data_list)
+
+                        data_packets.append(data_packet)
+                        data_stream[channel].append(data_list)
             # Push the read data
             ti = time.time()
             

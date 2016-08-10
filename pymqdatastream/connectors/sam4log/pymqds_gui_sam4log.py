@@ -118,7 +118,7 @@ class sam4logConfig(QtWidgets.QWidget):
         # Conversion speed
         self._convspeed_combo = QtWidgets.QComboBox(self)
         # TODO rewrite in Hz
-        self.speeds = [2,4,6,8,12,30]        
+        self.speeds = [30,12,8,6,4,2]        
         for speed in self.speeds:
             self._convspeed_combo.addItem(str(speed))
 
@@ -385,33 +385,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         #
         self._ad_table = QtWidgets.QTableWidget()
         #self._ad_table.setMinimumSize(300, 300)
-        #self._ad_table.setMaximumSize(300, 300)        
-        self._ad_table.setColumnCount(5)
-        self._ad_table.setRowCount(10)
-        self._ad_table.verticalHeader().setVisible(False)
-        self._ad_table.setItem(0,
-                               0, QtWidgets.QTableWidgetItem( ' Packet number' ))
-        self._ad_table.setItem(1,
-                               0, QtWidgets.QTableWidgetItem( ' Counter' ))
-        for i in range(0,8):
-            adname='LTC2442 ' + str(i)
-            self._ad_table.setItem(i+2,
-                                0, QtWidgets.QTableWidgetItem( adname ))        
+        #self._ad_table.setMaximumSize(300, 300)
+        self._ad_table_setup()
 
-        self._ad_table.setHorizontalHeaderLabels(['Name','Ch 0','Ch 1','Ch 2','Ch 3'])
-        # Make width and height of the table such that all entries can be seen
-        vwidth = self._ad_table.verticalHeader().width()
-        hwidth = self._ad_table.horizontalHeader().length()
-        fwidth = self._ad_table.frameWidth() * 2
-        swidth = self._ad_table.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
-        self._ad_table.setFixedWidth(vwidth + hwidth + fwidth)
-        self._ad_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        height = 0
-        hheight = self._ad_table.horizontalHeader().height()
-        for i in range(self._ad_table.rowCount()):
-            height += self._ad_table.rowHeight(i)
-            
-        self._ad_table.setFixedHeight(height + hheight + fwidth)
         
 
         # The main layout
@@ -461,6 +437,36 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.intraqueuetimer.setInterval(100)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()
+
+
+    def _ad_table_setup(self):
+        self._ad_table.setColumnCount(5)
+        self._ad_table.setRowCount(10)
+        self._ad_table.verticalHeader().setVisible(False)
+        self._ad_table.setItem(0,
+                               0, QtWidgets.QTableWidgetItem( ' Packet number' ))
+        self._ad_table.setItem(1,
+                               0, QtWidgets.QTableWidgetItem( ' Counter' ))
+        for i in range(0,8):
+            adname='LTC2442 ' + str(i)
+            self._ad_table.setItem(i+2,
+                                0, QtWidgets.QTableWidgetItem( adname ))        
+
+        self._ad_table.setHorizontalHeaderLabels(['Name','Ch 0','Ch 1','Ch 2','Ch 3'])
+        # Make width and height of the table such that all entries can be seen
+        vwidth = self._ad_table.verticalHeader().width()
+        hwidth = self._ad_table.horizontalHeader().length()
+        fwidth = self._ad_table.frameWidth() * 2
+        swidth = self._ad_table.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
+        self._ad_table.setFixedWidth(vwidth + hwidth + fwidth)
+        self._ad_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        height = 0
+        hheight = self._ad_table.horizontalHeader().height()
+        for i in range(self._ad_table.rowCount()):
+            height += self._ad_table.rowHeight(i)
+            
+        self._ad_table.setFixedHeight(height + hheight + fwidth)
+        
 
 
     def _update_status_information(self):
@@ -536,6 +542,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self._s4l_settings_bu.setEnabled(False)                
                 #print('Opening port' + ser + ' with baudrate ' + str(b))
                 #self.sam4log.add_serial_device(ser,baud=b)
+                self._ad_table.clear()
+                self._ad_table_setup()                
                 self.sam4log.add_raw_data_stream()
                 time.sleep(0.2)
                 self.sam4log.query_sam4logger()
