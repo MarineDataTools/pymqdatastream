@@ -274,6 +274,7 @@ class NMEA0183Grabber(object):
             except queue.Empty:
                 pass
 
+            
     def log_data_in_files(self, filename, time_interval):
         """
         Creates every time_interval a new file and logs the data to it
@@ -288,6 +289,7 @@ class NMEA0183Grabber(object):
         self.time_thread.daemon = True
         self.time_thread.start()
 
+        
     def time_interval_thread(self,filename,time_interval,thread_queue):
         """
 
