@@ -123,8 +123,9 @@ class zmq_socket(object):
         # The serialise function
         #self.dumps = self.dumps_json
         #self.loads = self.loads_json
+        # binary json
         self.dumps = self.dumps_ubjson
-        self.loads = self.loads_ubjson                
+        self.loads = self.loads_ubjson
         
         if(statistic):
             self.do_statistic = True
@@ -448,14 +449,14 @@ class zmq_socket(object):
             self.logger.warning(funcname + ': No thread found to stop')
 
             
-    def poll_substream_thread(self, socket, dt_wait = 0.02):
+    def poll_substream_thread(self, socket, dt_wait = 0.01):
         """The polling thread
             
         An infinite loop with a zmq.POLLIN and a timeout of dt_wait
         the timeout is used to check every dt_wait if data arrived on
         self.thread_queue, if something was receveied the thread is
         simply stopped. If data from the zmq socket was received the 
-        json string is decoded and put into self.deque.
+        ubjson data is decoded with self.loads and put into self.deque.
         TODO: Add time information of receive?
         
         Args: 
@@ -470,7 +471,7 @@ class zmq_socket(object):
         while True:
             if poller.poll(dt_wait*1000): #
                 recv = socket.recv_multipart()
-                # Convert from json to dicts again
+                # Convert from json to dicts again with self.loads
                 # This is discussable, but I leave it at the moment here
                 #try:
                 if(True):
@@ -1286,13 +1287,14 @@ class DataStream(object):
         return False
 
 
-    def subscribe_stream(self,substream = None):
+    def subscribe_stream(self,substream = None, statistic=False):
         """
 
         Subscribes a stream of a remote datastream
 
         Args:
             substream: either a datastream.Stream object or a valid stream address to subscribe to
+            statistic: do statistics of stream ( i.e. bytes received, packets received)
         Returns:
             stream: A stream object of the subscribed stream or None if subscription failed
         """
@@ -1312,10 +1314,10 @@ class DataStream(object):
             self.logger.debug(funcname + ': subscribing to stream:' + str(stream))
             if(stream.stream_type == 'pubstream'):
                 self.logger.debug(funcname + ': created a substream for subscription')
-                subscribe_stream = Stream('substream')
+                subscribe_stream = Stream('substream',statistic=statistic)
             elif(stream.stream_type == 'repstream'):
                 self.logger.debug(funcname + ': created a reqstream for subscription')
-                subscribe_stream = Stream('reqstream')
+                subscribe_stream = Stream('reqstream',statistic=statistic)
             else:
                 raise Exception('Unknown stream type, dont know how to subscribe ...')
             
