@@ -1410,10 +1410,46 @@ class DataStream(object):
                 self.logger.debug(funcname + ': Found stream at: ' + str(uuid))
                 return stream
 
-
+            
         return None
+    
+    
+    def query_datastreams(self,addresses=None):
+        """
+        Queries a list of addresses and returns datastream objects
+        Input:
+            addresses: List of addresses to query, if not defined standard addresses will be used
+        Return:
+            datastreams: A list of remote datastreams found
+        """
+        funcname = self.__class__.__name__ + '.query_datastreams()'
+        self.logger.debug(funcname)        
+        list_status = []
+        datastreams_remote = []
+        if(addresses == None):
+            addresses = standard_datastream_control_addresses
 
 
+        for address in addresses:
+            #self.logger.setLevel(logging.DEBUG)
+            if(address != self.address):
+                self.logger.debug(funcname + ': Address:' + address)
+                [ret,reply_dict] = self.get_datastream_info(address,dt_wait=0.01)
+                self.logger.debug(funcname + ': Reply_dict:' + str(reply_dict))
+                if(ret):
+                    datastream_remote = create_datastream_from_info_dict(reply_dict)
+                    try:
+                        list_status.append(reply_dict)
+                        datastreams_remote.append(datastream_remote)
+                        self.logger.debug(funcname + ": Reply:" + str(datastream_remote))
+                    except Exception as e :
+                        self.logger.debug(funcname + ": Exception:" + str(e))       
+                        self.logger.debug(funcname + ": Could not decode reply:" + str(reply_dict))
+
+
+        return datastreams_remote
+
+    
     def get_info(self):
         """
         """
@@ -1503,7 +1539,7 @@ def create_datastream_from_info_dict(info_dict,logging_level = logging.INFO):
     
     """
     # Only populating if the datastream is of remote type
-    datastream = DataStream(remote = True,name=info_dict['name'],logging_level = logging_level)
+    datastream = DataStream(remote = True,name=info_dict['name'] + '_remote',logging_level = logging_level)
     datastream.uuid = info_dict['uuid']
     datastream.created = info_dict['created']
     try:
@@ -1515,7 +1551,11 @@ def create_datastream_from_info_dict(info_dict,logging_level = logging.INFO):
         stream = create_Stream_from_info_dict(stream_dict)
         datastream.Streams.append(stream)
 
-    return datastream        
+    return datastream
+
+
+
+
         
 
         
