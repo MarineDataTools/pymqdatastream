@@ -1326,7 +1326,7 @@ class DataStream(object):
                 self.logger.debug(funcname + ': created a reqstream for subscription')
                 subscribe_stream = Stream('reqstream',statistic=statistic)
             else:
-                raise Exception('Unknown stream type, dont know how to subscribe ...')
+                raise Exception('Unknown stream type:' + str(stream.stream_type) + ', dont know how to subscribe ...')
             
             # Connect the stream
             ret = subscribe_stream.connect_stream(stream,statistic=statistic)

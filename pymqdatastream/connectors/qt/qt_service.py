@@ -151,13 +151,14 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         stream_type: Types of streams to show (subscription is still only to pubstreams)
         multiple_subscription: Allows to subscribe a stream more than once [default True]
     """
-    def __init__(self,Datastream,hide_myself = False, show_statistics = False, update_subscribed_streams = False, stream_type = None, multiple_subscription=True):
+    def __init__(self,Datastream,hide_myself = False, show_statistics = False, update_subscribed_streams = False, stream_type = None, multiple_subscription=True, statistic=True):
         QtWidgets.QWidget.__init__(self)
         funcname = self.__class__.__name__ + '.__init__()'
         logger.debug(funcname)
         self.Datastream = Datastream
         self.layout = QtWidgets.QGridLayout(self)
         self.show_statistics = show_statistics
+        self._statistic = statistic
         self.update_subscribed_streams = update_subscribed_streams
         self.multiple_subscription = multiple_subscription
         if( not(isinstance(stream_type,list))) :
@@ -190,9 +191,10 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         # Buttons
         self.button_settings   = QtWidgets.QPushButton('Settings', self)  
         #self.button_addresses   = QtWidgets.QPushButton('Addresses', self)
-        self.button_update      = QtWidgets.QPushButton('Update', self)
-        self.button_subscribe   = QtWidgets.QPushButton('Subscribe', self)
-        self.button_unsubscribe = QtWidgets.QPushButton('Unsubscribe', self)
+        self.button_update     = QtWidgets.QPushButton('Update', self)
+        self.button_subscribe  = QtWidgets.QPushButton('Subscribe', self)
+        self.button_unsubscribe= QtWidgets.QPushButton('Unsubscribe', self)
+        self.button_close      = QtWidgets.QPushButton('Close', self)          
         self.button_subscribe.setEnabled(False)
         self.button_unsubscribe.setEnabled(False)
 
@@ -201,6 +203,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         self.button_settings.clicked.connect(self.handle_settings_clicked)        
         self.button_subscribe.clicked.connect(self.handle_subscribe_clicked)
         self.button_unsubscribe.clicked.connect(self.handle_unsubscribe_clicked)
+        self.button_close.clicked.connect(self.handle_close_clicked)
         # labels
         self._label_datastreams = QtWidgets.QLabel('Datastreams')
         # layout
@@ -213,6 +216,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.info_streamsub,2,1)
         self.layout.addWidget(self.button_subscribe,3,0)
         self.layout.addWidget(self.button_unsubscribe,3,1)
+        self.layout.addWidget(self.button_close,4,1)        
 
 
         self.unsubscribe_item = None
@@ -433,7 +437,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         '''
         funcname = self.__class__.__name__ + '.handle_subscribe_clicked()'
             
-        substream = self.Datastream.subscribe_stream(self._subscribe_item.stream)
+        substream = self.Datastream.subscribe_stream(self._subscribe_item.stream,statistic=self._statistic)
         if(substream != None):
             logger.debug(funcname + ': Could connect to socket')
             self.populate_subscribed_with_streams()
@@ -470,6 +474,9 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         # Fill the list with datastream objects
         remote_datastreams = self.query_datastreams(self.address_list)
         self.populate_with_datastreams(remote_datastreams)
+
+    def handle_close_clicked(self):
+        self.close()
 
 
 
