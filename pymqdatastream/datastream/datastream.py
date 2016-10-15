@@ -709,7 +709,7 @@ class Stream(object):
             self.logger.debug(funcname + ': Creating control stream' )    
             self.socket = socket
 
-        elif(self.stream_type == 'repstream'): # Control stream
+        elif(self.stream_type == 'repstream'): # reply stream
             self.logger.debug(funcname + ': Creating repstream stream' )    
             self.socket = socket            
 
@@ -718,7 +718,8 @@ class Stream(object):
         if(statistic):
             self.do_statistic = True
             self.statistic = {}
-            self.statistic['packets sent'] = 0
+            self.statistic['packets_sent'] = 0
+            self.statistic['packets_received'] = 0            
             
         
     def publish_stream(self,socket):
@@ -749,7 +750,7 @@ class Stream(object):
             data = self.deque.pop()
             data = [self.uuid, data] # Add the uuid
             if(self.do_statistic):
-                self.statistic['packets sent'] += 1
+                self.statistic['packets_sent'] += 1
             for socket in self.socket:
                 socket.pub_data(data)
 
@@ -770,7 +771,7 @@ class Stream(object):
         #    data = [data,]
         if(self.stream_type == 'pubstream'):
             if(self.do_statistic):
-                self.statistic['packets sent'] += 1
+                self.statistic['packets_sent'] += 1
             for socket in self.socket:
                 data = [self.uuid, data] # Add the uuid
                 socket.pub_data(data)        
@@ -810,6 +811,9 @@ class Stream(object):
                     break
 
                 rawdata_recv = self.deque.pop()
+                if(self.do_statistic):
+                    self.statistic['packets_received'] += 1
+
                 data.append(rawdata_recv)
 
             return data
@@ -1180,6 +1184,8 @@ class DataStream(object):
     def add_pub_socket(self,address = None):
         """
         Adds a zmq connector socket
+        Return:
+            socket
         """
         funcname = '.add_pub_socket()'
         self.logger.debug(funcname)
@@ -1189,6 +1195,7 @@ class DataStream(object):
         #self.logger.debug(funcname + ': ' + str(address))            
         sub_socket = zmq_socket(socket_type = 'pubstream',address = address)
         self.sockets.append(sub_socket)
+        return sub_socket
 
         
     def add_pub_stream(self,socket, variables = None, name = None, statistic = False):
@@ -1322,7 +1329,7 @@ class DataStream(object):
                 raise Exception('Unknown stream type, dont know how to subscribe ...')
             
             # Connect the stream
-            ret = subscribe_stream.connect_stream(stream)
+            ret = subscribe_stream.connect_stream(stream,statistic=statistic)
             if(subscribe_stream.socket != None): # When succesfully connected, socket is not None anymore
                 if(subscribe_stream.socket.connected == True):
                     self.logger.debug(funcname + ': successfully subscribed stream:\n' + str(stream))
