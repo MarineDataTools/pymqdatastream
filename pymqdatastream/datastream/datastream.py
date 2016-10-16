@@ -1272,7 +1272,9 @@ class DataStream(object):
     def rem_stream(self,disstream):
         """
 
-        Disconnects and removes a Stream with the uuid
+        Disconnects and removes a Stream
+        Args:
+            disstream: Stream to be removed
         Returns:
             bool: True: if Stream was succesfully removed, False if Stream could not be removed
 
