@@ -1059,9 +1059,16 @@ class StreamVariable(dict):
 # Standard datastream ports
 
 __num_ports__ = 50 # The total number of ports to be used
-standard_datastream_control_port  = 18055 # First port number of the req/rep port for general information
-standard_stream_publish_port      = 28719 # First port number for the general use ports
-standard_datastream_address       = '127.0.0.1'
+standard_datastream_control_port    = 18055 # First port number of the req/rep port for general information
+standard_stream_publish_port        = 28719 # First port number for the general use ports
+standard_datastream_address         = '127.0.0.1'
+standard_datastream_control_address = 'tcp://' + standard_datastream_address
+
+standard_datastream_control_ports = [ i for i in range(standard_datastream_control_port,\
+                                                   standard_datastream_control_port +__num_ports__)]
+
+standard_stream_publish_ports = [i for i in range(standard_stream_publish_port,\
+                                                   standard_stream_publish_port +__num_ports__)]
 
 standard_datastream_control_addresses = [ 'tcp://' + standard_datastream_address + ':' + str(i)\
                                           for i in range(standard_datastream_control_port,\
@@ -1070,6 +1077,57 @@ standard_datastream_control_addresses = [ 'tcp://' + standard_datastream_address
 standard_datastream_publish_addresses = [ 'tcp://' + standard_datastream_address + ':' + str(i)\
                                           for i in range(standard_stream_publish_port,\
                                                          standard_stream_publish_port +__num_ports__)]
+
+
+def treat_address(address=None):
+    """
+        Args: 
+            address: string or list of address e.g. tcp://127.0.0.1
+        Returns:
+            address_list: A list of addresses
+    """
+    funcname = 'treat_address'
+    addresses_final = []
+    # Create standard addresses 
+    if(address == None):
+        logger.debug(funcname + \
+        ': Taking standard address for control datastream: '\
+        + str(standard_datastream_control_addresses[0]) + ' ... ' 
+        + str(standard_datastream_control_addresses[-1]))
+        addresses_final = standard_datastream_control_addresses
+    # Take address as given
+    else:
+        if(not(isinstance(address,list))): # A single address
+            addresses = [address]
+        else:
+            addresses = address
+
+        for address in addresses:
+            print('address',address)
+            print(address.find(':'))
+            # Adding protocol if not existing
+            # TODO: This essentially forbids to use anything but tcp
+            if(address[0:7] != 'tcp://'):
+                address = 'tcp://' + address
+            if(address.count(':') == 2):
+                logger.debug(funcname + ': Using address ' +
+                                  address + ' for control stream')
+                addresses_final.append(address)
+            else:
+                logger.debug(funcname + ': Using address ' +
+                    address + ' and trying ports ' +
+                    str(standard_datastream_control_ports[0])
+                    + ' ... ' +
+                    str(standard_datastream_control_ports[-1]) + 
+                    ' for control stream')                        
+                addresses = [ address + ':' + str(i)
+                    for i in range(standard_datastream_control_port,
+                    standard_datastream_control_port +__num_ports__)]
+                addresses_final.extend(addresses)
+
+
+    logger.debug('Adresses final:',addresses_final)
+    return addresses_final
 
 class DataStream(object):
     """
@@ -1108,12 +1166,8 @@ class DataStream(object):
         self.created = time.time()
         if(remote == False):
             self.uuid = 'pymqds_' + __datastream_version__ + '_DataStream' + ':' + str(uuid_module.uuid1())
-            # Create standard addresses 
-            if(address == None):
-                addresses = standard_datastream_control_addresses
-            else:
-                if(not(isinstance(address,list))): # A single address
-                    addresses = [address]
+            addresses = treat_address(address)
+
 
 
             # Create control socket
@@ -1434,13 +1488,14 @@ class DataStream(object):
             datastreams: A list of remote datastreams found
         """
         funcname = self.__class__.__name__ + '.query_datastreams()'
-        self.logger.debug(funcname)        
+        self.logger.debug(funcname)
         list_status = []
         datastreams_remote = []
-        if(addresses == None):
-            addresses = standard_datastream_control_addresses
+        addresses = treat_address(addresses)
+        #if(addresses == None):
+        #    addresses = standard_datastream_control_addresses
 
-
+        self.logger.debug(funcname + ': Addresses' + str(addresses))
         for address in addresses:
             #self.logger.setLevel(logging.DEBUG)
             if(address != self.address):

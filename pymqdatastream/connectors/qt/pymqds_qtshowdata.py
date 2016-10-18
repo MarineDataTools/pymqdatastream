@@ -25,7 +25,7 @@ class qtshowstreamdataWidget(QtWidgets.QWidget):
         #self.DatastreamChoose = DataStreamChooseShowWidget(self.Datastream, hide_myself=True)
         self.DatastreamChoose = datastream_qt_service.DataStreamSubscribeWidget(self.Datastream, hide_myself=True, stream_type = 'pubstream')
         #self.DatastreamChoose.query_datastreams(self.DatastreamChoose.address_list)
-        self.DatastreamChoose.handle_update_clicked()
+        #self.DatastreamChoose.handle_update_clicked()
         self.showwidgets = []
         
         self.layout = QtWidgets.QHBoxLayout()

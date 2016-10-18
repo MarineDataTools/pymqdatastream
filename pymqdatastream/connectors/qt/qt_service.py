@@ -121,22 +121,77 @@ class DataStreamAddresslist(QtWidgets.QWidget):
     Choose list of addresses addresslist
     This has to be completed
     """
-    def __init__(self,Datastream):
+    def __init__(self,addresses = []):
         QtWidgets.QWidget.__init__(self)
         self.layout = QtWidgets.QGridLayout(self)
         self.address_dialog = QtWidgets.QInputDialog(self)
-        address, ok = self.address_dialog.getText(self, 'Input Dialog', 'IP address:')
-        
-        self.le = QtWidgets.QLineEdit(self)
-        if ok:
-            self.le.setText(str(address))
-        # Buttons
-        self.button_done = QtWidgets.QPushButton('Done', self)
+        self.addr_table = QtWidgets.QTableWidget()
+        self.addr_table.setColumnCount(1)
+        self.addr_table.horizontalHeader().setStretchLastSection(True)
+        #self.addr_table.itemChanged.connect(self.update_address_list) 
 
+        self.addresses = addresses
+        print('Hallo addresses',self.addresses)
+        self.populate_table_from_address_list()
+        # Buttons
+        self.button_apply = QtWidgets.QPushButton('Apply', self)
+        self.button_close = QtWidgets.QPushButton('Close', self)        
+        self.button_new = QtWidgets.QPushButton('Add', self)
+        self.button_del = QtWidgets.QPushButton('Delete', self)        
+        self.button_new.clicked.connect(self.new_address)
+        self.button_del.clicked.connect(self.del_address)
+        self.button_close.clicked.connect(self.clicked_close)
+        self.button_apply.clicked.connect(self.update_address_list)                
         # Layout
-        self.layout.addWidget(self.button_done,1,0)
-        self.layout.addWidget(self.le,1,1)
-        self.layout.addWidget(self.address_dialog,2,1)        
+        self.layout.addWidget(self.button_new,0,0)
+        self.layout.addWidget(self.button_del,0,1)                        
+        self.layout.addWidget(self.button_apply,0,2)
+        self.layout.addWidget(self.button_close,0,3)        
+        self.layout.addWidget(self.addr_table,1,0,2,4)
+
+    def new_address(self):
+        rowPosition = self.addr_table.rowCount()
+        self.addr_table.insertRow(rowPosition)
+        self.addr_table.setItem(rowPosition,
+                            0, QtWidgets.QTableWidgetItem( 'tcp://' ))
+
+    def del_address(self):
+        #rowPosition = self.addr_table.rowCount()
+        #self.addr_table.removeRow(rowPosition-1)
+        print(self.addr_table.selectedIndexes())
+        print(self.addr_table.selectedIndexes()[0].row())
+        for item in self.addr_table.selectedItems():
+            ind = self.addr_table.indexFromItem(item)
+            row = ind.row()
+            self.addr_table.removeRow(row)
+            #self.update_address_list()
+
+    def populate_table_from_address_list(self):
+        self.addr_table.clear()
+        for addr in self.addresses:
+            rowPosition = self.addr_table.rowCount()
+            self.addr_table.insertRow(rowPosition)
+            self.addr_table.setItem(rowPosition,
+                                    0, QtWidgets.QTableWidgetItem( addr ))        
+
+    def update_address_list(self):
+        logger.debug('updating list')
+        self.addresses = []
+        rows = self.addr_table.rowCount()
+        for row in range(rows):
+            item = self.addr_table.item(row,0)
+            text = str(item.text())
+            self.addresses.append(text)
+
+        print(self.addresses)
+
+    def clicked_close(self):
+        self.close()
+
+    def get_addresses(self):
+        return self.addresses  
+        
+        
 
 
         
@@ -166,7 +221,8 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
         self.stream_type = stream_type
         # Address list
-        self.address_list = pymqdatastream.standard_datastream_control_addresses
+        #self.address_list = pymqdatastream.standard_datastream_control_addresses
+        self.address_list = [ pymqdatastream.standard_datastream_control_address ]
 
         # Check if the address of the local datastream is in the list, if yes, remove it
         if(hide_myself):
@@ -190,7 +246,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         self.info_streamsub.setReadOnly(True)        
         # Buttons
         self.button_settings   = QtWidgets.QPushButton('Settings', self)  
-        #self.button_addresses   = QtWidgets.QPushButton('Addresses', self)
+        self.button_addresses   = QtWidgets.QPushButton('Addresses', self)
         self.button_update     = QtWidgets.QPushButton('Update', self)
         self.button_subscribe  = QtWidgets.QPushButton('Subscribe', self)
         self.button_unsubscribe= QtWidgets.QPushButton('Unsubscribe', self)
@@ -198,7 +254,13 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         self.button_subscribe.setEnabled(False)
         self.button_unsubscribe.setEnabled(False)
 
-        #self.button_addresses.clicked.connect(self.open_address_widget)
+        self.button_layout0 = QtWidgets.QHBoxLayout()
+        self.button_layout0.addWidget(self.button_update)
+        self.button_layout0.addWidget(self.button_addresses)
+        self.button_layout0.addWidget(self.button_settings)
+        self.button_layout0.addWidget(self.button_close)                
+
+        self.button_addresses.clicked.connect(self.open_address_widget)
         self.button_update.clicked.connect(self.handle_update_clicked)
         self.button_settings.clicked.connect(self.handle_settings_clicked)        
         self.button_subscribe.clicked.connect(self.handle_subscribe_clicked)
@@ -207,22 +269,21 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         # labels
         self._label_datastreams = QtWidgets.QLabel('Datastreams')
         # layout
-        #self.layout.addWidget(self.button_addresses,0,1)
-        self.layout.addWidget(self.button_update,0,0)
-        self.layout.addWidget(self.button_settings,0,1)
+        self.layout.addLayout(self.button_layout0,0,0,1,2)        
         self.layout.addWidget(self.treeWidget,1,0)
         self.layout.addWidget(self.treeWidgetsub,1,1)
         self.layout.addWidget(self.info_stream,2,0)
         self.layout.addWidget(self.info_streamsub,2,1)
         self.layout.addWidget(self.button_subscribe,3,0)
         self.layout.addWidget(self.button_unsubscribe,3,1)
-        self.layout.addWidget(self.button_close,4,1)        
+        #self.layout.addWidget(self.button_close,4,1)        
 
 
         self.unsubscribe_item = None
 
         # Fill the list with datastream objects
-        remote_datastreams = self.query_datastreams(self.address_list[0:2])
+        #remote_datastreams = self.query_datastreams(self.address_list[0:2])
+        remote_datastreams = self.query_datastreams(self.address_list)
         self.populate_with_datastreams(remote_datastreams)
 
         # Define some signals, these list can be filled with functions which
@@ -242,7 +303,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         """
         """
         # Address widget
-        self.addresses = DataStreamAddresslist(self)
+        self.addresses = DataStreamAddresslist(self.address_list)
         self.addresses.show()
 
 
@@ -253,7 +314,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         funcname = self.__class__.__name__ + '.query_datastreams()'
         list_status = []
         datastreams_remote = []
-        print('\n\n\n')
+        addresses = pymqdatastream.treat_address(addresses)
         for address in addresses:
             logger.debug(funcname + ': Address:' + address)
             [ret,reply_dict] = self.Datastream.get_datastream_info(address,dt_wait=0.01)
@@ -361,6 +422,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
             stat_item = item.child(0)
             stat_item.setText(0, stat_name)
 
+            
     def handleItemChanged(self, item, column):
         """
 
@@ -471,6 +533,12 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         
     def handle_update_clicked(self):
         self.treeWidget.clear()
+        # Try to get a new address list from Addresslistwidget
+        try:
+            self.address_list = self.addresses.get_addresses()
+            print('Got data:',self.address_list)
+        except Exception as e:
+            print(str(e) + ' no addresslistwidget')
         # Fill the list with datastream objects
         remote_datastreams = self.query_datastreams(self.address_list)
         self.populate_with_datastreams(remote_datastreams)
@@ -605,6 +673,7 @@ class DataStreamShowTableDataWidget(QtWidgets.QWidget):
             header.append('var ' + str(i) + '\n' + var['name'] + '\n[' + var['unit'] + ']')
             
         self.stream_table.setHorizontalHeaderLabels(header)
+        self.stream_table.horizontalHeader().setStretchLastSection(True)
 
         
         self.button_con = QtWidgets.QPushButton('Disconnect', self)
