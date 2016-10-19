@@ -283,7 +283,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
         # Fill the list with datastream objects
         #remote_datastreams = self.query_datastreams(self.address_list[0:2])
-        remote_datastreams = self.query_datastreams(self.address_list)
+        remote_datastreams = self.Datastream.query_datastreams(self.address_list)
         self.populate_with_datastreams(remote_datastreams)
 
         # Define some signals, these list can be filled with functions which
@@ -307,7 +307,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         self.addresses.show()
 
 
-    def query_datastreams(self,addresses):
+    def query_datastreams_old(self,addresses):
         """
         Queries a list of addresses and returns datastream objects
         """
@@ -540,7 +540,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         except Exception as e:
             print(str(e) + ' no addresslistwidget')
         # Fill the list with datastream objects
-        remote_datastreams = self.query_datastreams(self.address_list)
+        remote_datastreams = self.Datastream.query_datastreams(self.address_list)
         self.populate_with_datastreams(remote_datastreams)
 
     def handle_close_clicked(self):

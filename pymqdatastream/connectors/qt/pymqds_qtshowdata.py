@@ -16,10 +16,10 @@ logger.setLevel(logging.DEBUG)
 
 
 class qtshowstreamdataWidget(QtWidgets.QWidget):
-    def __init__(self):
+    def __init__(self,logging_level=logging.INFO):
         QtWidgets.QWidget.__init__(self)        
         self.setMinimumSize(QtCore.QSize(500, 500))
-        self.Datastream = pymqdatastream.DataStream(name='qtshowstreamdata')
+        self.Datastream = pymqdatastream.DataStream(name='qtshowstreamdata',logging_level=logging_level)
         list_status = []
         # Datastream stuff
         #self.DatastreamChoose = DataStreamChooseShowWidget(self.Datastream, hide_myself=True)
@@ -68,7 +68,7 @@ class qtshowstreamdataWidget(QtWidgets.QWidget):
 
 
 class qtshowstreamdataMainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self,logging_level=logging.INFO):
         QtWidgets.QMainWindow.__init__(self)
         print('Hallo')
         mainMenu = self.menuBar()
@@ -89,7 +89,7 @@ class qtshowstreamdataMainWindow(QtWidgets.QMainWindow):
         
         self.statusBar()
 
-        self.qtshowstreamdatawidget = qtshowstreamdataWidget()
+        self.qtshowstreamdatawidget = qtshowstreamdataWidget(logging_level=logging_level)
         self.setCentralWidget(self.qtshowstreamdatawidget)
         
         self.show()
@@ -108,17 +108,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', '-v', action='count')
     args = parser.parse_args()
+    logging_level = logging.INFO
     if(args.verbose == None):
+        logging_level = logging.CRITICAL        
         logger.setLevel(logging.CRITICAL)
         pymqdatastream.logger.setLevel(logging.CRITICAL)
     elif(args.verbose == 1):
+        logging_level = logging.INFO
         logger.setLevel(logging.INFO)
         pymqdatastream.logger.setLevel(logging.INFO)
-    elif(args.verbose == 2):
+    elif(args.verbose >= 2):
+        print('Debug logging level')
+        logging_level = logging.DEBUG
         logger.setLevel(logging.DEBUG)
         pymqdatastream.logger.setLevel(logging.DEBUG)        
     
     app = QtWidgets.QApplication(sys.argv)
-    window = qtshowstreamdataMainWindow()
+    window = qtshowstreamdataMainWindow(logging_level = logging_level)
     window.show()
     sys.exit(app.exec_())

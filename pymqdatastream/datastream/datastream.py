@@ -584,7 +584,7 @@ class zmq_socket(object):
         self.zmq_socket.send(ubjson_data)
 
         
-    def _get_rep_(self,dt_wait = 0.05):
+    def _get_rep_(self,dt_wait = 0.2):
         """Reads data from a req/rep socket using a poller which waits
         dt_wait seconds desialising it with ubjson 
         Args:
@@ -1059,7 +1059,7 @@ class StreamVariable(dict):
 
 # Standard datastream ports
 
-__num_ports__ = 50 # The total number of ports to be used
+__num_ports__ = 20 # The total number of ports to be used
 standard_datastream_control_port    = 18055 # First port number of the req/rep port for general information
 standard_stream_publish_port        = 28719 # First port number for the general use ports
 standard_datastream_address         = '127.0.0.1'
@@ -1526,11 +1526,12 @@ class DataStream(object):
         #    addresses = standard_datastream_control_addresses
 
         self.logger.debug(funcname + ': Addresses' + str(addresses))
+
         for address in addresses:
-            #self.logger.setLevel(logging.DEBUG)
             if(address != self.address):
                 self.logger.debug(funcname + ': Address:' + address)
                 [ret,reply_dict] = self.get_datastream_info(address,dt_wait=0.01)
+                #self.logger.setLevel(logging.DEBUG)                
                 self.logger.debug(funcname + ': Reply_dict:' + str(reply_dict))
                 if(ret):
                     datastream_remote = create_datastream_from_info_dict(reply_dict)
