@@ -377,7 +377,7 @@ class zmq_socket(object):
         poller.register(self.zmq_socket, zmq.POLLIN)
         
         while True:
-            self.logger.debug(funcname + ': process_reply_loop')
+            #self.logger.debug(funcname + ': process_reply_loop')
             if poller.poll(dt_wait*1000): #
                 #recv = socket.recv_multipart()
                 ubjson_request = self.zmq_socket.recv() # Waiting for a request (blocking)
