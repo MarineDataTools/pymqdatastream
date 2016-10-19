@@ -1141,6 +1141,20 @@ def treat_address(address=None,control=True):
     logger.debug('Adresses final:',addresses_final)
     return addresses_final
 
+
+def get_ip_from_address(address):
+    """
+    Returns the IP as a string from an address string
+    e.g. 127.1.0.0 from tcp://127.1.0.0:1234
+    """
+    address_ret = address
+    address_ret = address_ret.replace('tcp://','')
+    ind = address_ret.rfind(':')
+    if(ind >= 0):
+        address_ret = address_ret[0:ind]
+
+    return address_ret
+
 class DataStream(object):
     """
     
@@ -1185,6 +1199,7 @@ class DataStream(object):
             # Create control socket
             control_socket = zmq_socket(socket_type = 'control', address = addresses, socket_reply_function = self.control_socket_reply)
             self.address = control_socket.address
+            self.ip = get_ip_from_address(self.address)
             self.sockets.append(control_socket)
 
             # Create control stream
@@ -1259,7 +1274,7 @@ class DataStream(object):
         self.logger.debug(funcname)
         if(address == None): # If no address has been defined take the address of this datastream
             #address = standard_datastream_publish_addresses
-            address = treat_address(self.address,control=False)
+            address = treat_address(self.ip,control=False)
 
         #self.logger.debug(funcname + ': ' + str(address))            
         pub_socket = zmq_socket(socket_type = 'pubstream',address = address,logging_level = self.logging_level)
