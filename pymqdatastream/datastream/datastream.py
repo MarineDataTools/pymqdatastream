@@ -1264,7 +1264,7 @@ class DataStream(object):
         #self.logger.debug(funcname + ': ' + str(address))            
         pub_socket = zmq_socket(socket_type = 'pubstream',address = address,logging_level = self.logging_level)
         self.sockets.append(pub_socket)
-        return sub_socket
+        return pub_socket
 
         
     def add_pub_stream(self,socket, variables = None, name = None, statistic = False):
