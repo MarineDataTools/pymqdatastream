@@ -1079,22 +1079,33 @@ standard_datastream_publish_addresses = [ 'tcp://' + standard_datastream_address
                                                          standard_stream_publish_port +__num_ports__)]
 
 
-def treat_address(address=None):
+def treat_address(address=None,control=True):
     """
         Args: 
             address: string or list of address e.g. tcp://127.0.0.1
+            control: Use addresses/ports dedicated to control stream (True) or to data stream (False)
         Returns:
             address_list: A list of addresses
     """
     funcname = 'treat_address'
     addresses_final = []
+    # Check if we have control addresses/ports or data ports
+    if(control):
+        base_addresses = standard_datastream_control_addresses
+        base_ports     = standard_datastream_control_ports
+        base_port      = standard_datastream_control_port
+    else:
+        base_addresses = standard_datastream_publish_addresses
+        base_ports     = standard_stream_publish_ports
+        base_port      = standard_stream_publish_port
+        
     # Create standard addresses 
     if(address == None):
         logger.debug(funcname + \
         ': Taking standard address for control datastream: '\
-        + str(standard_datastream_control_addresses[0]) + ' ... ' 
-        + str(standard_datastream_control_addresses[-1]))
-        addresses_final = standard_datastream_control_addresses
+        + str(base_addresses[0]) + ' ... ' 
+        + str(base_addresses[-1]))
+        addresses_final = base_addresses
     # Take address as given
     else:
         if(not(isinstance(address,list))): # A single address
@@ -1107,7 +1118,7 @@ def treat_address(address=None):
             print(address.find(':'))
             # Adding protocol if not existing
             # TODO: This essentially forbids to use anything but tcp
-            if(address[0:7] != 'tcp://'):
+            if(not 'tcp://' in address):
                 address = 'tcp://' + address
             if(address.count(':') == 2):
                 logger.debug(funcname + ': Using address ' +
@@ -1116,13 +1127,13 @@ def treat_address(address=None):
             else:
                 logger.debug(funcname + ': Using address ' +
                     address + ' and trying ports ' +
-                    str(standard_datastream_control_ports[0])
+                    str(base_ports[0])
                     + ' ... ' +
-                    str(standard_datastream_control_ports[-1]) + 
+                    str(base_ports[-1]) + 
                     ' for control stream')                        
                 addresses = [ address + ':' + str(i)
-                    for i in range(standard_datastream_control_port,
-                    standard_datastream_control_port +__num_ports__)]
+                    for i in range(base_port,
+                    base_port +__num_ports__)]
                 addresses_final.extend(addresses)
 
 
@@ -1238,13 +1249,16 @@ class DataStream(object):
     def add_pub_socket(self,address = None):
         """
         Adds a zmq connector socket
+        Args:
+            address: An address string compatible with zeromq or a list of addresses pymqds will try to connect the socket to
         Return:
             socket
         """
         funcname = '.add_pub_socket()'
         self.logger.debug(funcname)
-        if(address == None): # If no address has been defined
-            address = standard_datastream_publish_addresses
+        if(address == None): # If no address has been defined take the address of this datastream
+            #address = standard_datastream_publish_addresses
+            address = treat_address(self.address,control=False)
 
         #self.logger.debug(funcname + ': ' + str(address))            
         sub_socket = zmq_socket(socket_type = 'pubstream',address = address)
