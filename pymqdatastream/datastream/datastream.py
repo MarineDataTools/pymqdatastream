@@ -289,6 +289,7 @@ class zmq_socket(object):
         funcname = self.__class__.__name__ + '.connect_socket()'
         address = self.address
         zmq_socket_type = self.zmq_socket_type
+        self.logger.debug(funcname + ': Connecting to address: ' + str(address))
         try:
             self.logger.debug(funcname + ': Connecting to address: ' + address)
             # Finally lets connect a socket
@@ -1261,8 +1262,8 @@ class DataStream(object):
             address = treat_address(self.address,control=False)
 
         #self.logger.debug(funcname + ': ' + str(address))            
-        sub_socket = zmq_socket(socket_type = 'pubstream',address = address)
-        self.sockets.append(sub_socket)
+        pub_socket = zmq_socket(socket_type = 'pubstream',address = address,logging_level = self.logging_level)
+        self.sockets.append(pub_socket)
         return sub_socket
 
         
