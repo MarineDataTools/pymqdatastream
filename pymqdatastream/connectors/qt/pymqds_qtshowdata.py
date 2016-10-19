@@ -105,8 +105,10 @@ class qtshowstreamdataMainWindow(QtWidgets.QMainWindow):
 if __name__ == "__main__":
     # Remove string and then quit gives segfault!
     # Verbosity of datastream objects
+    datastream_help = 'Query datastream with address e.g. -d tcp://192.168.178.97:18055'    
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)    
     args = parser.parse_args()
     logging_level = logging.INFO
     if(args.verbose == None):
@@ -121,7 +123,14 @@ if __name__ == "__main__":
         print('Debug logging level')
         logging_level = logging.DEBUG
         logger.setLevel(logging.DEBUG)
-        pymqdatastream.logger.setLevel(logging.DEBUG)        
+        pymqdatastream.logger.setLevel(logging.DEBUG)
+
+    print('Args datastream:',args.datastream)
+    if(args.datastream != False):    
+        if(args.datastream == None):
+            logger.debug('Connecting to  pymqdatastream Datastream logger')
+        else:
+            logger.debug('Connecting to pymqdatastream at address: ' + str(args.datastream))
     
     app = QtWidgets.QApplication(sys.argv)
     window = qtshowstreamdataMainWindow(logging_level = logging_level)

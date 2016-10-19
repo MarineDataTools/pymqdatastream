@@ -1522,8 +1522,6 @@ class DataStream(object):
         list_status = []
         datastreams_remote = []
         addresses = treat_address(addresses)
-        #if(addresses == None):
-        #    addresses = standard_datastream_control_addresses
 
         self.logger.debug(funcname + ': Addresses' + str(addresses))
 
