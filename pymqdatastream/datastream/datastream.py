@@ -584,9 +584,9 @@ class zmq_socket(object):
         self.zmq_socket.send(ubjson_data)
 
         
-    def _get_rep_(self,dt_wait = 0.2):
+    def _get_rep_(self,dt_wait = 0.1):
         """Reads data from a req/rep socket using a poller which waits
-        dt_wait seconds desialising it with ubjson 
+        dt_wait seconds. Returned data is deserialised with ubjson 
         Args:
            dt_wait (float): wait time for the reply 
         Returns:
@@ -840,7 +840,7 @@ class Stream(object):
         funcname = 'reqrep()'
         if(self.stream_type == 'reqstream'):
             self.socket.send_req(request)
-            reply = self.socket.get_rep() # This is with a poller, so it can block depending on dt_wait
+            reply = self.socket.get_rep(dt_wait) # This is with a poller, so it can block depending on dt_wait
             return reply
         else:
             raise Exception(funcname + ": wrong stream type, cannot request data")            
@@ -1138,7 +1138,7 @@ def treat_address(address=None,control=True):
                 addresses_final.extend(addresses)
 
 
-    logger.debug('Adresses final:',addresses_final)
+    logger.debug('Adresses final: ' + str(addresses_final))
     return addresses_final
 
 
@@ -1211,8 +1211,7 @@ class DataStream(object):
         """
         Connecting to a remote datastream, querying the stream and
         disconnect afterwards
-        TODO: This is not thread safe, as it is using the threaded
-        control socket, CHANGE
+
         """
         funcname = 'get_datastream_info()'
         try:
@@ -1509,7 +1508,7 @@ class DataStream(object):
         return None
     
     
-    def query_datastreams(self,addresses=None):
+    def query_datastreams(self,addresses=None,queue=None):
         """
         Queries a list of addresses and returns datastream objects
         Input:
@@ -1542,8 +1541,48 @@ class DataStream(object):
                         self.logger.debug(funcname + ": Could not decode reply:" + str(reply_dict))
 
 
+        # If we have a queue put the result to the queue, this is for the threaded query
+        if(not queue == None):
+            queue.put(datastreams_remote)
+            
         return datastreams_remote
 
+    
+    def query_datastreams_fast(self,addresses):
+        """
+
+        Querying datastreams by creating several threads trying to connect to the list of :param addresses:
+        The function will create a temporary datastream for each address and will query the given ports of that address
+
+        Args:
+            addresses: String or list of addresses
+        Returns:
+            datastreams: The found datastreams
+
+        """
+
+        addresses_query = treat_address(addresses)
+        threads = []
+        datastreams_remote = []
+        # Start a thread for every address
+        for addr in addresses_query:
+            q = queue.Queue()
+            thread = threading.Thread(target=self.query_datastreams,args = (addr,q))
+            #thread.daemon = True
+            threads.append([thread,q])
+            thread.start()
+
+        # Wait for return of all threads
+        for t in threads:
+            t[0].join()
+
+        # 
+        for t in threads:
+            d = t[1].get()
+            datastreams_remote.extend(d)
+
+
+        return datastreams_remote
     
     def get_info(self):
         """
@@ -1651,7 +1690,9 @@ def create_datastream_from_info_dict(info_dict,logging_level = logging.INFO):
 
 
 
-        
+
+
+    
 
         
 

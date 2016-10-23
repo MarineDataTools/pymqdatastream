@@ -3,6 +3,7 @@ import sys
 import os
 import pymqdatastream
 import logging
+import argparse
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pydatastream_scan')
@@ -44,10 +45,53 @@ def query_datastreams(addresses,verbosity):
     return datastreams_remote
 
 
-if __name__ == '__main__':
-    addresses = pymqdatastream.standard_datastream_control_addresses
-    datastreams_remote = query_datastreams(addresses,verbosity=200)
+def query(address):
+    """
+    Queries the datastreams at given address
 
+    Args:
+        address
+    """
+
+
+
+    #Datastream = pymqdatastream.DataStream(name='scan')            
+    #datastream = 
+
+
+if __name__ == '__main__':
+    datastream_help = 'Query datastream with address e.g. -d tcp://192.168.178.97:18055'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)
+
+
+    args = parser.parse_args()
+    logging_level = logging.INFO
+    if(args.verbose == None):
+        logging_level = logging.CRITICAL        
+    elif(args.verbose == 1):
+        logging_level = logging.INFO
+    elif(args.verbose >= 2):
+        print('Debug logging level')
+        logging_level = logging.DEBUG
+
+    pymqdatastream.logger.setLevel(logging_level)        
+
+    address = None    
+    print('Args datastream:',args.datastream)
+    if(args.datastream != False):    
+        if(args.datastream == None):
+            pass
+        else:
+            pymqdatastream.logger.debug('Scanning for pymqdatastreams at address: ' + str(args.datastream))
+            address = args.datastream
+
+
+    Datastream = pymqdatastream.DataStream(name='scan',logging_level = logging_level)
+    #datastreams_remote = Datastream.query_datastreams(address)
+    datastreams_remote = Datastream.query_datastreams_fast(address)
+    # Print datastreams
     if(len(datastreams_remote)>0):
         print('Datastreams:')
         for i,rdatastream in enumerate(datastreams_remote):

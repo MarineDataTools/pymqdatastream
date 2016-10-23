@@ -283,8 +283,10 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
         # Fill the list with datastream objects
         #remote_datastreams = self.query_datastreams(self.address_list[0:2])
-        remote_datastreams = self.Datastream.query_datastreams(self.address_list)
-        self.populate_with_datastreams(remote_datastreams)
+        #remote_datastreams = self.Datastream.query_datastreams_fast(self.address_list)
+        #self.populate_with_datastreams(remote_datastreams)
+
+        self.handle_update_clicked()
 
         # Define some signals, these list can be filled with functions which
         # TODO: This could be updated/improved by using Signals/Blinker
@@ -305,32 +307,6 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         # Address widget
         self.addresses = DataStreamAddresslist(self.address_list)
         self.addresses.show()
-
-
-    def query_datastreams_old(self,addresses):
-        """
-        Queries a list of addresses and returns datastream objects
-        """
-        funcname = self.__class__.__name__ + '.query_datastreams()'
-        list_status = []
-        datastreams_remote = []
-        addresses = pymqdatastream.treat_address(addresses)
-        for address in addresses:
-            logger.debug(funcname + ': Address:' + address)
-            [ret,reply_dict] = self.Datastream.get_datastream_info(address,dt_wait=0.01)
-            #logger.debug(funcname + ': Reply_dict:' + str(reply_dict))
-            if(ret):
-                datastream_remote = pymqdatastream.create_datastream_from_info_dict(reply_dict)
-                try:
-                    list_status.append(reply_dict)
-                    datastreams_remote.append(datastream_remote)
-                    #logger.debug(funcname + ": Reply:" + str(datastream_remote))
-                except Exception as e :
-                    logger.debug(funcname + ": Exception:" + str(e))       
-                    logger.debug(funcname + ": Could not decode reply:" + str(reply_dict))
-
-
-        return datastreams_remote
 
 
     def populate_with_datastreams(self,datastream_list, data_type = None, variables = None):
@@ -538,9 +514,9 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
             self.address_list = self.addresses.get_addresses()
             print('Got data:',self.address_list)
         except Exception as e:
-            print(str(e) + ' no addresslistwidget')
+            print(str(e) + ', no addresslistwidget')
         # Fill the list with datastream objects
-        remote_datastreams = self.Datastream.query_datastreams(self.address_list)
+        remote_datastreams = self.Datastream.query_datastreams_fast(self.address_list)
         self.populate_with_datastreams(remote_datastreams)
 
     def handle_close_clicked(self):

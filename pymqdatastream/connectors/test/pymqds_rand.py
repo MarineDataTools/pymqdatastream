@@ -141,8 +141,10 @@ class RandDataStream(pymqdatastream.DataStream):
 if __name__ == '__main__':
     # For different loggers see also:
     # http://stackoverflow.com/questions/8837615/different-levels-of-logging-in-python
+    publish_datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network, no argument take standard address, otherwise specify zeromq compatible address e.g. tcp://192.168.178.10'            
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--publish_datastream', '-pd', nargs = '?', default = False, help=publish_datastream_help)    
     args = parser.parse_args()
     if(args.verbose == None):
         logger.info('logging level: CRITICAL')
@@ -160,7 +162,17 @@ if __name__ == '__main__':
     logger.setLevel(logging_level)
     pymqdatastream.logger.setLevel(logging_level)
 
-    RDS = RandDataStream(name = 'random',logging_level = logging_level)
+    address = None    
+    print('Args publish_datastream:',args.publish_datastream)
+    # Create datastream? 
+    if(args.publish_datastream != False):
+        if(args.publish_datastream == None):        
+            logger.debug('Creating a pymqdatastream at standard address')
+        else:
+            logger.debug('Creating a pymqdatastream at address: ' + str(args.publish_datastream))
+            address = args.publish_datastream
+
+    RDS = RandDataStream(address = address, name = 'random',logging_level = logging_level)
     RDS.add_random_stream()
     
     for i in range(16):

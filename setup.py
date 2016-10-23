@@ -28,6 +28,7 @@ setup(name='pymqdatastream',
                  'pymqdatastream/connectors/logger/pymqds_slogger.py',\
                  'pymqdatastream/connectors/logger/pymqds_gui_slogger.py'],
       entry_points={ 'console_scripts': ['NMEA0183grabber=pymqdatastream.connectors.nmea.NMEA0183grabber:main',\
+      'pymqds_query=pymqdatastream:query',\
       'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
       package_data = {'microrider':['data/*.DAT'],'':['VERSION']},
       zip_safe=False)
