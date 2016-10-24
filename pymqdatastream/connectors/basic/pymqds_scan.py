@@ -63,7 +63,7 @@ if __name__ == '__main__':
     datastream_help = 'Query datastream with address e.g. -d tcp://192.168.178.97:18055'
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)
+    parser.add_argument('--datastream', '-d', nargs = '?', default = [], action='append', help=datastream_help)
 
 
     args = parser.parse_args()
@@ -80,12 +80,15 @@ if __name__ == '__main__':
 
     address = None    
     print('Args datastream:',args.datastream)
-    if(args.datastream != False):    
-        if(args.datastream == None):
-            pass
-        else:
-            pymqdatastream.logger.debug('Scanning for pymqdatastreams at address: ' + str(args.datastream))
-            address = args.datastream
+    if(len(args.datastream) != 0):
+        address = []
+        for addr in args.datastream:
+            if(addr == None):
+                address.append(None)
+            else:
+                print('Scanning for pymqdatastreams at address: ' + str(addr))
+                #address = args.datastream
+                address.append(addr)
 
 
     Datastream = pymqdatastream.DataStream(name='scan',logging_level = logging_level)

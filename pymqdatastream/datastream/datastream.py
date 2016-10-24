@@ -1099,7 +1099,8 @@ def treat_address(address=None,control=True):
         base_addresses = standard_datastream_publish_addresses
         base_ports     = standard_stream_publish_ports
         base_port      = standard_stream_publish_port
-        
+
+    has_base_address = False
     # Create standard addresses 
     if(address == None):
         logger.debug(funcname + \
@@ -1115,6 +1116,15 @@ def treat_address(address=None,control=True):
             addresses = address
 
         for address in addresses:
+            if(address == None and has_base_address == False):
+                logger.debug(funcname + \
+                ': Taking standard address for control datastream: '\
+                + str(base_addresses[0]) + ' ... ' 
+                + str(base_addresses[-1]))                
+                addresses_final = base_addresses
+                has_base_address = True
+                continue
+                
             print('address',address)
             print(address.find(':'))
             # Adding protocol if not existing
