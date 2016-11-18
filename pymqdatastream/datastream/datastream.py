@@ -354,7 +354,7 @@ class zmq_socket(object):
 
     def status_json(self):
         '''
-        returns a json string of thReturn the largest item in an iterable or the largest of two or more arguments.e status
+        returns a json string of status
         '''
         status_dict = {'uuid':self.uuid,'address':self.address,'socket_type':self.socket_type}
         status_dict_json = json.dumps(status_dict).encode('utf-8')
@@ -652,11 +652,12 @@ class Stream(object):
        statistics:
        remote:
        name:
+       family
        data_type:
     Returns:
        None
     """
-    def __init__(self,stream_type, address = None, socket = None, variables = None, data_format = 'py_json', queuelen = 1000,statistic = False, remote = False, name = 'Stream', data_type = 'continous', logging_level= 'INFO'):
+    def __init__(self,stream_type, address = None, socket = None, variables = None, data_format = 'py_json', queuelen = 1000,statistic = False, remote = False, name = 'Stream', family = 'NA', data_type = 'continous', logging_level= 'INFO'):
         funcname = self.__class__.__name__ + '.__init__()'
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -688,13 +689,15 @@ class Stream(object):
               (stream_type == 'pubstream') or \
               (stream_type == 'repstream') \
             ) ):
-            self.uuid = 'pymqds_' + __datastream_version__ + '_' + \
-                        stream_type_short + ':' + str(uuid_module.uuid1())
+            self.uuid = str(uuid_module.uuid1())
             self.uuid_utf8 = self.uuid.encode('utf-8')
+            self.version = __datastream_version__
         else: # substreams, reqstreams do get the uuid from the counterparts
             self.uuid = ''
+            self.version = '?'
             
         self.name = name
+        self.family = family        
         self.stream_type = stream_type
         self.socket = None
         self.variables = variables
@@ -870,10 +873,11 @@ class Stream(object):
             if(self.stream_type == 'substream'):
                 if(len(stream.socket) > ind_socket):
                     self.logger.debug(funcname + ': Connecting substream at address' + str(stream.socket[0].address))
-                    self.uuid = stream.uuid
+                    self.uuid      = stream.uuid
                     self.variables = stream.variables
-                    self.name = stream.name
-                    self.socket = zmq_socket(socket_type = self.stream_type,address = stream.socket[0].address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level)
+                    self.name      = stream.name
+                    self.family    = stream.family
+                    self.socket    = zmq_socket(socket_type = self.stream_type,address = stream.socket[0].address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level)
                 else:
                     raise Exception(funcname + "no socket available for subscription")
 
@@ -886,10 +890,11 @@ class Stream(object):
             if(self.stream_type == 'reqstream'):
                 if(True):
                     self.logger.debug(funcname + ': Connecting reqstream at address' + str(stream.socket.address))
-                    self.uuid = stream.uuid
+                    self.uuid      = stream.uuid
                     self.variables = stream.variables
-                    self.name = stream.name
-                    self.socket = zmq_socket(socket_type = self.stream_type,address = stream.socket.address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level)
+                    self.name      = stream.name
+                    self.family    = stream.family                    
+                    self.socket    = zmq_socket(socket_type = self.stream_type,address = stream.socket.address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level)
             else:
                 self.logger.warning(funcname + \
                                     ': cannot connect, stream type is not of type reqstream. Type connect stream:'\
@@ -945,10 +950,12 @@ class Stream(object):
         info_dict = {}
         info_dict['uuid'] = self.uuid
         info_dict['name'] = self.name
+        info_dict['family'] = self.family
         info_dict['stream_type'] = self.stream_type
         info_dict['variables'] = self.variables
         info_dict['data_type'] = self.data_type
         info_dict['data_format'] = self.data_format
+        info_dict['version'] = self.version
         
         if(isinstance(self.socket,list)):
             info_dict['socket'] = []        
@@ -981,6 +988,7 @@ class Stream(object):
         if((info_type == 'all') | (info_type == 'stream') ):
             ret_str += self.__class__.__name__ + ' uuid:' + self.uuid +\
                       ';name:' + self.name + \
+                      ';family:' + self.family + \
                       ';stream_type:' + self.stream_type + \
                       ';variables:' + str(self.variables) + \
                       ';data_type:' + str(self.data_type) + \

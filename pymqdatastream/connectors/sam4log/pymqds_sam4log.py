@@ -446,18 +446,18 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 if( ' board version:' in line ):
                     # Expecting a string like this:
                     # >>> --  board version: 9.00 --
-                    boardversion = line.rsplit(' ',maxsplit=2)
+                    boardversion = line.rsplit(': ')
                     try:
-                        boardversion = boardversion[1]
+                        boardversion = boardversion[1].split(' --')[0]
                     except:                    
                         self.logger.debug(funcname + ': No valid version string')
                     print('Board version:',boardversion)           
-                elif( 'version:' in line ):
+                elif( 'firmware version:' in line ):
                     # Expecting a string like this:
-                    # >>> --  version: 0.30 --
-                    firmwareversion = line.rsplit(' ',maxsplit=2)
+                    # >>> --  firmware version: 0.30 --
+                    firmwareversion = line.rsplit(': ')
                     try:
-                        firmwareversion = firmwareversion[1]
+                        firmwareversion = firmwareversion[1].split(' --')[0]
                     except:
                         self.logger.debug(funcname + ': No valid version string')
                     print('Firmware version:',firmwareversion)

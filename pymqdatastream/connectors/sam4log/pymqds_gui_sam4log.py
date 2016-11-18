@@ -26,6 +26,7 @@ logger = logging.getLogger('pymqds_gui_sam4log')
 logger.setLevel(logging.DEBUG)
 
 
+
 def serial_ports():
     """ Lists serial port names
 
@@ -50,13 +51,60 @@ def serial_ports():
     result = []
     for port in ports:
         try:
-            #print("Opening serial port", port)
-            s = serial.Serial(port)
-            s.close()
-            result.append(port)
-        except (OSError, serial.SerialException):
+            print("Testing serial port", port)
+            ret = test_serial_lock_file(port)
+            if(ret == False):
+                print("Opening serial port", port)
+                s = serial.Serial(port)
+                s.close()
+                result.append(port)
+        #except (OSError, serial.SerialException):
+        except Exception as e:
+            print('Exception:' + str(e))
             pass
+
     return result
+
+def test_serial_lock_file(port):
+    """
+    Creates or removes a lock file for a serial port in linux
+    """
+    devicename = port.split('/')[-1]
+    filename = '/var/lock/LCK..'+devicename
+    print('serial_lock_file(): filename:' + str(filename))
+    try:
+        flock = open(filename,'r')
+        flock.close()
+        return True            
+    except Exception as e:
+        print('serial_lock_file():' + str(e))
+        return False
+
+def serial_lock_file(port,remove=False):
+    """
+    Creates or removes a lock file for a serial port in linux
+    """
+    devicename = port.split('/')[-1]
+    filename = '/var/lock/LCK..'+devicename
+    print('serial_lock_file(): filename:' + str(filename))
+        
+    if(remove == False):
+        try:
+            flock = open(filename,'w')
+            flock.write(str(os.getpid()) + '\n')
+            flock.close()
+        except Exception as e:
+            print('serial_lock_file():' + str(e))
+    else:
+        try:
+            print('serial_lock_file(): removing filename:' + str(filename))
+            flock = open(filename,'r')
+            line = flock.readline()
+            print('data',line)
+            flock.close()
+            os.remove(filename)
+        except Exception as e:
+            print('serial_lock_file():' + str(e))        
 
 # Serial baud rates
 baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
@@ -342,6 +390,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._show_data_bu = QtWidgets.QPushButton('Show data')
         self._show_data_bu.clicked.connect(self._clicked_show_data_bu)
         self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
+        self._show_data_close = QtWidgets.QPushButton('Close')
+        self._show_data_close.clicked.connect(self._clicked_show_data_bu)
         # Textdataformat of the show_textdata widget 0 str, 1 hex
         self._textdataformat = 0 
         self.combo_format = QtWidgets.QComboBox()
@@ -352,12 +402,13 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.show_comdata.setReadOnly(True)
 
         # Command widgets
-        self._show_data_layout.addWidget(QtWidgets.QLabel('Command'),0,0) # Command
-        self._show_data_layout.addWidget(self.send_le,0,1,1,2) # Command
-        self._show_data_layout.addWidget(send_bu,0,3) # Command
-        self._show_data_layout.addWidget(QtWidgets.QLabel('Format'),1,0) # Command        
-        self._show_data_layout.addWidget(self.combo_format,1,1)
-        self._show_data_layout.addWidget(self.show_textdata,2,0,1,4)
+        self._show_data_layout.addWidget(self._show_data_close)
+        self._show_data_layout.addWidget(QtWidgets.QLabel('Command'),1,0) # Command
+        self._show_data_layout.addWidget(self.send_le,1,1,1,2) # Command
+        self._show_data_layout.addWidget(send_bu,1,3) # Command
+        self._show_data_layout.addWidget(QtWidgets.QLabel('Format'),2,0) # Command        
+        self._show_data_layout.addWidget(self.combo_format,2,1)
+        self._show_data_layout.addWidget(self.show_textdata,3,0,1,4)
         #self._show_data_layout.addWidget(self.show_comdata,1,1)
 
 
@@ -602,7 +653,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def _clicked_show_data_bu(self):
         """
         """
-        
+        sender = self.sender()
         t = self._show_data_bu.text()
         print('Click ' + str(t))
         if True:
@@ -610,7 +661,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self._show_data_widget_opened = self._show_data_widget
                 self._show_data_widget_opened.show()
                 self._show_data_bu.setText('Hide data')
-            if(t == 'Hide data'):
+            if(t == 'Hide data' or sender == self._show_data_close):
                 self._show_data_widget_opened.close()
                 self._show_data_bu.setText('Show data')                
 
