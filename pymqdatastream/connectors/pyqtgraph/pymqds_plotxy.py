@@ -10,6 +10,7 @@ import logging
 import threading
 import os,sys
 import pyqtgraph as pg
+import argparse
 import pymqdatastream
 import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
 
@@ -87,17 +88,27 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         # For the plotting setup
         self.treeWidgetsub.itemClicked.connect(self.handleItemClicked)
         self.button_unsubscribe.clicked.connect(self.handle_unsubscribe_clicked_setup)
+
         
         layout_widget = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(layout_widget)
         self.layout.addWidget(layout_widget,4,0,1,2)
         layout.addWidget(self.button_plot)
         layout.addWidget(self.button_plotting_setup)
-        layout.addWidget(self.button_clear)        
-        self._plot_stream = False
+        layout.addWidget(self.button_clear)
+        # Check if we have already the dictionary pyqtgraph in the Datastream object
+        try:
+            self.Datastream.pyqtgraph
+        except:
+            self.Datastream.pyqtgraph = {}
+            self.Datastream.pyqtgraph['plot_stream'] = False
+            
         self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
         
         self.color_ind = 0
+
+        self.handle_button_subscribed()
+        #.pyqtgraph['ind_x']
 
     def handle_button_plotting_setup(self):
         print('HALLO')
@@ -110,11 +121,11 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                          
 
     def handle_button_plot_stream(self):
-        if(self._plot_stream == False):
-            self._plot_stream = True
+        if(self.Datastream.pyqtgraph['plot_stream'] == False):
+            self.Datastream.pyqtgraph['plot_stream'] = True
             self.button_plot.setText('Pause Plot')
         else:
-            self._plot_stream = False
+            self.Datastream.pyqtgraph['plot_stream'] = False
             self.button_plot.setText('Plot Streams')
 
 
@@ -164,7 +175,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         print(self.treeWidgetsub)
         root = self.treeWidgetsub.invisibleRootItem()
         child_count = root.childCount()
-        self.treeWidgetsub.setColumnCount(3)
+        self.treeWidgetsub.setColumnCount(1)
         #self.treeWidgetsub.setHeaderHidden(False)
         print('Columncount',self.treeWidgetsub.columnCount())
         root.setData(0, QtCore.Qt.UserRole, 'blab')
@@ -172,15 +183,29 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         column = 0
         for i in range(child_count):
             childitem = root.child(i)
+            # do we have a pyqtgraph dictionary for plotting information?
             try:
                 childitem.stream.pyqtgraph
             except:
-                childitem.stream.pyqtgraph = {'color':self.line_colors[self.color_ind]}
-                childitem.stream.pyqtgraph['ind_x'] = 0
-                childitem.stream.pyqtgraph['ind_y'] = 1
+                childitem.stream.pyqtgraph = {}
+
+            # Color information?
+            try:
+                childitem.stream.pyqtgraph['color']
+            except:
+                childitem.stream.pyqtgraph['color'] = self.line_colors[self.color_ind]
                 self.color_ind += 1
                 if(self.color_ind == len(self.line_colors)):
-                    self.color_ind = 0                 
+                    self.color_ind = 0
+
+            # Test if we have already an ind_x/ind_y
+            try:
+                childitem.stream.pyqtgraph['ind_x']
+                childitem.stream.pyqtgraph['ind_y']
+            except:                    
+                childitem.stream.pyqtgraph['ind_x'] = 0
+                childitem.stream.pyqtgraph['ind_y'] = 1
+
                 
             childitem.setData(0, QtCore.Qt.UserRole, 'blab')
             childitem.setData(1, QtCore.Qt.UserRole, 'blab')            
@@ -332,14 +357,18 @@ class pyqtgraphWidget(QtWidgets.QWidget):
     Widget to plot data
 
     """
-    def __init__(self,bufsize = 20000):
+    def __init__(self, datastream = None, bufsize = 20000, logging_level = logging.INFO):
         """
         
         Args:
            bufsize: size of the data buffer, if filled half it is swapped. 
         """
         QtWidgets.QWidget.__init__(self)
-        self.Datastream = pymqdatastream.DataStream(name = 'plotxy')
+        if(datastream == None):
+            self.Datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
+        else:
+            self.Datastream = datastream
+            
         list_status = []
         self.color_ind = 0
         # Datastream stuff
@@ -375,7 +404,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         
 
     def update_plot(self):
-        if(self.datastream_subscribe._plot_stream):
+        if(self.Datastream.pyqtgraph['plot_stream']):
             # Check if the number of streams changed, if yes
             if(len(self.pyqtgraph_line) != ( len(self.Datastream.Streams) - 1 )):
                 self.pyqtgraph_line = []
@@ -447,9 +476,8 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
 
 class pyqtgraphMainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, datastream = None, logging_level = logging.INFO):
         QtWidgets.QMainWindow.__init__(self)
-        
         mainMenu = self.menuBar()
         self.setWindowTitle("Python Zeromq Datastream_PlotXY")
         self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
@@ -465,7 +493,7 @@ class pyqtgraphMainWindow(QtWidgets.QMainWindow):
 
 
         # Add the pyqtgraphWidget
-        self.pyqtgraphwidget = pyqtgraphWidget(bufsize = 5000000)
+        self.pyqtgraphwidget = pyqtgraphWidget(datastream = datastream, bufsize = 5000000, logging_level = logging_level)
         self.setCentralWidget(self.pyqtgraphwidget)
         
         self.show()
@@ -480,7 +508,51 @@ class pyqtgraphMainWindow(QtWidgets.QMainWindow):
 
 # If run from the command line
 if __name__ == "__main__":
+
+    datastream_help = 'Subscribe to datastream with address e.g. -d tcp://192.168.178.97:18055'
+    stream_help = 'Plots stream of address: e.g. -pd e47e9e56-ae34-11e6-8b71-00247ee0ea87::tcp://127.0.0.1:28736@tcp://127.0.0.1:18055'            
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)
+    parser.add_argument('--plot_stream', '-pd', nargs = '+', action = 'append', help=stream_help)
+    args = parser.parse_args()
+
+    logging_level = logging.INFO
+    if(args.verbose == None):
+        logging_level = logging.CRITICAL        
+    elif(args.verbose == 1):
+        logging_level = logging.INFO
+    elif(args.verbose >= 2):
+        print('Debug logging level')
+        logging_level = logging.DEBUG
+
+
+    logger.setLevel(logging_level)
+    
+    datastream = None
+    print('Hallo',args.plot_stream)
+    if(args.plot_stream != None):
+        num_streams = len(args.plot_stream)
+        logger.debug('main: creating a datastream')        
+        datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)        
+        for sp in args.plot_stream:
+            logger.debug('main: Plotting stream: ' + str(sp))
+            saddress = sp[0]
+            good_address = pymqdatastream.check_stream_address_str(saddress)
+            logger.debug('main: Address good?: ' + str(good_address))
+            if(good_address):
+                stream = datastream.subscribe_stream(saddress)
+                stream.pyqtgraph = {}
+                stream.pyqtgraph['ind_x'] = 0
+                stream.pyqtgraph['ind_y'] = 1
+                datastream.pyqtgraph = {}
+                datastream.pyqtgraph['plot_stream'] = True
+
+    else:
+        logger.warning('Need an address for the stream, e.g.: ' + stream_help)
+
+    
     app = QtWidgets.QApplication(sys.argv)
-    window = pyqtgraphMainWindow()
+    window = pyqtgraphMainWindow(datastream = datastream, logging_level = logging_level)
     window.show()
     sys.exit(app.exec_())    

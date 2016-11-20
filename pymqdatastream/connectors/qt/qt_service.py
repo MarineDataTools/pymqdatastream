@@ -285,7 +285,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         #remote_datastreams = self.query_datastreams(self.address_list[0:2])
         #remote_datastreams = self.Datastream.query_datastreams_fast(self.address_list)
         #self.populate_with_datastreams(remote_datastreams)
-
+        self.populate_subscribed_with_streams()
         self.handle_update_clicked()
 
         # Define some signals, these list can be filled with functions which

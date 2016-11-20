@@ -60,9 +60,11 @@ def query(address):
 
 
 if __name__ == '__main__':
-    datastream_help = 'Query datastream with address e.g. -d tcp://192.168.178.97:18055'
+    datastream_help  = 'Query datastream with address e.g. -d tcp://192.168.178.97:18055'
+    information_help = 'Print full information of each found datastream'
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--full_information', '-f', action='store_true', help = information_help)
     parser.add_argument('--datastream', '-d', nargs = '?', default = [], action='append', help=datastream_help)
 
 
@@ -98,4 +100,7 @@ if __name__ == '__main__':
     if(len(datastreams_remote)>0):
         print('Datastreams:')
         for i,rdatastream in enumerate(datastreams_remote):
-            print(rdatastream.get_info_str('short'))
+            if(args.full_information):
+                print(rdatastream.get_info_str('short'))
+            else:
+                print(rdatastream.get_info_str('standard'))

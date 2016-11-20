@@ -984,6 +984,18 @@ class Stream(object):
                     
 
             return ret_str
+
+        if(info_type == 'address'):
+            if(not(isinstance(self.socket,list))):
+                socket_tmp = [self.socket]
+            else:
+                socket_tmp = self.socket
+
+            for i,socket in enumerate(socket_tmp):
+                ret_str += self.uuid + '::' + socket.address
+                    
+
+            return ret_str
             
         if((info_type == 'all') | (info_type == 'stream') ):
             ret_str += self.__class__.__name__ + ' uuid:' + self.uuid +\
@@ -1051,19 +1063,7 @@ class StreamVariable(dict):
         self.__setitem__('unit',unit)
         self.__setitem__('datatype',datatype)      
 
-#
-#
-#
-#
-#
-#
-# DataStream object
-#
-#
-#
-#
-#
-#
+
 
 # Standard datastream ports
 
@@ -1172,6 +1172,43 @@ def get_ip_from_address(address):
         address_ret = address_ret[0:ind]
 
     return address_ret
+
+
+def check_stream_address_str(address):
+    """
+    Checks for a correct stream address in given string 
+    Address looks like: e47bdacc-ae34-11e6-8b71-00247ee0ea87::tcp://127.0.0.1:28733@tcp://127.0.0.1:18055
+    Args:
+       address: string with the address of the stream
+    Returns:
+       bool: True for a valid address, otherwise False
+    """
+    try:
+        address = address.rsplit('@')
+        datastream_address = address[1]
+        stream_uuid_address = address[0]
+        [uuid,address] = stream_uuid_address.split('::')        
+        return True
+    except Exception as e:
+        return False
+    
+
+
+#
+#
+#
+#
+#
+#
+# DataStream object
+#
+#
+#
+#
+#
+#
+
+
 
 class DataStream(object):
     """
@@ -1299,7 +1336,7 @@ class DataStream(object):
         return pub_socket
 
         
-    def add_pub_stream(self,socket, variables = None, name = None, statistic = False):
+    def add_pub_stream(self,socket, variables = None, name = None, family = 'NA', statistic = False):
         """ Adds a new stream
         
         Args:
@@ -1313,7 +1350,7 @@ class DataStream(object):
 
         """
         if(socket.socket_type == 'pubstream'): # Check for correct socket type
-            stream = Stream(stream_type = 'pubstream',socket = socket, variables = variables, name = name, statistic = statistic, logging_level = self.logging_level)
+            stream = Stream(stream_type = 'pubstream',socket = socket, variables = variables, name = name, family = family, statistic = statistic, logging_level = self.logging_level)
             self.Streams.append(stream)
             return stream
         else:
@@ -1410,6 +1447,7 @@ class DataStream(object):
         """
         funcname = '.subscribe_stream()'
 
+        stream = None
         # Check if we have a stream object or a address
         if(isinstance(substream,Stream)):
             stream = substream
@@ -1457,7 +1495,7 @@ class DataStream(object):
                 DSremote = create_datastream_from_info_dict(info_dict,logging_level = self.logging_level)
                 stream = DSremote.get_stream_from_uuid(stream_address)
                 self.logger.debug(funcname + ':' + str(stream))
-                ret = self.subscribe_stream(stream = stream)
+                ret = self.subscribe_stream(substream = stream)
                 return ret
             else:
                 self.logger.critical('Did not find a datastream at: ' + datastream_address)
@@ -1507,7 +1545,7 @@ class DataStream(object):
 
     def get_stream_from_uuid(self,uuid):
         """
-        returns a stream object with the given uuid
+        Returns a stream object for the given uuid/address string
         Args:
             uuid: uuid string
         Returns:
@@ -1649,7 +1687,7 @@ class DataStream(object):
         """
         Gets an info string og the object
         Args:
-        out_format: 'standard'
+           out_format: 'standard' or 'short'
         """
 
         if(out_format == 'standard'):
@@ -1670,9 +1708,10 @@ class DataStream(object):
             ret_str = self.uuid + '@' + str(self.address)
             ret_str += '\nStreams:\n'
             for i,stream in enumerate(self.Streams):
-                ret_str += '#' + str(i) + '.' + \
-                           stream.get_info_str('short') + '@' + \
-                           str(self.address) + '\n'
+                ret_str += '#' + str(i) + ' Name: "' + str(stream.name) + '"'\
+                           + ', Family: "' + str(stream.family) + '"'\
+                           + ', Address:"' + stream.get_info_str('address') + '@'\
+                           + str(self.address) + '"\n'
 
                 if(stream.do_statistic):
                     ret_str += 'Packets sent: ' + str(stream.statistic['packets sent'])

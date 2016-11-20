@@ -14,6 +14,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqdatastream_rand')
 logger.setLevel(logging.INFO)
 # TODO: http://stackoverflow.com/questions/367586/generating-random-text-strings-of-a-given-pattern
+famstr = 'pymqds_rand'
 
 class RandDataStream(pymqdatastream.DataStream):
     def __init__(self, **kwargs):
@@ -36,7 +37,7 @@ class RandDataStream(pymqdatastream.DataStream):
         datavar = pymqdatastream.StreamVariable(name = 'data',datatype = 'float')        
         variables = [timevar,datavar]
         name = 'sine ' + str(dt) + ' ' + str(num_elements)
-        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
+        self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables, family = famstr)
         self.thread.append(threading.Thread(target=self.do_sine,args = (self.Streams[-1],dt,f,num_elements)))
         self.thread[-1].daemon = True
         self.thread[-1].start()        
@@ -56,7 +57,7 @@ class RandDataStream(pymqdatastream.DataStream):
         datavar = pymqdatastream.StreamVariable(name = 'data', datatype = 'float')        
         variables = [timevar,datavar]        
         name = 'random ' + str(dt) + ' ' + str(num_elements)
-        stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
+        stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, family = famstr)
         self.thread.append(threading.Thread(target=self.do_random,args = (self.Streams[-1],dt,num_elements)))
         self.thread[-1].daemon = True
         self.thread[-1].start()
@@ -76,7 +77,7 @@ class RandDataStream(pymqdatastream.DataStream):
         variables = [timevar,datavar]
 
         name = 'random str ' + str(dt) + ' ' + str(num_elements)
-        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables)
+        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, family = famstr)
         self.thread.append(threading.Thread(target=self.do_random_str,args = (self.Streams[-1],dt,num_elements)))
         self.thread[-1].daemon = True
         self.thread[-1].start()        
