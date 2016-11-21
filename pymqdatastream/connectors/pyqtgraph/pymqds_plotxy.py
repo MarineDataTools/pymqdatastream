@@ -447,7 +447,6 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                             stream.pyqtgraph_cmod = 0
 
 
-                        
 
                 print(self.pyqtgraph_line)
                 
@@ -562,23 +561,40 @@ class pyqtgraphMainWindow(QtWidgets.QMainWindow):
         mainMenu = self.menuBar()
         self.setWindowTitle("Python Zeromq Datastream_PlotXY")
         self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
+        extractActionA = QtWidgets.QAction("&Add Graph", self)
+        extractActionA.setShortcut("Ctrl+A")
+        extractActionA.setStatusTip('Adding a new graph')
+        extractActionA.triggered.connect(self.add_graph)
         extractAction = QtWidgets.QAction("&Quit", self)
         extractAction.setShortcut("Ctrl+Q")
         extractAction.setStatusTip('Closing the program')
-        extractAction.triggered.connect(self.close_application)
+        extractAction.triggered.connect(self.close_application)        
 
         fileMenu = mainMenu.addMenu('&File')
         fileMenu.addAction(extractAction)
+        graphMenu = mainMenu.addMenu('&Graphs')
+        graphMenu.addAction(extractActionA)        
         
         self.statusBar()
 
-
         # Add the pyqtgraphWidget
+        self.pyqtgraphs = []
+        mainwidget = QtWidgets.QWidget(self)        
+        self.layout = QtWidgets.QVBoxLayout(mainwidget)
         self.pyqtgraphwidget = pyqtgraphWidget(datastream = datastream, bufsize = 5000000, logging_level = logging_level)
-        self.setCentralWidget(self.pyqtgraphwidget)
+        self.layout.addWidget(self.pyqtgraphwidget)
+        self.pyqtgraphs.append(self.pyqtgraphwidget)
+
         
-        self.show()
-        #self.pyqtgraphwidget.show()
+        mainwidget.setFocus()
+        self.setCentralWidget(mainwidget)
+        #self.show()
+
+    def add_graph(self):
+        print('Adding graph!')
+        pyqtgraphwidget = pyqtgraphWidget( bufsize = 5000000, logging_level = logging_level )        
+        self.pyqtgraphs.append(pyqtgraphwidget)
+        self.layout.addWidget(pyqtgraphwidget)
 
     def close_application(self):
         print('Goodbye!')

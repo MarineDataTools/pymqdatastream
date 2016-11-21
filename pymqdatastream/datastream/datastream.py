@@ -99,7 +99,6 @@ class zmq_socket(object):
         """
         funcname = '__init__()'
         self.logger = logging.getLogger(self.__class__.__name__ + '(' + socket_type + ')')
-        logging_level = logging.DEBUG
         self.logging_level = logging_level
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
@@ -1430,7 +1429,9 @@ class DataStream(object):
     
     def add_stream(self,Stream):
         """
+
         Adds a Stream to the datastream object
+
         """
         self.Streams.append(Stream)
         self.sockets.append(Stream.socket)
