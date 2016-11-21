@@ -120,6 +120,7 @@ class zmq_socket(object):
         self.do_statistic = False
         self.deque = deque
         self.packets = 0 # Packets sent via pub_data
+        self.thread_queue = None
     
         # The serialise function
         #self.dumps = self.dumps_json
@@ -398,17 +399,15 @@ class zmq_socket(object):
             else: # Try to read every dt_wait interval from the queue
                 try:
                     # If we got something, just quit!
-                    #data = self.thread_queue.get(block=False)
-                    data = self.thread_queue.get()
+                    data = self.thread_queue.get(block=False)
+                    #data = self.thread_queue.get()
                     self.logger.debug(funcname + ': Got data:' + data)
                     poller.unregister(self.zmq_socket)
-                    self.zmq_socket.close()
                     self.connected = False
-                    self.thread_queue = None                    
                     self.logger.debug(funcname + ': Closing')
-                    return True                    
+                    break
                 except queue.Empty as e:
-                    print(funcname + ' hallo ' + str(e))                    
+                    #print(funcname + ' hallo ' + str(e))                    
                     pass
                 except Exception as e:
                     logger.warning(funcname + ' ' +str(e))
@@ -437,32 +436,41 @@ class zmq_socket(object):
         self.subpoll_thread.daemon = True        
         self.subpoll_thread.start()
 
+        
     def stop_poll_thread(self):
         """
         Stops a polling thread of either a substream or a reply (control) stream
         """
-        funcname = 'start_poll_thread()'
-        if(self.socket_type == 'control'):
-            self.logger.debug(funcname + ': Stopping control thread')
-            self.thread_queue.put('stop')
-            self.reply_thread.join()
-            self.reply_thread = None
-            self.thread_queue = None
-        elif(self.socket_type == 'substream'):
-            self.logger.debug(funcname + ': Stopping substream thread')
-            self.stop_poll_substream_thread()
-        
+        funcname = 'stop_poll_thread()'
+        self.logger.debug(funcname)
+        if(self.thread_queue == None):
+            self.logger.debug(funcname + ': No thread queue, doing nothing')
+        else:
+            if(self.socket_type == 'control'):
+                self.logger.debug(funcname + ': Stopping control thread')
+                self.thread_queue.put('stop')
+                self.reply_thread.join()
+                self.reply_thread = None
+                self.thread_queue = None
+            elif(self.socket_type == 'substream'):
+                self.logger.debug(funcname + ': Stopping substream thread')
+                self.stop_poll_substream_thread()
+
+
     def stop_poll_substream_thread(self):
         funcname = 'stop_poll_substream_tread()'
-        try:
-            self.logger.debug(funcname + ': Stopping')
-            self.thread_queue.put('stop')
-            self.subpoll_thread.join()
-            self.subpoll_thread = None
-            self.thread_queue = None
-            self.logger.debug(funcname + ': Stopped')
-        except Exception as e:
-            self.logger.warning(funcname + ': No thread found to stop: ' + str(e))
+        if(self.thread_queue == None):
+            self.logger.debug(funcname + ': No thread queue, doing nothing')
+        else:
+            if(True):
+                self.logger.debug(funcname + ': Stopping, sending stop')
+                self.thread_queue.put('stop')
+                self.subpoll_thread.join()
+                self.subpoll_thread = None
+                self.thread_queue = None
+                self.logger.debug(funcname + ': Stopped')
+            else:
+                self.logger.warning(funcname + ': No thread found to stop: ' + str(e))
 
             
     def poll_substream_thread(self, socket, dt_wait = 0.01):
@@ -483,7 +491,6 @@ class zmq_socket(object):
         funcname = 'poll_substream_tread()'
         poller = zmq.Poller()
         poller.register(socket, zmq.POLLIN)
-        
         while True:
             if poller.poll(dt_wait*1000): #
                 recv = socket.recv_multipart()
@@ -515,17 +522,21 @@ class zmq_socket(object):
                 try:
                     # If we got something, just quit!
                     data = self.thread_queue.get(block=False)
+                    poller.unregister(socket)                    
                     self.logger.debug(funcname + ': Got data:' + data)
-                    poller.unregister(socket)
-                    socket.close()
-                    self.connected = False
-                    self.logger.debug(funcname + ': Closing')
-                    return True                    
+                    break
+                    
                 except queue.Empty:
                     pass
-                except Excpetion as e:
+                except Exception as e:
                     self.logger.warning('Exception: ' + str(e))
-        
+
+
+
+        self.connected = False
+        self.zmq_socket = socket
+        self.logger.debug(funcname + ': Closed')        
+
         
     def start_pub_data_thread(self):
         """
@@ -1422,6 +1433,7 @@ class DataStream(object):
         Adds a Stream to the datastream object
         """
         self.Streams.append(Stream)
+        self.sockets.append(Stream.socket)
 
         
     def rem_stream(self,disstream):
@@ -1641,7 +1653,7 @@ class DataStream(object):
         for addr in addresses_query:
             q = queue.Queue()
             thread = threading.Thread(target=self.query_datastreams,args = (addr,q))
-            #thread.daemon = True
+            thread.daemon = True
             threads.append([thread,q])
             thread.start()
 
@@ -1743,15 +1755,22 @@ class DataStream(object):
         """
         Cleanup and close of all stuff
         """
-        # remove streams
+        funcname = 'close()'
+        self.logger.debug(funcname)
+        #self.sockets[0].stop_poll_thread()
+        #self.sockets[0].zmq_socket.close()
+        #self.sockets[1].stop_poll_thread()
+        #self.sockets[1].zmq_socket.close()
+        ## remove streams
+        for stream in self.Streams:
+            self.rem_stream(stream)                    
         # closing all sockets
-        #for stream in self.Streams:
-        #    self.rem_stream(stream)
-
         for sock in self.sockets:
-            print(sock, 'Stopping poll thread')
+            self.logger.debug(funcname + ' closing thread of ' + str(sock))
             sock.stop_poll_thread()
-            #sock.close()
+            sock.close()
+
+
             
             
 

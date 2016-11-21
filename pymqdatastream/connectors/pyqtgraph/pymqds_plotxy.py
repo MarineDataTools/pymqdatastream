@@ -546,7 +546,10 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         Closes the widget
         """
         print('Closing!')
+        self.datastream_subscribe.close()
+        self.update_timer.stop()                
         self.Datastream.close()
+        print('Closed Datastream!')
         self.close()
         
 
@@ -633,4 +636,4 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     window = pyqtgraphMainWindow(datastream = datastream, logging_level = logging_level)
     window.show()
-    sys.exit(app.exec_())    
+    sys.exit(app.exec_())
