@@ -64,7 +64,7 @@ if __name__ == '__main__':
     information_help = 'Print full information of each found datastream'
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('--full_information', '-f', action='store_true', help = information_help)
+    parser.add_argument('--full_information', '-f', action='store_false', help = information_help)
     parser.add_argument('--datastream', '-d', nargs = '?', default = [], action='append', help=datastream_help)
 
 

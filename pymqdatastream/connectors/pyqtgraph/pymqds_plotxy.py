@@ -59,6 +59,7 @@ class SetupStreamStyle(QtWidgets.QWidget):
         print('Ok')
         self.stream.pyqtgraph_nplot = self.spin_nplot.value()
         print('Ok',self.stream.pyqtgraph_nplot)
+        
     def handle_cancel(self):
         print('Cancel')
         self.close()
@@ -373,23 +374,41 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.color_ind = 0
         # Datastream stuff
         self.datastream_subscribe = DataStreamChoosePlotWidget(self.Datastream,hide_myself = True, stream_type='pubstream')
+        # Connect the close button to a different function
+        self.datastream_subscribe.button_close.disconnect()
+        self.datastream_subscribe.button_close.clicked.connect(self.handle_streams)
+        self.datastream_subscribe.button_close.setText('Hide')
 
         # The pyqtgraph stuff
         self.pyqtgraph_line = []
         self.pyqtgraph_layout = pg.GraphicsLayoutWidget()
         self.pyqtgraph_axes = self.pyqtgraph_layout.addPlot()
-        
+        self.pyqtgraph_leg = self.pyqtgraph_axes.addLegend()
         #self.pyqtgraph_axes.setTitle("Title")
         self.pyqtgraph_axes.setLabel('left', "Y Axis")
         self.pyqtgraph_axes.setLabel('bottom', "X Axis")
 
+        # 
+        self.button_streams = QtWidgets.QPushButton('Streams', self)
+        self.button_streams.clicked.connect(self.handle_streams)
+
+        self.button_close = QtWidgets.QPushButton('Close', self)
+        self.button_close.clicked.connect(self.handle_close)                
+
         # Layout
-        splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
-        splitter.addWidget(self.datastream_subscribe)
-        splitter.addWidget(self.pyqtgraph_layout)        
+        self.graph_layout = QtWidgets.QHBoxLayout()
+        self.button_layout = QtWidgets.QVBoxLayout()
+
+        self.graph_layout.addLayout(self.button_layout)        
+        self.graph_layout.addWidget(self.pyqtgraph_layout)
+        
+        self.button_layout.addWidget(self.button_streams)
+        self.button_layout.addWidget(self.button_close)                
+        
         
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(splitter)
+        #layout.addWidget(self.splitter)
+        layout.addLayout(self.graph_layout)
 
 
         # update the figure once in a while
@@ -413,7 +432,10 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                         try:         # Check if we have already created a line for the stream
                             self.pyqtgraph_line.append(stream.pyqtgraph_line)
                         except Exception as e:
-                            stream.pyqtgraph_line = pg.PlotDataItem( pen=stream.pyqtgraph['color'])
+                            ind_x = stream.pyqtgraph['ind_x']
+                            ind_y = stream.pyqtgraph['ind_y']
+                            sname = stream.name + ' x: ' + stream.variables[ind_x]['name'] +  ' y:' + stream.variables[ind_y]['name']
+                            stream.pyqtgraph_line = pg.PlotDataItem( pen=stream.pyqtgraph['color'],name = sname)
                             stream.pyqtgraph_npdata = {'time':np.zeros((self.bufsize,)),'x':np.zeros((self.bufsize,)),'y':np.zeros((self.bufsize,)),'ind_start':0,'ind_end':0}
                             self.pyqtgraph_axes.addItem(stream.pyqtgraph_line)
                             self.pyqtgraph_line.append({'line':stream.pyqtgraph_line,'uuid':stream.uuid})
@@ -425,10 +447,30 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                             stream.pyqtgraph_cmod = 0
 
 
+                        
+
+                print(self.pyqtgraph_line)
+                
                 self.pyqtgraph_axes.clear()
+                self.pyqtgraph_leg.close()
+                self.pyqtgraph_leg = self.pyqtgraph_axes.addLegend()                
+                nplot = 0
+                lins = []
                 for i,stream in enumerate(self.Datastream.Streams):
-                    if(stream.stream_type == 'substream'):            
-                        self.pyqtgraph_axes.addItem(stream.pyqtgraph_line)
+                    if(stream.stream_type == 'substream'):
+                        li = self.pyqtgraph_axes.addItem(stream.pyqtgraph_line,name= 'test')
+                        lins.append(li)
+                        nplot += 1
+                        ind_x = stream.pyqtgraph['ind_x']
+                        ind_y = stream.pyqtgraph['ind_y']
+                        xaxis_title = stream.variables[ind_x]['name'] + ' [' + stream.variables[ind_x]['unit'] + ']'
+                        yaxis_title = stream.variables[ind_y]['name'] + ' [' + stream.variables[ind_y]['unit'] + ']'
+                        
+
+                # Only one plot, so we can easily set x/y-axes text
+                if(nplot == 1):
+                    self.pyqtgraph_axes.setLabel('bottom', xaxis_title)                    
+                    self.pyqtgraph_axes.setLabel('left', yaxis_title)
 
             # Load data and plot
             for i,stream in enumerate(self.Datastream.Streams):
@@ -452,27 +494,63 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                 stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
                                 ind_end += 1
                                 if( (ind_end - ind_start ) >= self.buf_tilesize):
-                                    ind_start += 1               
+                                    ind_start += 1
 
                                 xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
                                 yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
                                 stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
+
+                                
                                 # check for a buffer overflow
                                 if(ind_end == self.bufsize ):
                                     stream.pyqtgraph_npdata['time'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['time'][-self.buf_tilesize:]
                                     stream.pyqtgraph_npdata['x'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['x'][-self.buf_tilesize:]
                                     stream.pyqtgraph_npdata['y'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['y'][-self.buf_tilesize:]
+                                            
                                     ind_end = self.buf_tilesize
                                     ind_start = 0
 
                                 stream.pyqtgraph_npdata['ind_start'] = ind_start
                                 stream.pyqtgraph_npdata['ind_end'] = ind_end
 
-            
-        
+
+
     def handlePlot(self):
         print('Plotting Streams...')
         #self.plot_streams = True
+
+    def handle_streams(self):
+        """
+        Show/hide stream subscribe/plot widget
+        """
+        if(self.sender() == self.datastream_subscribe.button_close):
+            #self.graph_layout.replaceWidget(self.datastream_subscribe,self.button_streams)
+            self.button_layout.addWidget(self.button_streams)
+            self.button_layout.removeWidget(self.button_close)
+            self.button_layout.removeWidget(self.datastream_subscribe)                                    
+            self.datastream_subscribe.hide()
+            self.button_streams.show()
+            self.button_close.show()
+        else:
+            #self.graph_layout.replaceWidget(self.button_streams,self.datastream_subscribe)
+            self.button_layout.removeWidget(self.button_streams)
+            self.button_layout.removeWidget(self.button_close)
+            self.button_layout.addWidget(self.datastream_subscribe)                        
+            self.button_streams.hide()
+            self.button_close.hide()            
+            self.datastream_subscribe.show()
+
+
+    def handle_close(self):
+        """
+        Closes the widget
+        """
+        print('Closing!')
+        self.Datastream.close()
+        self.close()
+        
+
+            
 
 
 class pyqtgraphMainWindow(QtWidgets.QMainWindow):

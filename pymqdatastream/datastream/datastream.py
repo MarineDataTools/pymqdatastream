@@ -98,7 +98,8 @@ class zmq_socket(object):
         """
         """
         funcname = self.__class__.__name__ + '.__init__()'
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__ + '(' + socket_type + ')')
+        logging_level = logging.DEBUG
         self.logging_level = logging_level
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
@@ -399,7 +400,8 @@ class zmq_socket(object):
             else: # Try to read every dt_wait interval from the queue
                 try:
                     # If we got something, just quit!
-                    data = self.thread_queue.get(block=False)
+                    #data = self.thread_queue.get(block=False)
+                    data = self.thread_queue.get()
                     self.logger.debug(funcname + ': Got data:' + data)
                     poller.unregister(self.zmq_socket)
                     self.zmq_socket.close()
@@ -407,7 +409,8 @@ class zmq_socket(object):
                     self.thread_queue = None                    
                     self.logger.debug(funcname + ': Closing')
                     return True                    
-                except queue.Empty:
+                except queue.Empty as e:
+                    print(funcname + ' hallo ' + str(e))                    
                     pass
                 except Exception as e:
                     logger.warning(funcname + ' ' +str(e))
@@ -427,7 +430,7 @@ class zmq_socket(object):
         Starts a thread which is polling the substream socket for new data
         and puts it into the given deque
         """
-        funcname = self.__class__.__name__ + '.start_poll_substream_tread()'
+        funcname = self.__class__.__name__ + '.start_poll_substream_thread()'
         self.logger.debug(funcname)
         self.thread_queue = queue.Queue()
         socket = self.zmq_socket
@@ -435,7 +438,21 @@ class zmq_socket(object):
         self.subpoll_thread = threading.Thread(target=self.poll_substream_thread,args = (socket,))
         self.subpoll_thread.daemon = True        
         self.subpoll_thread.start()
-        
+
+    def stop_poll_thread(self):
+        """
+        Stops a polling thread of either a substream or a reply (control) stream
+        """
+        funcname = self.__class__.__name__ + '.start_poll_thread()'
+        if(self.socket_type == 'control'):
+            self.logger.debug(funcname + ': Stopping control thread')
+            self.thread_queue.put('stop')
+            self.reply_thread.join()
+            self.reply_thread = None
+            self.thread_queue = None
+        elif(self.socket_type == 'substream'):
+            self.logger.debug(funcname + ': Stopping substream thread')
+            self.stop_poll_substream_thread()
         
     def stop_poll_substream_thread(self):
         funcname = self.__class__.__name__ + '.stop_poll_substream_tread()'
@@ -445,9 +462,9 @@ class zmq_socket(object):
             self.subpoll_thread.join()
             self.subpoll_thread = None
             self.thread_queue = None
-            self.logger.debug(funcname + ': Stopped')            
-        except:
-            self.logger.warning(funcname + ': No thread found to stop')
+            self.logger.debug(funcname + ': Stopped')
+        except Exception as e:
+            self.logger.warning(funcname + ': No thread found to stop: ' + str(e))
 
             
     def poll_substream_thread(self, socket, dt_wait = 0.01):
@@ -610,10 +627,12 @@ class zmq_socket(object):
         
     def close(self):
         """
-        Cleanup
+        Stopping threads and closing the sockets
         """
-        self.zmq_socket.close()                    
-
+        funcname = self.__class__.__name__ + '.close()'
+        self.stop_poll_thread()
+        #self.zmq_socket.close()
+        
     
     def __str__(self):
         ret_str = self.__class__.__name__ + ';uuid:' + self.uuid +\
@@ -697,7 +716,7 @@ class Stream(object):
             self.version = '?'
             
         self.name = name
-        self.family = family        
+        self.family = family
         self.stream_type = stream_type
         self.socket = None
         self.variables = variables
@@ -937,7 +956,7 @@ class Stream(object):
         funcname = '.disconnect_substream()'
         self.logger.debug(funcname)
         if(self.stream_type == 'substream'):
-            self.logger.debug(funcname + ': disconnecting socket')            
+            self.logger.debug(funcname + ': disconnecting socket')
             self.socket.stop_poll_substream_thread()
             self.logger.debug(funcname + ': disconnecting socket done')
 
@@ -1252,7 +1271,7 @@ class DataStream(object):
 
 
             # Create control socket
-            control_socket = zmq_socket(socket_type = 'control', address = addresses, socket_reply_function = self.control_socket_reply)
+            control_socket = zmq_socket(socket_type = 'control', address = addresses, socket_reply_function = self.control_socket_reply,logging_level = self.logging_level)
             self.address = control_socket.address
             self.ip = get_ip_from_address(self.address)
             self.sockets.append(control_socket)
@@ -1270,7 +1289,7 @@ class DataStream(object):
         """
         funcname = 'get_datastream_info()'
         try:
-            socket = zmq_socket(socket_type = 'remote_control', address = address)
+            socket = zmq_socket(socket_type = 'remote_control', address = address,logging_level = self.logging_level)
         except Exception as e :
             self.logger.debug('Datastream.get_datastream_info(): Exception:' + str(e))
             return [False,None]
@@ -1428,7 +1447,7 @@ class DataStream(object):
                     return True
                 elif(disstream.stream_type == 'pubstream'):
                     self.Streams.pop(i)
-                    return True                    
+                    return True
                     
 
         return False
@@ -1721,6 +1740,21 @@ class DataStream(object):
             
     def __str__(self):
         return self.get_info_str()
+
+    def close(self):
+        """
+        Cleanup and close of all stuff
+        """
+        # remove streams
+        # closing all sockets
+        #for stream in self.Streams:
+        #    self.rem_stream(stream)
+
+        for sock in self.sockets:
+            print(sock, 'Stopping poll thread')
+            sock.stop_poll_thread()
+            #sock.close()
+            
             
 
 
