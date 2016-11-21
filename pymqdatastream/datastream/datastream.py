@@ -97,7 +97,7 @@ class zmq_socket(object):
     def __init__(self,socket_type, address = '', deque = None, socket_reply_function = None, filter_uuid = '', connect = True, remote = False, statistic = False, logging_level='INFO'):
         """
         """
-        funcname = self.__class__.__name__ + '.__init__()'
+        funcname = '__init__()'
         self.logger = logging.getLogger(self.__class__.__name__ + '(' + socket_type + ')')
         logging_level = logging.DEBUG
         self.logging_level = logging_level
@@ -160,7 +160,6 @@ class zmq_socket(object):
                         self.reply_thread = threading.Thread(target=self.wait_for_request_and_reply)
                         self.reply_thread.daemon = True
                         self.reply_thread.start()
-                        return 
                 else:
                     raise Exception("zmq_socket_init_failed")
 
@@ -187,7 +186,6 @@ class zmq_socket(object):
                 self.connect_socket(filter_uuid = self.filter_uuid)
                 self.start_poll_substream_thread()
                 
-            return
 
         # 'remote_control'
         elif(socket_type == 'remote_control'):
@@ -197,7 +195,6 @@ class zmq_socket(object):
                 self.send_req = self._send_req_
                 self.get_rep = self._get_rep_
 
-            return
 
         
         # 'reqstream'
@@ -212,6 +209,7 @@ class zmq_socket(object):
             raise Exception("unknown socket_type:", socket_type)
 
 
+        # end __init__
     def dumps_json(self, data):
         '''
         
@@ -256,7 +254,7 @@ class zmq_socket(object):
         
             address: Address or list of addresses for the binding, the first free address will be used
         """
-        funcname = self.__class__.__name__ + '.bind_socket()'
+        funcname = 'bind_socket()'
         if(not(isinstance(address,list))):
             address = [address]
 
@@ -287,7 +285,7 @@ class zmq_socket(object):
         connecting the socket to a remote zmq socket with address
 
         '''
-        funcname = self.__class__.__name__ + '.connect_socket()'
+        funcname = 'connect_socket()'
         address = self.address
         zmq_socket_type = self.zmq_socket_type
         self.logger.debug(funcname + ': Connecting to address: ' + str(address))
@@ -313,7 +311,7 @@ class zmq_socket(object):
     def get_connected_socket(self,filter_uuid = ''):
         """
         """
-        funcname = self.__class__.__name__ + '.get_connected_socket()'
+        funcname = 'get_connected_socket()'
         try:
             self.logger.debug(funcname + ': Connecting to address: ' + self.address)
             # A socket to receive incoming requests about status etc.
@@ -338,7 +336,7 @@ class zmq_socket(object):
         """
         Reconnects to a disconnected socket
         """
-        funcname = self.__class__.__name__ + '.reconnect_subsocket()'
+        funcname = 'reconnect_subsocket()'
         try:
             if(self.connected == False):
                 self.zmq_socket = self.get_connected_socket(filter_uuid = self.filter_uuid)
@@ -372,7 +370,7 @@ class zmq_socket(object):
 
         """
         
-        funcname = self.__class__.__name__ + '.wait_for_request_and_reply()'
+        funcname = 'wait_for_request_and_reply()'
         
         poller = zmq.Poller()
         poller.register(self.zmq_socket, zmq.POLLIN)
@@ -430,7 +428,7 @@ class zmq_socket(object):
         Starts a thread which is polling the substream socket for new data
         and puts it into the given deque
         """
-        funcname = self.__class__.__name__ + '.start_poll_substream_thread()'
+        funcname = 'start_poll_substream_thread()'
         self.logger.debug(funcname)
         self.thread_queue = queue.Queue()
         socket = self.zmq_socket
@@ -443,7 +441,7 @@ class zmq_socket(object):
         """
         Stops a polling thread of either a substream or a reply (control) stream
         """
-        funcname = self.__class__.__name__ + '.start_poll_thread()'
+        funcname = 'start_poll_thread()'
         if(self.socket_type == 'control'):
             self.logger.debug(funcname + ': Stopping control thread')
             self.thread_queue.put('stop')
@@ -455,7 +453,7 @@ class zmq_socket(object):
             self.stop_poll_substream_thread()
         
     def stop_poll_substream_thread(self):
-        funcname = self.__class__.__name__ + '.stop_poll_substream_tread()'
+        funcname = 'stop_poll_substream_tread()'
         try:
             self.logger.debug(funcname + ': Stopping')
             self.thread_queue.put('stop')
@@ -482,7 +480,7 @@ class zmq_socket(object):
         
         """
         
-        funcname = self.__class__.__name__ + '.poll_substream_tread()'
+        funcname = 'poll_substream_tread()'
         poller = zmq.Poller()
         poller.register(socket, zmq.POLLIN)
         
@@ -629,7 +627,7 @@ class zmq_socket(object):
         """
         Stopping threads and closing the sockets
         """
-        funcname = self.__class__.__name__ + '.close()'
+        funcname = 'close()'
         self.stop_poll_thread()
         #self.zmq_socket.close()
         
@@ -1248,7 +1246,7 @@ class DataStream(object):
     def __init__(self,address = None, remote = False, name = 'datastream',logging_level = 'INFO'):
         funcname = '.__init__()'
         # Init a logger
-        self.logger = logging.getLogger(self.__class__.__name__ + '_' + name)
+        self.logger = logging.getLogger(self.__class__.__name__ + '(' + name + ')')
         self.logging_level = logging_level
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
@@ -1398,7 +1396,7 @@ class DataStream(object):
             address:
 
         """
-        funcname = '.create_rep_stream()'
+        funcname = 'create_rep_stream()'
         self.logger.debug(funcname)
         if(socket_reply_function == None):
             raise Exception("Need a reply function")
@@ -1437,7 +1435,7 @@ class DataStream(object):
 
 
         """
-        funcname = '.rem_stream()'
+        funcname = 'rem_stream()'
         for i,stream in enumerate(self.Streams):
             if(stream == disstream):
                 if(disstream.stream_type == 'substream'):                        
@@ -1464,7 +1462,7 @@ class DataStream(object):
         Returns:
             stream: A stream object of the subscribed stream or None if subscription failed
         """
-        funcname = '.subscribe_stream()'
+        funcname = 'subscribe_stream()'
 
         stream = None
         # Check if we have a stream object or a address
@@ -1525,7 +1523,7 @@ class DataStream(object):
         """
         Replies to request of the control function
         """
-        funcname = '.control_socket_reply()'
+        funcname = 'control_socket_reply()'
         self.logger.debug(funcname + ': Got request:' + str(request))
         
         # Check the type of request
@@ -1570,7 +1568,7 @@ class DataStream(object):
         Returns:
             Stream object or None if nothing was found
         """
-        funcname = '.get_stream_from_uuid()'
+        funcname = 'get_stream_from_uuid()'
         [pure_uuid,address] = uuid.rsplit('::')
         self.logger.info(funcname + ':' + str(pure_uuid) + ' ' + str(address))
         self.logger.debug(funcname + ':' + str(pure_uuid) + ' ' + str(address))
@@ -1591,7 +1589,7 @@ class DataStream(object):
         Return:
             datastreams: A list of remote datastreams found
         """
-        funcname = self.__class__.__name__ + '.query_datastreams()'
+        funcname = 'query_datastreams()'
         self.logger.debug(funcname)
         list_status = []
         datastreams_remote = []
