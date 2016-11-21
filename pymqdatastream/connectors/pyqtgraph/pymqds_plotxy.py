@@ -633,17 +633,28 @@ if __name__ == "__main__":
         logger.debug('main: creating a datastream')        
         datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)        
         for sp in args.plot_stream:
-            logger.debug('main: Plotting stream: ' + str(sp))
-            saddress = sp[0]
-            good_address = pymqdatastream.check_stream_address_str(saddress)
-            logger.debug('main: Address good?: ' + str(good_address))
-            if(good_address):
-                stream = datastream.subscribe_stream(saddress)
-                stream.pyqtgraph = {}
-                stream.pyqtgraph['ind_x'] = 0
-                stream.pyqtgraph['ind_y'] = 1
-                datastream.pyqtgraph = {}
-                datastream.pyqtgraph['plot_stream'] = True
+            if(len(sp) == 1 or len(sp) == 3):
+                logger.debug('main: Plotting stream: ' + str(sp))
+                saddress = sp[0]
+                good_address = pymqdatastream.check_stream_address_str(saddress)
+                logger.debug('main: Address good?: ' + str(good_address))
+                if(good_address):
+                    stream = datastream.subscribe_stream(saddress)
+                    stream.pyqtgraph = {}
+                    if(len(sp) == 3):
+                        ind_x = int(sp[1])
+                        ind_y = int(sp[2])
+                    else:
+                        ind_x = 0
+                        ind_y = 1
+
+                    stream.pyqtgraph['ind_x'] = ind_x
+                    stream.pyqtgraph['ind_y'] = ind_y
+                    datastream.pyqtgraph = {}
+                    datastream.pyqtgraph['plot_stream'] = True
+            else:
+                logger.warning('Wrong number of arguments')
+                
 
     else:
         logger.warning('Need an address for the stream, e.g.: ' + stream_help)
