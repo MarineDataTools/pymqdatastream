@@ -685,17 +685,32 @@ class Stream(object):
        None
     """
     def __init__(self,stream_type, address = None, socket = None, variables = None, data_format = 'py_json', queuelen = 1000,statistic = False, remote = False, name = 'Stream', family = 'NA', data_type = 'continous', logging_level= 'INFO'):
-        funcname = self.__class__.__name__ + '.__init__()'
+        funcname = '__init__()'
 
-        self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Create a uuid for streams 
+        if( (remote == False) and \
+            ( (stream_type == 'control') or \
+              (stream_type == 'pubstream') or \
+              (stream_type == 'repstream') \
+            ) ):
+            self.uuid = str(uuid_module.uuid1())
+            self.uuid_utf8 = self.uuid.encode('utf-8')
+            self.version = __datastream_version__
+        else: # substreams, reqstreams do get the uuid from the counterparts
+            self.uuid = ''
+            self.version = '?'
+
+        self.logger = logging.getLogger(self.__class__.__name__ + '(' + self.uuid + ')')
         self.logging_level = logging_level
+
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
         elif((logging_level == 'INFO') | (logging_level == logging.INFO)):
             self.logger.setLevel(logging.INFO)            
         else:
             self.logger.setLevel(logging.CRITICAL)
-            
+
         self.logger.debug(funcname)
         
         self.remote = remote
@@ -710,18 +725,6 @@ class Stream(object):
         else:
             stream_type_short = 'Stream'
             
-        # Create a uuid for streams 
-        if( (remote == False) and \
-            ( (stream_type == 'control') or \
-              (stream_type == 'pubstream') or \
-              (stream_type == 'repstream') \
-            ) ):
-            self.uuid = str(uuid_module.uuid1())
-            self.uuid_utf8 = self.uuid.encode('utf-8')
-            self.version = __datastream_version__
-        else: # substreams, reqstreams do get the uuid from the counterparts
-            self.uuid = ''
-            self.version = '?'
             
         self.name = name
         self.family = family
