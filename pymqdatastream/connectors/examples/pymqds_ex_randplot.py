@@ -28,10 +28,14 @@ def start_pymqds_plotxy(addresses):
     print('AFDFS')
     print(addresses)
     logging_level = logging.DEBUG
-    #datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
-    #stream = datastream.subscribe_stream(saddress)
+    datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
+    for addr in addresses:
+        stream = datastream.subscribe_stream(addr)
+
+    datastream.pyqtgraph = {}
+    datastream.pyqtgraph['plot_stream'] = True    
     app = QtWidgets.QApplication([])
-    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow()
+    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastream)
     plotxywindow.show()
     sys.exit(app.exec_())    
     print('FSFDS')    
@@ -77,14 +81,16 @@ if __name__ == '__main__':
     RDS.add_random_stream()
 
     streams = []
+    stream_addrs = []
     for i in range(2):
         stream = RDS.add_random_stream(dt = 0.2,num_elements = 40)
         streams.append(stream)
+        stream_addrs.append(RDS.get_stream_address(stream))
 
 
     # Multiprocessing test
     multiprocessing.set_start_method('spawn',force=True)        
-    plotxyprocess = multiprocessing.Process(target =start_pymqds_plotxy, args = ([RDS.get_stream_address(stream),'2'],))
+    plotxyprocess = multiprocessing.Process(target =start_pymqds_plotxy, args = (stream_addrs,))
     plotxyprocess.start()        
 
 
