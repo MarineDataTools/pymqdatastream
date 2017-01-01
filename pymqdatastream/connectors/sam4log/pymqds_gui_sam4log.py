@@ -16,14 +16,23 @@ import collections
 import time
 import multiprocessing
 #import subprocess
-import pymqdatastream
-import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
-import pymqdatastream.connectors.pyqtgraph.pymqds_plotxy as pymqds_plotxy
-import pymqds_sam4log
+import binascii
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_gui_sam4log')
 logger.setLevel(logging.DEBUG)
+
+
+import pymqdatastream
+import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
+try:
+    import pymqdatastream.connectors.pyqtgraph.pymqds_plotxy as pymqds_plotxy
+    FLAG_PLOTXY=True
+except Exception as e:
+    logger.warning('Could not import pymqds_plotxy, this is not fatal, but there will be no real time plotting (original error: ' + str(e) + ' )')
+    FLAG_PLOTXY=False
+    
+import pymqds_sam4log
 
 
 
@@ -311,9 +320,6 @@ class sam4logConfig(QtWidgets.QWidget):
 
             
 
-
-
-
 def _start_pymqds_plotxy():
     """
     
@@ -422,6 +428,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._info_record_bu = QtWidgets.QPushButton(self._recording_status[0])
         self._info_record_info = QtWidgets.QLabel('Status: Not recording')
         self._info_plot_bu = QtWidgets.QPushButton('Plot')
+        self._info_plot_bu.setEnabled(FLAG_PLOTXY)
         self._info_plot_bu.clicked.connect(self._plot_clicked)
         self._info_record_bu.clicked.connect(self._record_clicked)
 
@@ -508,7 +515,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         vwidth = self._ad_table.verticalHeader().width()
         hwidth = self._ad_table.horizontalHeader().length()
         fwidth = self._ad_table.frameWidth() * 2
-        swidth = self._ad_table.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
+        #swidth = self._ad_table.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
         self._ad_table.setFixedWidth(vwidth + hwidth + fwidth)
         self._ad_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         height = 0
@@ -640,11 +647,16 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                         # This works for python3
                         data_str = data.decode('utf-8')
                     except UnicodeDecodeError:
-                        # This works for python3                        
-                        data_str = data.hex()
+                        ## This works for python3.5+                        
+                        #data_str = data.hex()
+                        # This works for python3.1+
+                        data_str = str(binascii.hexlify(data),'ascii')
+                        
                 elif(self._textdataformat == 1):
-                    # This works for python3
-                    data_str = data.hex()
+                    ## This works for python3.5+
+                    #data_str = data.hex()
+                    # This works for python3.1+
+                    data_str = str(binascii.hexlify(data),'ascii')
 
 
                 self.show_textdata.appendPlainText(str(data_str))
@@ -693,8 +705,15 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 for n,i in enumerate(self.sam4log.flag_adcs):
                     item = QtWidgets.QTableWidgetItem(str(V[n]))
 
-                    self._ad_table.setItem(i+2, ch+1, item )  
+                    self._ad_table.setItem(i+2, ch+1, item )
 
+        # Update the recording file status as well (addding file size)
+        t = self._info_record_bu.text()
+        if(t == self._recording_status[1]):
+            self._info_record_info.setText('Status: Logging to file  '
+                        + self.filename_log  + ' ( ' + str(self.sam4log.logfile_bytes_wrote)
+                        + ' bytes wrote)')
+            
 
     def _combo_format(self):
         """
@@ -748,13 +767,18 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                     filename = filename + '.' + fname_end
 
                 filename_full = path + '/' +filename
-                self._info_record_info.setText('Status: logfile: ' + filename)
+                self.filename_log = filename
+                self._info_record_info.setText('Status: logfile: ' + self.filename_log)
+                # Starting the logging:
                 self.sam4log.log_serial_data(filename_full)
                 self._info_record_bu.setText(self._recording_status[1])
         if(t == self._recording_status[1]):
             print('Stop record')            
             ret = self.sam4log.stop_log_serial_data()
             self._info_record_bu.setText(self._recording_status[0])
+            self._info_record_info.setText('Status: Stopped logging to file  '
+                        + self.filename_log  + ' ( ' + str(self.sam4log.logfile_bytes_wrote)
+                        + ' bytes wrote)')            
             
         # The more complex slogger object, disable for the moment
         if False:
@@ -784,6 +808,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
 # If run from the command line
 if __name__ == "__main__":
+    print(sys.version_info)
     app = QtWidgets.QApplication(sys.argv)
     window = sam4logMainWindow()
     window.show()

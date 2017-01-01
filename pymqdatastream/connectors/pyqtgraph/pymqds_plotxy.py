@@ -659,7 +659,7 @@ if __name__ == "__main__":
     else:
         logger.warning('Need an address for the stream, e.g.: ' + stream_help)
 
-    
+
     app = QtWidgets.QApplication(sys.argv)
     window = pyqtgraphMainWindow(datastream = datastream, logging_level = logging_level)
     window.show()

@@ -221,6 +221,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self._log_thread_queue = queue.Queue()
         self._log_thread_queue_ans = queue.Queue()
         self.logfile = open(filename,'wb')
+        self.logfile_bytes_wrote = 0
         self._logfile_thread = threading.Thread(target=self._logging_thread,args=(deque,self.logfile))
         self._logfile_thread.daemon = True
         self._logfile_thread.start()
@@ -233,6 +234,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data = self._log_thread_queue_ans.get()
         self.logger.debug('Got data from conversion thread; thread stopped.')
         self.logfile.close()
+        self.logfile_bytes_wrote = 0
 
         
     def _logging_thread(self,deque,logfile,dt = 0.2):
@@ -244,6 +246,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             while(len(deque) > 0):
                 data = deque.pop()
                 logfile.write(data)
+                self.logfile_bytes_wrote += len(data)
             try:
                 data = self._log_thread_queue.get(block=False)
                 self.logger.debug(funcname + ': Got data:' + data)
