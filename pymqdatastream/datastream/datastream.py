@@ -649,7 +649,8 @@ class zmq_socket(object):
                   ';socket_type:' + self.socket_type
 
         return ret_str
-    
+
+
 #
 #
 #
@@ -707,7 +708,7 @@ class Stream(object):
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
         elif((logging_level == 'INFO') | (logging_level == logging.INFO)):
-            self.logger.setLevel(logging.INFO)            
+            self.logger.setLevel(logging.INFO)
         else:
             self.logger.setLevel(logging.CRITICAL)
 
@@ -988,7 +989,7 @@ class Stream(object):
         info_dict['version'] = self.version
         
         if(isinstance(self.socket,list)):
-            info_dict['socket'] = []        
+            info_dict['socket'] = []
             for i,socket in enumerate(self.socket):
                 info_dict['socket'].append(socket.get_info())
         else:
@@ -1741,16 +1742,41 @@ class DataStream(object):
             ret_str = self.uuid + '@' + str(self.address)
             ret_str += '\nStreams:\n'
             for i,stream in enumerate(self.Streams):
-                ret_str += '#' + str(i) + ' Name: "' + str(stream.name) + '"'\
-                           + ', Family: "' + str(stream.family) + '"'\
-                           + ', Address:"' + stream.get_info_str('address') + '@'\
-                           + str(self.address) + '"\n'
+                ret_str += self.get_stream_address(stream,more_info=True)
 
                 if(stream.do_statistic):
                     ret_str += 'Packets sent: ' + str(stream.statistic['packets sent'])
 
             ret_str += '\n\n'  
             return ret_str
+        
+        
+    def get_stream_address(self,stream,more_info=False):
+        """
+        Gets an address string of the stream
+        Args:
+           stream: either a Stream object or an int of the stream number
+           more_info: Adding more information (Stream number, name and family)
+        Returns:
+           Address string with some additional information of the stream
+        """
+
+        # If stream is an integer
+        if(isinstance(stream, int)):
+            stream = self.Streams[stream]
+            
+        if(more_info):
+            for i,tstream in enumerate(self.Streams):
+                if(tstream == stream):
+                    ret_str += '#' + str(i) + ' Name: "' + str(stream.name) + '"'\
+                               + ', Family: "' + str(stream.family) + '"'\
+                               + ', Address:"' + stream.get_info_str('address') + '@'\
+                               + str(self.address) + '"\n'
+        else:
+            ret_str = stream.get_info_str('address') + '@' + str(self.address)
+
+        return ret_str
+        
             
     def __str__(self):
         return self.get_info_str()

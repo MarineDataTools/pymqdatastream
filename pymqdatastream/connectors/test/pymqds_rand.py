@@ -37,10 +37,11 @@ class RandDataStream(pymqdatastream.DataStream):
         datavar = pymqdatastream.StreamVariable(name = 'data',datatype = 'float')        
         variables = [timevar,datavar]
         name = 'sine ' + str(dt) + ' ' + str(num_elements)
-        self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables, family = famstr)
+        stream = self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables, family = famstr)
         self.thread.append(threading.Thread(target=self.do_sine,args = (self.Streams[-1],dt,f,num_elements)))
         self.thread[-1].daemon = True
-        self.thread[-1].start()        
+        self.thread[-1].start()
+        return stream
 
         
         
@@ -77,10 +78,11 @@ class RandDataStream(pymqdatastream.DataStream):
         variables = [timevar,datavar]
 
         name = 'random str ' + str(dt) + ' ' + str(num_elements)
-        self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, family = famstr)
+        stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, family = famstr)
         self.thread.append(threading.Thread(target=self.do_random_str,args = (self.Streams[-1],dt,num_elements)))
         self.thread[-1].daemon = True
-        self.thread[-1].start()        
+        self.thread[-1].start()
+        return stream
         
         
     def do_random(self,stream,dt,num_elements):

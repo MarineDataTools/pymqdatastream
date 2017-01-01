@@ -167,9 +167,11 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
     def handle_button_subscribed(self):
         """
 
-        Add a check state box for the subscribed streams, indicating
-        if to plot or not, choose color for plot and which data to
-        plot against in x and y
+        The basic subscription procedure is done in the inherited module, here
+        extra stuff special for pyqtgraph are handled. Add a check
+        state box for the subscribed streams, indicating if to plot or
+        not, choose color for plot and which data to plot against in x
+        and y.
 
         """
         # http://stackoverflow.com/questions/1667688/qcombobox-inside-qtreewidgetitem
@@ -209,7 +211,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
 
                 
             childitem.setData(0, QtCore.Qt.UserRole, 'blab')
-            childitem.setData(1, QtCore.Qt.UserRole, 'blab')            
+            childitem.setData(1, QtCore.Qt.UserRole, 'blab')
             grandchild_count = childitem.childCount()
             print('grandchild',grandchild_count)
             # Add plot options as grandchilds if initialized the first time
@@ -423,6 +425,9 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         
 
     def update_plot(self):
+        """
+        The main function of the module: Here all subscribed substreams are plotted
+        """
         if(self.Datastream.pyqtgraph['plot_stream']):
             # Check if the number of streams changed, if yes
             if(len(self.pyqtgraph_line) != ( len(self.Datastream.Streams) - 1 )):
@@ -584,6 +589,7 @@ class pyqtgraphMainWindow(QtWidgets.QMainWindow):
         self.pyqtgraphwidget = pyqtgraphWidget(datastream = datastream, bufsize = 5000000, logging_level = logging_level)
         self.layout.addWidget(self.pyqtgraphwidget)
         self.pyqtgraphs.append(self.pyqtgraphwidget)
+        self.logging_level = logging_level
 
         
         mainwidget.setFocus()
@@ -592,7 +598,7 @@ class pyqtgraphMainWindow(QtWidgets.QMainWindow):
 
     def add_graph(self):
         print('Adding graph!')
-        pyqtgraphwidget = pyqtgraphWidget( bufsize = 5000000, logging_level = logging_level )        
+        pyqtgraphwidget = pyqtgraphWidget( bufsize = 5000000, logging_level = self.logging_level )        
         self.pyqtgraphs.append(pyqtgraphwidget)
         self.layout.addWidget(pyqtgraphwidget)
 
