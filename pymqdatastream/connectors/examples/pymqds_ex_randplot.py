@@ -10,6 +10,7 @@ import pymqdatastream.connectors.test.pymqds_rand as pymqds_rand
 import multiprocessing
 from PyQt5 import QtCore, QtGui, QtWidgets
 import pymqdatastream.connectors.pyqtgraph.pymqds_plotxy as pymqds_plotxy
+from pymqdatastream.connectors.pyqtgraph import pyqtgraphDataStream
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqdatastream_rand')
@@ -28,12 +29,15 @@ def start_pymqds_plotxy(addresses):
     print('AFDFS')
     print(addresses)
     logging_level = logging.DEBUG
-    datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
+    #datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
+    datastream = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)
     for addr in addresses:
         stream = datastream.subscribe_stream(addr)
+        stream.pyqtgraph = {}
+        stream.pyqtgraph['plot_data'] = True
 
     datastream.pyqtgraph = {}
-    datastream.pyqtgraph['plot_stream'] = True    
+    datastream.pyqtgraph['plot_stream'] = True
     app = QtWidgets.QApplication([])
     plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastream)
     plotxywindow.show()

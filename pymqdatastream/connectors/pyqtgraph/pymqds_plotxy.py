@@ -13,6 +13,7 @@ import pyqtgraph as pg
 import argparse
 import pymqdatastream
 import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
+import time
 
 #import datastream.qt.pyqtgraph_service as datastream_pyqtgraph_service
 
@@ -22,6 +23,27 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
 logger = logging.getLogger('pymqds_plotxy')
 logger.setLevel(logging.INFO)
+
+
+
+class pyqtgraphDataStream(pymqdatastream.DataStream):
+    """
+
+    A child of a datastream with extensions for pyqtgraph plotting
+
+    """
+    def __init__(self,*args,**kwargs):
+        super(pyqtgraphDataStream, self).__init__(*args,**kwargs)
+        self.pyqtgraph = {}
+        self.pyqtgraph['plot_stream'] = False        
+
+
+def setup_stream_pyqtgraph(stream):
+    """
+    Adds data and information to stream needed to for plotting
+    """
+    pass
+    
 
 class SetupStreamStyle(QtWidgets.QWidget):
     """
@@ -54,7 +76,6 @@ class SetupStreamStyle(QtWidgets.QWidget):
         layout.addWidget(wi)        
 
 
-
     def handle_ok(self):
         print('Ok')
         self.stream.pyqtgraph_nplot = self.spin_nplot.value()
@@ -83,26 +104,31 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         self.button_clear.clicked.connect(self.handle_button_plot_clear)
         self.button_plot = QtWidgets.QPushButton('Plot Streams', self)        
         self.button_plot.clicked.connect(self.handle_button_plot_stream)        
-        self.button_plotting_setup = QtWidgets.QPushButton('Plotting Setup', self)
-        self.button_plotting_setup.clicked.connect(self.handle_button_plotting_setup)
-        self.button_plotting_setup.setEnabled(False)
+
         # For the plotting setup
         self.treeWidgetsub.itemClicked.connect(self.handleItemClicked)
         self.button_unsubscribe.clicked.connect(self.handle_unsubscribe_clicked_setup)
-
+        # Plotting options
+        self.button_plotting_setup = QtWidgets.QPushButton('Plotting Setup', self)
+        self.button_plotting_setup.clicked.connect(self.handle_button_plotting_setup)
+        self.button_plotting_setup.setEnabled(False)        
+        self.layout_options = QtWidgets.QVBoxLayout()
+        self.layout_options.addWidget(self.button_plotting_setup)
         
         layout_widget = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(layout_widget)
         self.layout.addWidget(layout_widget,4,0,1,2)
+        self.layout.addLayout(self.layout_options,1,2)        
         layout.addWidget(self.button_plot)
-        layout.addWidget(self.button_plotting_setup)
         layout.addWidget(self.button_clear)
+
+
         # Check if we have already the dictionary pyqtgraph in the Datastream object
         try:
             self.Datastream.pyqtgraph
         except:
             self.Datastream.pyqtgraph = {}
-            self.Datastream.pyqtgraph['plot_stream'] = False
+            self.Datastream.pyqtgraph['plot_stream'] = True
             
         self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
         
@@ -187,6 +213,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         for i in range(child_count):
             childitem = root.child(i)
             # do we have a pyqtgraph dictionary for plotting information?
+            # TODO, this should be done in a general routine
             try:
                 childitem.stream.pyqtgraph
             except:
@@ -201,7 +228,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 if(self.color_ind == len(self.line_colors)):
                     self.color_ind = 0
 
-            # Test if we have already an ind_x/ind_y
+            # Test if we have already an ind_x/ind_y and a plot_data
             try:
                 childitem.stream.pyqtgraph['ind_x']
                 childitem.stream.pyqtgraph['ind_y']
@@ -209,11 +236,29 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 childitem.stream.pyqtgraph['ind_x'] = 0
                 childitem.stream.pyqtgraph['ind_y'] = 1
 
-                
+            # Test if we have plot_data
+            try:
+                childitem.stream.pyqtgraph['plot_data']
+            except:                    
+                childitem.stream.pyqtgraph['plot_data'] = False
+
+            # Test if we have a line variable
+            try:
+                childitem.stream.pyqtgraph_line
+            except:                    
+                childitem.stream.pyqtgraph_line = None
+                childitem.stream.pyqtgraph['bufsize'] = 200000
+                bufsize = childitem.stream.pyqtgraph['bufsize']
+                childitem.stream.pyqtgraph_npdata = {'time':np.zeros((bufsize,)),'x':np.zeros((bufsize,)),'y':np.zeros((bufsize,)),'ind_start':0,'ind_end':0}
+                childitem.stream.pyqtgraph_nplot = 1
+                childitem.stream.pyqtgraph_cmod = 0
+
+
             childitem.setData(0, QtCore.Qt.UserRole, 'blab')
             childitem.setData(1, QtCore.Qt.UserRole, 'blab')
             grandchild_count = childitem.childCount()
             print('grandchild',grandchild_count)
+            
             # Add plot options as grandchilds if initialized the first time
             if(grandchild_count == 0):
                 childitem.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
@@ -243,9 +288,23 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 p.setColor(button.backgroundRole(), color)
                 button.setPalette(p)
                 self.treeWidgetsub.setItemWidget(grandchilditem, 0 , button)
+                # Create a plot option
+                check_plot = QtWidgets.QCheckBox()
+                check_plot.setText('Plot stream')
+                check_plot.setChecked(False)
+                check_plot.stateChanged.connect(self.handle_check_plot_changed)
+                check_plot.pyqtgraph = childitem.stream.pyqtgraph
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])                
+                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , check_plot)                
             else:
                 print('All here already')
 
+    def handle_check_plot_changed(self):
+        """
+        """
+        print('Check plot change!')
+        check_plot = self.sender()
+        check_plot.pyqtgraph['plot_data'] = check_plot.isChecked()
 
     def handle_button_color_clicked(self):
         """
@@ -400,6 +459,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         # Layout
         self.graph_layout = QtWidgets.QHBoxLayout()
         self.button_layout = QtWidgets.QVBoxLayout()
+        self.button_layout.setAlignment(QtCore.Qt.AlignTop)
 
         self.graph_layout.addLayout(self.button_layout)        
         self.graph_layout.addWidget(self.pyqtgraph_layout)
@@ -430,7 +490,8 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         """
         if(self.Datastream.pyqtgraph['plot_stream']):
             # Check if the number of streams changed, if yes
-            if(len(self.pyqtgraph_line) != ( len(self.Datastream.Streams) - 1 )):
+            #if(len(self.pyqtgraph_line) != ( len(self.Datastream.Streams) - 1 )):
+            if False:
                 self.pyqtgraph_line = []
                 for i,stream in enumerate(self.Datastream.Streams):
                     if(stream.stream_type == 'substream'):
@@ -476,46 +537,102 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                     self.pyqtgraph_axes.setLabel('bottom', xaxis_title)                    
                     self.pyqtgraph_axes.setLabel('left', yaxis_title)
 
+
             # Load data and plot
+            FLAG_CHANGED = False
             for i,stream in enumerate(self.Datastream.Streams):
                 if(stream.stream_type == 'substream'):
-                    # Finally get the data
-                    #if(len(stream.deque) > 0):
-                    while(len(stream.deque) > 0):
-                        data = stream.deque.pop()
-                        plot_data = data['data']
-                        time_plot_data = data['info']['ts']
-                        ind_start = stream.pyqtgraph_npdata['ind_start']
-                        ind_end = stream.pyqtgraph_npdata['ind_end']
+                    # No plotting of this stream
+                    if(stream.pyqtgraph['plot_data'] == False):
+                        if(not stream.pyqtgraph_line == None):
+                            self.pyqtgraph_axes.removeItem(stream.pyqtgraph_line)
+                            stream.pyqtgraph_line = None
+                            #stream.pyqtgraph_line.setData(x=[],y=[], pen=stream.pyqtgraph['color'])
+                            stream.pyqtgraph_npdata['ind_end'] = 0
+                            stream.pyqtgraph_npdata['ind_start'] = 0
+                            FLAG_CHANGED = True
+                            
+                        # Get rid of accumulated data
+                        while(len(stream.deque) > 0):
+                            data = stream.deque.pop()
+
+                    # Plotting of this stream                            
+                    else:
                         ind_x = stream.pyqtgraph['ind_x']
-                        ind_y = stream.pyqtgraph['ind_y']
-                        for n in range(len(plot_data)):
-                            stream.pyqtgraph_cmod += 1
-                            if(stream.pyqtgraph_cmod >= stream.pyqtgraph_nplot):
-                                stream.pyqtgraph_cmod = 0
-                                stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
-                                stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
-                                stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
-                                ind_end += 1
-                                if( (ind_end - ind_start ) >= self.buf_tilesize):
-                                    ind_start += 1
+                        ind_y = stream.pyqtgraph['ind_y']                        
+                        # Create a new line object for the stream
+                        if(stream.pyqtgraph_line == None):
+                            FLAG_CHANGED = True
+                            print('None')
+                            sname = stream.name + ' x: ' + stream.variables[ind_x]['name'] +  ' y:' + stream.variables[ind_y]['name']
+                            stream.pyqtgraph_line = pg.PlotDataItem( pen=stream.pyqtgraph['color'],name = sname)
+                            li = self.pyqtgraph_axes.addItem(stream.pyqtgraph_line,name= 'test')
+                            #self.pyqtgraph_axes.clear()
 
-                                xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
-                                yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
-                                stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
+                            
+                        # Finally get the data
+                        while(len(stream.deque) > 0):
+                            data = stream.deque.pop()
+                            plot_data = data['data']
+                            time_plot_data = data['info']['ts']
+                            ind_start = stream.pyqtgraph_npdata['ind_start']
+                            ind_end = stream.pyqtgraph_npdata['ind_end']
+                            for n in range(len(plot_data)):
+                                stream.pyqtgraph_cmod += 1
+                                if(stream.pyqtgraph_cmod >= stream.pyqtgraph_nplot):
+                                    stream.pyqtgraph_cmod = 0
+                                    stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
+                                    stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
+                                    stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
+                                    ind_end += 1
+                                    if( (ind_end - ind_start ) >= self.buf_tilesize):
+                                        ind_start += 1
 
-                                
-                                # check for a buffer overflow
-                                if(ind_end == self.bufsize ):
-                                    stream.pyqtgraph_npdata['time'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['time'][-self.buf_tilesize:]
-                                    stream.pyqtgraph_npdata['x'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['x'][-self.buf_tilesize:]
-                                    stream.pyqtgraph_npdata['y'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['y'][-self.buf_tilesize:]
-                                            
-                                    ind_end = self.buf_tilesize
-                                    ind_start = 0
+                                    xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
+                                    yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
+                                    stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
 
-                                stream.pyqtgraph_npdata['ind_start'] = ind_start
-                                stream.pyqtgraph_npdata['ind_end'] = ind_end
+
+                                    # check for a buffer overflow
+                                    if(ind_end == self.bufsize ):
+                                        stream.pyqtgraph_npdata['time'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['time'][-self.buf_tilesize:]
+                                        stream.pyqtgraph_npdata['x'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['x'][-self.buf_tilesize:]
+                                        stream.pyqtgraph_npdata['y'][0:self.buf_tilesize] = stream.pyqtgraph_npdata['y'][-self.buf_tilesize:]
+
+                                        ind_end = self.buf_tilesize
+                                        ind_start = 0
+
+                                    stream.pyqtgraph_npdata['ind_start'] = ind_start
+                                    stream.pyqtgraph_npdata['ind_end'] = ind_end
+            
+            if(FLAG_CHANGED):
+                print('FLAG_CHANGED!!!')
+                self.pyqtgraph_axes.clear()
+                self.pyqtgraph_leg.close()                
+                self.pyqtgraph_leg = self.pyqtgraph_axes.addLegend()
+                nplot = 0
+                xaxis_title = ' '
+                yaxis_title = ' '                
+                for i,stream in enumerate(self.Datastream.Streams):
+                    if(stream.stream_type == 'substream'):
+                        # No plotting of this stream
+                        if(stream.pyqtgraph['plot_data'] == True):
+                            li = self.pyqtgraph_axes.addItem(stream.pyqtgraph_line)
+                            nplot += 1
+                            ind_x = stream.pyqtgraph['ind_x']
+                            ind_y = stream.pyqtgraph['ind_y']
+                            xaxis_title = stream.variables[ind_x]['name'] + ' [' + stream.variables[ind_x]['unit'] + ']'
+                            yaxis_title = stream.variables[ind_y]['name'] + ' [' + stream.variables[ind_y]['unit'] + ']'
+                            
+
+
+                # Only one plot, so we can easily set x/y-axes text
+                #if(nplot == 1):
+                if(True):
+                    self.pyqtgraph_axes.setLabel('bottom', xaxis_title)                    
+                    self.pyqtgraph_axes.setLabel('left', yaxis_title)                            
+                            
+                    
 
 
 
@@ -656,6 +773,7 @@ if __name__ == "__main__":
 
                     stream.pyqtgraph['ind_x'] = ind_x
                     stream.pyqtgraph['ind_y'] = ind_y
+                    stream.pyqtgraph['plot_data'] = True
                     datastream.pyqtgraph = {}
                     datastream.pyqtgraph['plot_stream'] = True
             else:
