@@ -31,15 +31,27 @@ def start_pymqds_plotxy(addresses):
     logging_level = logging.DEBUG
     #datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
     datastream = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)
+    datastream2 = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)    
     for addr in addresses:
         stream = datastream.subscribe_stream(addr)
         stream.pyqtgraph = {}
         stream.pyqtgraph['plot_data'] = True
+        stream.pyqtgraph['mode'] = 'cont'
+
+        stream = datastream2.subscribe_stream(addr)
+        stream.pyqtgraph = {}
+        stream.pyqtgraph['plot_data'] = True
+        stream.pyqtgraph['mode'] = 'xr'
+        stream.pyqtgraph['xl'] = 10
+        
 
     datastream.pyqtgraph = {}
     datastream.pyqtgraph['plot_stream'] = True
+    datastream2.pyqtgraph = {}
+    datastream2.pyqtgraph['plot_stream'] = True    
     app = QtWidgets.QApplication([])
     plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastream)
+    plotxywindow.add_graph(datastream=datastream2)
     plotxywindow.show()
     sys.exit(app.exec_())    
     print('FSFDS')    
@@ -87,7 +99,7 @@ if __name__ == '__main__':
     streams = []
     stream_addrs = []
     for i in range(2):
-        stream = RDS.add_random_stream(dt = 0.2,num_elements = 40)
+        stream = RDS.add_random_stream(dt = 0.1,num_elements = 10)
         streams.append(stream)
         stream_addrs.append(RDS.get_stream_address(stream))
 
