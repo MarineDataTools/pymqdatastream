@@ -22,20 +22,221 @@ import time
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
 logger = logging.getLogger('pymqds_plotxy')
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 
 class pyqtgraphDataStream(pymqdatastream.DataStream):
     """
 
-    A child of a datastream with extensions for pyqtgraph plotting
+    A child of a datastream with extensions for pyqtgraph plotting.
 
     """
     def __init__(self,*args,**kwargs):
         super(pyqtgraphDataStream, self).__init__(*args,**kwargs)
+        self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
+        self.color_ind = 0
         self.pyqtgraph = {}
-        self.pyqtgraph['plot_stream'] = False        
+        self.pyqtgraph['plot_datastream'] = False
+        # Define the plotting mode
+        try:
+            self.pyqtgraph['mode']
+        except:                    
+            self.pyqtgraph['mode'] = 'cont' # continous mode
+            
+        try:
+            self.pyqtgraph['xl']
+        except:                                    
+            self.pyqtgraph['xl'] = 10
+
+        try:
+            self.pyqtgraph['xrs']
+        except:                                    
+            self.pyqtgraph['xrs'] = None
+
+
+        self.pyqtgraph['modes']       = ['continous','xlim','xreset']
+        self.pyqtgraph['modes_short'] = ['cont','xl','xr']            
+
+
+    def init_stream_settings(self,stream,color = None, bufsize=10000, ind_x = 0, ind_y = 1, plot_data=False):
+        """
+
+        Initialises the stream with standard settings for plotting if they
+        dont already exist. Here nothing well be overwritten. Use
+        set_stream_settings for an explicit setting.
+        Args:
+            stream:
+            color:
+            bufsize:
+
+        """
+        
+        # TODO, this should be done in a general routine
+        try:
+            stream.pyqtgraph
+        except:
+            stream.pyqtgraph = {}
+
+        # Color information?
+
+        try:
+            stream.pyqtgraph['color']
+        except:
+            if(color == None): # no            
+                stream.pyqtgraph['color'] = self.line_colors[self.color_ind]
+                self.color_ind += 1
+                if(self.color_ind == len(self.line_colors)):
+                    self.color_ind = 0
+            else:
+                stream.pyqtgraph['color'] = color
+
+        # Test if we have already an ind_x/ind_y and a plot_data
+        try:
+            stream.pyqtgraph['ind_x']
+            stream.pyqtgraph['ind_y']
+        except:                    
+            stream.pyqtgraph['ind_x'] = ind_x
+            stream.pyqtgraph['ind_y'] = ind_y
+
+        # Test if we have plot_data
+        try:
+            stream.pyqtgraph['plot_data']
+        except:                    
+            stream.pyqtgraph['plot_data'] = plot_data
+
+        # Test if we have a line variable
+        try:
+            stream.pyqtgraph_line
+        except:                    
+            stream.pyqtgraph_line = None
+
+        # Test if we have bufsize etc.
+        try:
+            stream.pyqtgraph['bufsize']
+        except:
+            stream.pyqtgraph['bufsize'] = int(bufsize*2)
+            stream.pyqtgraph['buf_tilesize'] = bufsize
+            bufsize = stream.pyqtgraph['bufsize']            
+            stream.pyqtgraph_npdata = {'time':np.zeros((bufsize,)),'x':np.zeros((bufsize,)),'y':np.zeros((bufsize,)),'ind_start':0,'ind_end':0}
+            stream.pyqtgraph_nplot = 1
+            stream.pyqtgraph_cmod = 0
+
+
+    def set_stream_settings(self,stream,color=None,ind_x = None,ind_y = None, plot_data = None, bufsize = None):
+        """
+        Sets the plotting settings of the stream
+        """
+        
+        # TODO, this should be done in a general routine
+        try:
+            stream.pyqtgraph
+        except:
+            logger.warning('Initialise stream first with init_stream_settings')
+            return
+
+        # Color information?
+        if(color == None): # No color, take standard color
+            stream.pyqtgraph['color'] = self.line_colors[self.color_ind]
+            self.color_ind += 1
+            if(self.color_ind == len(self.line_colors)):
+                self.color_ind = 0
+        else:
+            stream.pyqtgraph['color'] = color
+
+        # Test if we have already an ind_x/ind_y and a plot_data
+        if(ind_x != None):        
+            stream.pyqtgraph['ind_x'] = ind_x
+        if(ind_y != None):                    
+            stream.pyqtgraph['ind_y'] = ind_y
+        if(plot_data != None):
+            stream.pyqtgraph['plot_data'] = plot_data
+        if(bufsize != None):
+            stream.pyqtgraph['bufsize'] = int(bufsize*2)
+            stream.pyqtgraph['buf_tilesize'] = bufsize
+            bufsize = stream.pyqtgraph['bufsize']
+            stream.pyqtgraph_npdata = {'time':np.zeros((bufsize,)),'x':np.zeros((bufsize,)),'y':np.zeros((bufsize,)),'ind_start':0,'ind_end':0}
+            stream.pyqtgraph_nplot = 1
+            stream.pyqtgraph_cmod = 0                        
+
+            
+    def plot_stream(self,stream,plot_stream=False):
+        """
+        Defines if the stream is plotted
+        """
+        stream.pyqtgraph['plot_data'] = plot_stream
+
+            
+    def plot_datastream(self,plot_datastream=False):
+        """
+        Defines if the datastream is plotted
+        """
+        self.pyqtgraph['plot_datastream'] = plot_datastream
+
+        
+    def get_plot_datastream(self):
+        """
+        Defines if the datastream is plotted
+        Returns:
+            True/False for plotting/not plotting
+        """
+        return self.pyqtgraph['plot_datastream']
+
+    def get_plot_modes(self,short=False):
+        """
+        Returns available plotting modes
+        """
+        if(short):
+            modes = self.pyqtgraph['modes_short']
+        else:
+            modes = self.pyqtgraph['modes']
+            
+        return modes
+        
+            
+    def set_plotting_mode(self,mode='cont',xl=None):
+        """
+        Defines the plotting modes
+        Args:
+            mode: The plotting modes ("cont": Continous, "xl": xlimit; plots the last data within the xlimits, "xr": Plots until xl is reached, then plot is cleared and started again)
+            xl: Xlimit
+        """
+        logger.debug('set_plotting_mode()')
+        # Check if we have the long version of mode, if yes get index and use short version
+        for i,m in enumerate(self.pyqtgraph['modes']):
+            if(m == mode):
+                logger.debug('Long to short mode string ' + m)
+                mode = self.pyqtgraph['modes_short'][i]
+                break
+        # const mode
+        if(mode == self.pyqtgraph['modes_short'][0]):
+            logger.debug('Constant mode')
+            self.pyqtgraph['mode'] = mode
+            self.pyqtgraph['xrs'] = None            
+            return
+        # xlim mode
+        elif(mode == self.pyqtgraph['modes_short'][1]):
+            logger.debug('Xlim mode')            
+            if(xl == None):
+                logger.warning('Specify xl for the "xl" mode, doing nothing now')
+                return
+            else:
+                self.pyqtgraph['mode'] = mode
+                self.pyqtgraph['xl'] = xl
+                self.pyqtgraph['xrs'] = None                
+        # x reset mode
+        elif(mode == self.pyqtgraph['modes_short'][2]):
+            logger.debug('xr mode')                        
+            if(xl == None):
+                logger.warning('Specify xl for the "xr" mode, doing nothing now')
+                return
+            else:
+                self.pyqtgraph['mode'] = mode
+                self.pyqtgraph['xl'] = xl
+                self.pyqtgraph['xrs'] = None
+                
+            
 
 
 def setup_stream_pyqtgraph(stream):
@@ -111,9 +312,22 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         # Plotting options
         self.button_plotting_setup = QtWidgets.QPushButton('Plotting Setup', self)
         self.button_plotting_setup.clicked.connect(self.handle_button_plotting_setup)
-        self.button_plotting_setup.setEnabled(False)        
+        self.button_plotting_setup.setEnabled(False)
+
+        # Plotting option widgets
+        self.combo_plotmode = QtWidgets.QComboBox(self)
+        self.combo_plotmode.addItems(self.Datastream.get_plot_modes())
+        self.combo_plotmode.currentIndexChanged.connect(self._set_combo_mode)
+        xll = QtWidgets.QLabel('X Limit')
+        self.lined_xlim = QtWidgets.QLineEdit(self)
+        self.lined_xlim.setEnabled(False)
+        #self.Datastream.pyqtgraph['mode']
         self.layout_options = QtWidgets.QVBoxLayout()
         self.layout_options.addWidget(self.button_plotting_setup)
+        self.layout_options.addWidget(self.combo_plotmode)
+        self.layout_options.addWidget(xll)
+        self.layout_options.addWidget(self.lined_xlim)
+
         
         layout_widget = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(layout_widget)
@@ -128,7 +342,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
             self.Datastream.pyqtgraph
         except:
             self.Datastream.pyqtgraph = {}
-            self.Datastream.pyqtgraph['plot_stream'] = True
+            self.Datastream.pyqtgraph['plot_datastream'] = True
             
         self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
         
@@ -136,6 +350,13 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
 
         self.handle_button_subscribed()
         #.pyqtgraph['ind_x']
+
+    def _set_combo_mode(self):
+        """
+        """
+        print('Hallo setting to mode:',self.combo_plotmode.currentText())
+        mode = str(self.combo_plotmode.currentText())
+        self.Datastream.set_plotting_mode(mode=mode,xl=10)
 
     def handle_button_plotting_setup(self):
         print('HALLO')
@@ -148,11 +369,11 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                          
 
     def handle_button_plot_stream(self):
-        if(self.Datastream.pyqtgraph['plot_stream'] == False):
-            self.Datastream.pyqtgraph['plot_stream'] = True
+        if(self.Datastream.pyqtgraph['plot_datastream'] == False):
+            self.Datastream.pyqtgraph['plot_datastream'] = True
             self.button_plot.setText('Pause Plot')
         else:
-            self.Datastream.pyqtgraph['plot_stream'] = False
+            self.Datastream.pyqtgraph['plot_datastream'] = False
             self.button_plot.setText('Plot Streams')
 
 
@@ -212,68 +433,6 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         column = 0
         for i in range(child_count):
             childitem = root.child(i)
-            # do we have a pyqtgraph dictionary for plotting information?
-            # TODO, this should be done in a general routine
-            try:
-                childitem.stream.pyqtgraph
-            except:
-                childitem.stream.pyqtgraph = {}
-
-            # Color information?
-            try:
-                childitem.stream.pyqtgraph['color']
-            except:
-                childitem.stream.pyqtgraph['color'] = self.line_colors[self.color_ind]
-                self.color_ind += 1
-                if(self.color_ind == len(self.line_colors)):
-                    self.color_ind = 0
-
-            # Test if we have already an ind_x/ind_y and a plot_data
-            try:
-                childitem.stream.pyqtgraph['ind_x']
-                childitem.stream.pyqtgraph['ind_y']
-            except:                    
-                childitem.stream.pyqtgraph['ind_x'] = 0
-                childitem.stream.pyqtgraph['ind_y'] = 1
-
-            # Test if we have plot_data
-            try:
-                childitem.stream.pyqtgraph['plot_data']
-            except:                    
-                childitem.stream.pyqtgraph['plot_data'] = False
-
-            # Test if we have a line variable
-            try:
-                childitem.stream.pyqtgraph_line
-            except:                    
-                childitem.stream.pyqtgraph_line = None
-                #childitem.stream.pyqtgraph['bufsize'] = 200000
-                childitem.stream.pyqtgraph['bufsize'] = 1000
-                childitem.stream.pyqtgraph['buf_tilesize'] = int(childitem.stream.pyqtgraph['bufsize']/2)
-                bufsize = childitem.stream.pyqtgraph['bufsize']
-                childitem.stream.pyqtgraph_npdata = {'time':np.zeros((bufsize,)),'x':np.zeros((bufsize,)),'y':np.zeros((bufsize,)),'ind_start':0,'ind_end':0}
-                childitem.stream.pyqtgraph_nplot = 1
-                childitem.stream.pyqtgraph_cmod = 0
-
-
-            # Define the plotting mode
-            try:
-                childitem.stream.pyqtgraph['mode']
-            except:                    
-                #childitem.stream.pyqtgraph['mode'] = 'cont'
-                #childitem.stream.pyqtgraph['mode'] = 'xl'
-                childitem.stream.pyqtgraph['mode'] = 'xr'
-
-            try:
-                childitem.stream.pyqtgraph['xl']
-            except:                                    
-                childitem.stream.pyqtgraph['xl'] = 10
-
-            try:
-                childitem.stream.pyqtgraph['xrs']
-            except:                                    
-                childitem.stream.pyqtgraph['xrs'] = 0                
-
             childitem.setData(0, QtCore.Qt.UserRole, 'blab')
             childitem.setData(1, QtCore.Qt.UserRole, 'blab')
             grandchild_count = childitem.childCount()
@@ -505,7 +664,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         """
         The main function of the module: Here all subscribed substreams are plotted
         """
-        if(self.Datastream.pyqtgraph['plot_stream']):
+        if(self.Datastream.pyqtgraph['plot_datastream']):
             # Load data and plot
             FLAG_CHANGED = False
             for i,stream in enumerate(self.Datastream.Streams):
@@ -560,18 +719,25 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                     yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
 
                                     # Test for xlim mode
-                                    if(stream.pyqtgraph['mode'] == 'xl'):
-                                        if(any((xd[-1] - xd) > stream.pyqtgraph['xl'])):
-                                            ind = (xd[-1] - xd) < stream.pyqtgraph['xl']
+                                    if(self.Datastream.pyqtgraph['mode'] == 'xl'):
+                                        if(any((xd[-1] - xd) > self.Datastream.pyqtgraph['xl'])):
+                                            ind = (xd[-1] - xd) < self.Datastream.pyqtgraph['xl']
                                             xd = xd[ind]
                                             yd = yd[ind]
                                             
-                                    elif(stream.pyqtgraph['mode'] == 'xr'):
-                                        # Reset if difference is larger than 'xl'
-                                        if((xd[-1] - stream.pyqtgraph['xrs'])  > stream.pyqtgraph['xl']):
-                                            stream.pyqtgraph['xrs'] = xd[-1]
+                                    elif(self.Datastream.pyqtgraph['mode'] == 'xr'):
 
-                                        self.pyqtgraph_axes.setXRange(stream.pyqtgraph['xrs'],stream.pyqtgraph['xrs']+stream.pyqtgraph['xl'])
+                                        # Put some value if xrs has not been defined
+                                        if(self.Datastream.pyqtgraph['xrs'] == None):
+                                            self.Datastream.pyqtgraph['xrs'] = xd[-1]
+                                        # Reset if difference is larger than 'xl'                                            
+                                        if((xd[-1] - self.Datastream.pyqtgraph['xrs'])  > self.Datastream.pyqtgraph['xl']):
+                                            self.Datastream.pyqtgraph['xrs'] = xd[-1]
+
+                                        self.pyqtgraph_axes.setXRange(self.Datastream.pyqtgraph['xrs'],
+                                                                      self.Datastream.pyqtgraph['xrs']+
+                                                                      self.Datastream.pyqtgraph['xl'])
+                                        
                                     # finally set the data for the line
                                     stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
 
@@ -758,7 +924,7 @@ if __name__ == "__main__":
                     stream.pyqtgraph['ind_y'] = ind_y
                     stream.pyqtgraph['plot_data'] = True
                     datastream.pyqtgraph = {}
-                    datastream.pyqtgraph['plot_stream'] = True
+                    datastream.pyqtgraph['plot_datastream'] = True
             else:
                 logger.warning('Wrong number of arguments')
                 

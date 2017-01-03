@@ -34,21 +34,18 @@ def start_pymqds_plotxy(addresses):
     datastream2 = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)    
     for addr in addresses:
         stream = datastream.subscribe_stream(addr)
-        stream.pyqtgraph = {}
-        stream.pyqtgraph['plot_data'] = True
-        stream.pyqtgraph['mode'] = 'cont'
-
+        datastream.init_stream_settings(stream,plot_data = True)
         stream = datastream2.subscribe_stream(addr)
-        stream.pyqtgraph = {}
-        stream.pyqtgraph['plot_data'] = True
-        stream.pyqtgraph['mode'] = 'xr'
-        stream.pyqtgraph['xl'] = 10
+        datastream2.init_stream_settings(stream,plot_data = True)        
+
         
 
-    datastream.pyqtgraph = {}
-    datastream.pyqtgraph['plot_stream'] = True
-    datastream2.pyqtgraph = {}
-    datastream2.pyqtgraph['plot_stream'] = True    
+    datastream.plot_datastream(True)
+    datastream.pyqtgraph['mode'] = 'cont'
+    
+    datastream2.plot_datastream(True)
+    datastream2.set_plotting_mode(mode='xr',xl=10)
+    
     app = QtWidgets.QApplication([])
     plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastream)
     plotxywindow.add_graph(datastream=datastream2)
