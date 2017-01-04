@@ -176,9 +176,14 @@ class sam4logConfig(QtWidgets.QWidget):
         # Conversion speed
         self._convspeed_combo = QtWidgets.QComboBox(self)
         # TODO rewrite in Hz
-        self.speeds = [30,12,8,6,4,2]        
-        for speed in self.speeds:
-            self._convspeed_combo.addItem(str(speed))
+        self.speeds =        [30   ,12 ,10 ,8  ,6  ,4   ,2   ]
+        self.speeds_hz_adc = [6.875,110,220,439,879,1760,3520]
+        self.speeds_td =     [2000 ,100,25 , 50,20 ,20  ,18  ]   # Version 0.4, timer delay
+        self.speeds_hz =     []
+        for i,speed in enumerate(self.speeds):
+            self.speeds_hz.append(10000.0/self.speeds_td[i])
+            speed_hz = 'f: 'str(self.speeds_hz[-1]) + ' Hz (f ADC:' + str(self.speeds_hz_adc[i]) + ' Hz)'
+            self._convspeed_combo.addItem(str(speed_hz))
 
         # Data format
         self.formats = [2,3]        
@@ -345,7 +350,6 @@ def _start_pymqds_plotxy(addresses):
     
     """
 
-    print('AFDFS')
     logger.debug("_start_pymqs_plotxy():" + str(addresses))
 
     logging_level = logging.DEBUG
