@@ -346,31 +346,29 @@ def _start_pymqds_plotxy(addresses):
     """
 
     print('AFDFS')
-    print(addresses)
+    logger.debug("_start_pymqs_plotxy():" + str(addresses))
+
     logging_level = logging.DEBUG
-    #datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
-    datastream = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)
-    datastream2 = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)    
+    datastreams = []
+    
     for addr in addresses:
+        datastream = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)
         stream = datastream.subscribe_stream(addr)
-        datastream.init_stream_settings(stream,plot_data = True)
-        stream = datastream2.subscribe_stream(addr)
-        datastream2.init_stream_settings(stream,plot_data = True)        
+        datastream.init_stream_settings(stream,plot_data = True,ind_x = 1, ind_y = 2)
+        datastream.plot_datastream(True)
+        datastream.set_plotting_mode(mode='cont')        
+        datastreams.append(datastream)
 
-        
 
-    datastream.plot_datastream(True)
-    datastream.set_plotting_mode(mode='cont')
-    
-    datastream2.plot_datastream(True)
-    datastream2.set_plotting_mode(mode='xr',xl=10)
-    
     app = QtWidgets.QApplication([])
-    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastream)
-    plotxywindow.add_graph(datastream=datastream2)
+    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0])
+    for i,datastream in enumerate(datastreams):
+        if(i > 0):
+            plotxywindow.add_graph(datastream=datastream)
+        
     plotxywindow.show()
     sys.exit(app.exec_())    
-    print('FSFDS')        
+    logger.debug("_start_pymqs_plotxy(): done")
 
 
 class sam4logMainWindow(QtWidgets.QMainWindow):
@@ -589,6 +587,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self._settings_widget.close()
         except:
             pass
+
+        try:
+            self._plotxyprocess.stop()
+        except:
+            pass            
             
         self.close()
 
@@ -776,11 +779,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # http://stackoverflow.com/questions/29556291/multiprocessing-with-qt-works-in-windows-but-not-linux
         # this does not work with python 2.7 
         multiprocessing.set_start_method('spawn',force=True)
-        for stream in self.sam4log.streams:
-            print(stream.get_family)
-        #stream_addrs.append(RDS.get_stream_address(stream))
-        #self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy)
-        #self._plotxyprocess.start()
+        addresses = []
+        for stream in self.sam4log.Streams:
+            print(stream.get_family())
+            if(stream.get_family() == "sam4log adc"):
+                addresses.append(self.sam4log.get_stream_address(stream))
+                
+        self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,))
+        self._plotxyprocess.start()
 
         
     def _record_clicked(self):
