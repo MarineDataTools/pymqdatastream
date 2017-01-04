@@ -209,10 +209,11 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
                 logger.debug('Long to short mode string ' + m)
                 mode = self.pyqtgraph['modes_short'][i]
                 break
-        # const mode
+        # cont mode
         if(mode == self.pyqtgraph['modes_short'][0]):
             logger.debug('Constant mode')
             self.pyqtgraph['mode'] = mode
+            self.pyqtgraph['autorange'] = True
             self.pyqtgraph['xrs'] = None            
             return
         # xlim mode
@@ -224,6 +225,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             else:
                 self.pyqtgraph['mode'] = mode
                 self.pyqtgraph['xl'] = xl
+                self.pyqtgraph['autorange'] = True                
                 self.pyqtgraph['xrs'] = None                
         # x reset mode
         elif(mode == self.pyqtgraph['modes_short'][2]):
@@ -234,6 +236,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             else:
                 self.pyqtgraph['mode'] = mode
                 self.pyqtgraph['xl'] = xl
+                self.pyqtgraph['autorange'] = True                
                 self.pyqtgraph['xrs'] = None
                 
             
@@ -321,12 +324,16 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         xll = QtWidgets.QLabel('X Limit')
         self.lined_xlim = QtWidgets.QLineEdit(self)
         self.lined_xlim.setEnabled(False)
+        self.lined_xlim.returnPressed.connect(self._set_xlim)
+        self.lined_xlim.setText(str(float(self.Datastream.pyqtgraph['xl'])))
+        self.label_xlunit = QtWidgets.QLabel('[]')        
         #self.Datastream.pyqtgraph['mode']
         self.layout_options = QtWidgets.QVBoxLayout()
         self.layout_options.addWidget(self.button_plotting_setup)
         self.layout_options.addWidget(self.combo_plotmode)
         self.layout_options.addWidget(xll)
         self.layout_options.addWidget(self.lined_xlim)
+        self.layout_options.addWidget(self.label_xlunit)
 
         
         layout_widget = QtWidgets.QWidget()
@@ -357,6 +364,21 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         print('Hallo setting to mode:',self.combo_plotmode.currentText())
         mode = str(self.combo_plotmode.currentText())
         self.Datastream.set_plotting_mode(mode=mode,xl=10)
+        if((mode == self.Datastream.pyqtgraph['modes'][1]) or (mode == self.Datastream.pyqtgraph['modes'][2])):
+            self.lined_xlim.setEnabled(True)
+            self._set_xlim()
+        else:
+            self.lined_xlim.setEnabled(False)
+
+    def _set_xlim(self):
+        """
+        """
+        xlim = self.lined_xlim.text()
+        try:
+            self.Datastream.pyqtgraph['xl'] = float(xlim)
+            logger.info("Setting xlim to, " + str(xlim) + ".")            
+        except ValueError:
+            logger.info("Please select a number, " + str(xlim) + " is not valid.")
 
     def handle_button_plotting_setup(self):
         print('HALLO')
@@ -718,8 +740,20 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                     xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
                                     yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
 
-                                    # Test for xlim mode
-                                    if(self.Datastream.pyqtgraph['mode'] == 'xl'):
+                                    # Test for continous mode
+                                    if(self.Datastream.pyqtgraph['mode'] == 'cont'):
+                                        # Enable autorange
+                                        if(self.Datastream.pyqtgraph['autorange']):
+                                            self.Datastream.pyqtgraph['autorange'] = False
+                                            self.pyqtgraph_axes.enableAutoRange()
+                                            
+                                        
+                                    # Test for xlim mode                                        
+                                    elif(self.Datastream.pyqtgraph['mode'] == 'xl'):
+                                        # Enable autorange
+                                        if(self.Datastream.pyqtgraph['autorange']):
+                                            self.Datastream.pyqtgraph['autorange'] = False
+                                            self.pyqtgraph_axes.enableAutoRange()                                        
                                         if(any((xd[-1] - xd) > self.Datastream.pyqtgraph['xl'])):
                                             ind = (xd[-1] - xd) < self.Datastream.pyqtgraph['xl']
                                             xd = xd[ind]
@@ -779,7 +813,8 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                 #if(nplot == 1):
                 if(True):
                     self.pyqtgraph_axes.setLabel('bottom', xaxis_title)                    
-                    self.pyqtgraph_axes.setLabel('left', yaxis_title)                            
+                    self.pyqtgraph_axes.setLabel('left', yaxis_title)
+                    self.datastream_subscribe.label_xlunit.setText(xaxis_title)
                             
                     
 

@@ -41,7 +41,7 @@ def start_pymqds_plotxy(addresses):
         
 
     datastream.plot_datastream(True)
-    datastream.pyqtgraph['mode'] = 'cont'
+    datastream.set_plotting_mode(mode='cont')
     
     datastream2.plot_datastream(True)
     datastream2.set_plotting_mode(mode='xr',xl=10)
