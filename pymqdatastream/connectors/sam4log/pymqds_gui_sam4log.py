@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 
 #
@@ -130,13 +131,15 @@ class sam4logInfo(QtWidgets.QWidget):
         self.b_version = QtWidgets.QLabel('Board: ?')
         self.adcs = QtWidgets.QLabel('ADCS: ?')                
         self.ch_seq = QtWidgets.QLabel('Channels: ?')
-        self.data_format = QtWidgets.QLabel('Format: ?')        
+        self.data_format = QtWidgets.QLabel('Format: ?')
+        self.freq = QtWidgets.QLabel('Conv. freq: ?')                
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(self.b_version)
         layout.addWidget(self.f_version)
         layout.addWidget(self.adcs)
         layout.addWidget(self.ch_seq)
-        layout.addWidget(self.data_format)        
+        layout.addWidget(self.data_format)
+        layout.addWidget(self.freq)        
         self.setLayout(layout)        
 
     def update(self,status):
@@ -154,12 +157,16 @@ class sam4logInfo(QtWidgets.QWidget):
         for adc in status['adcs']:
             adcstr += str(adc)
             
+
+        freqstr = "Conv. freq: " + str(status['freq']) + ' [Hz]'
+        
         self.b_version.setText(boardstr)
         self.f_version.setText(firmstr)
         self.ch_seq.setText(chstr)
         self.adcs.setText(adcstr)
         self.data_format.setText(formatstr)
-        pass
+        self.freq.setText(freqstr)        
+
 
 
 
@@ -175,21 +182,23 @@ class sam4logConfig(QtWidgets.QWidget):
 
         # Conversion speed
         self._convspeed_combo = QtWidgets.QComboBox(self)
-        # TODO rewrite in Hz
-        self.speeds =        [30   ,12 ,10 ,8  ,6  ,4   ,2   ]
-        self.speeds_hz_adc = [6.875,110,220,439,879,1760,3520]
-        self.speeds_td =     [2000 ,100,25 , 50,20 ,20  ,18  ]   # Version 0.4, timer delay
-        self.speeds_hz =     []
+        # v0.4 speeds
+        self.speeds        = pymqds_sam4log.s4lv0_4_speeds
+        self.speeds_hz_adc = pymqds_sam4log.s4lv0_4_speeds_hz_adc
+        self.speeds_td     = pymqds_sam4log.s4lv0_4_speeds_td
+        self.speeds_hz     = pymqds_sam4log.s4lv0_4_speeds_hz
         for i,speed in enumerate(self.speeds):
-            self.speeds_hz.append(10000.0/self.speeds_td[i])
-            speed_hz = 'f: 'str(self.speeds_hz[-1]) + ' Hz (f ADC:' + str(self.speeds_hz_adc[i]) + ' Hz)'
-            self._convspeed_combo.addItem(str(speed_hz))
+            speed_hz = 'f: ' + str(self.speeds_hz[i]) + \
+                       ' Hz (f ADC:' + str(self.speeds_hz_adc[i]) + ' Hz)'
+            self._convspeed_combo.addItem(str(speed_hz))        
 
         # Data format
-        self.formats = [2,3]        
+        self.formats =     [2              ,3    ]
+        self.formats_str = ['binary (cobs)','csv']
         self._dataformat_combo = QtWidgets.QComboBox(self)
-        for dformat in self.formats:
-            self._dataformat_combo.addItem(str(dformat))        
+        for i,dformat in enumerate(self.formats):
+            format_str = str(dformat) + ' ' + self.formats_str[i]
+            self._dataformat_combo.addItem(format_str)        
 
 
 
@@ -289,10 +298,13 @@ class sam4logConfig(QtWidgets.QWidget):
 
             
     def _setup_device(self):
-        speed = int(self._convspeed_combo.currentText())
-        print('Speed',speed)
+        speed_str = self._convspeed_combo.currentText()
+        ind = self._convspeed_combo.currentIndex()
+        speed_num = self.speeds[ind]
+        logger.debug('_setup_device(): Setting speed to ' + str(speed_str)\
+                     + ' num:' + str(speed_num))
 
-        data_format = int(self._dataformat_combo.currentText())
+        data_format = 3
         print('Data format',data_format)        
         
         adcs = []
@@ -312,7 +324,7 @@ class sam4logConfig(QtWidgets.QWidget):
 
         print('Chs List:',chs)
         print('init sam4logger')
-        self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed,data_format=3)
+        self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed_num,data_format=3)
         self._update_status()
         self.deviceinfo.update(self.sam4log.device_info)        
 
@@ -570,12 +582,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def _update_status_information(self):
         """
         """
-        print('Update_status_information')
+        logger.debug('Update_status_information')
         self.deviceinfo.update(self.sam4log.device_info)
 
 
     def close_application(self):
-        print('Goodbye!')
+        logger.debug('Goodbye!')
         # Closing potentially open widgets
         try:
             self._show_data_widget_opened.close()

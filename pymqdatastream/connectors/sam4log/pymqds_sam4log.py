@@ -22,6 +22,20 @@ logger = logging.getLogger('pymqds_sam4log')
 logger.setLevel(logging.DEBUG)
 
 
+
+# SAM4LOG speeds for version 0.4
+s4lv0_4_speeds        = [30   ,12 ,10 ,8  ,6  ,4   ,2   ]
+s4lv0_4_speeds_hz_adc = [6.875,110,220,439,879,1760,3520]
+s4lv0_4_speeds_td     = [2000 ,100,25 , 50,20 ,20  ,18  ]
+s4lv0_4_speeds_hz     = []
+s4lv0_4_tfreq         = 10000.0
+for i,speed in enumerate(s4lv0_4_speeds):
+    s4lv0_4_speeds_hz.append(s4lv0_4_tfreq/s4lv0_4_speeds_td[i])
+
+
+
+
+
 class sam4logDataStream(pymqdatastream.DataStream):
     """
 
@@ -164,7 +178,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     for n,deque in enumerate(self.deques_raw_serial):
                         deque.appendleft(data)
                 except Exception as e:
-                    logger.debug(funcname + ':Exception:' + str(e))
+                    logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
 
                     
             # Try to read from the queue, if something was read, quit
@@ -479,7 +493,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.send_serial_data('ad\n')
         time.sleep(0.1)
         self.send_serial_data('channels\n')
-        time.sleep(0.1)        
+        time.sleep(0.1)
+        self.send_serial_data('info\n')
+        time.sleep(0.1)                
         self.print_serial_data = False                
         self.send_serial_data('start\n')
 
@@ -490,10 +506,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
             data_str += data.decode(encoding='utf-8')
             #data_str += data
 
-        print(data_str)
+        #print(data_str)
         #print('Data str:' + data_str)
         # Parse the data
-        print('Info is')
+        #print('Info is')
         #data_str= ">>>format\n>>> is a command with length 7\n>>>format is 2\n>>>ad\n>>> is a command with length 3\n>>>adcs: 0 2 4\n"
         # Look for a format string ala ">>>format is 2"
         data_format = None
@@ -507,17 +523,29 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
         channel_str = ''
         for i,me in enumerate(re.finditer(r'>>>channel sequence:.*\n',data_str)):
-            channel_str = me.group()                        
+            channel_str = me.group()
 
-        print('Channel str:' + channel_str)
+
+        #print('Channel str:' + channel_str)
+        speed_str = ''
+        for i,me in enumerate(re.finditer(r'>>>speed:.*\n',data_str)):
+            speed_str = me.group()                                    
+
+
         data_format = [int(s) for s in re.findall(r'\b\d+\b', format_str)][-1]
         data_adcs = [int(s) for s in re.findall(r'\b\d+\b', adc_str)]
         data_channel_seq = [int(s) for s in re.findall(r'\b\d+\b', channel_str)]
+        speed_data = [float(s) for s in re.findall(r'\d+\.\d+', speed_str)]
 
-        self.device_info['counterfreq'] = 10000.0 # TODO, this should come frome the firmware
+        #print('Speed str:' + speed_str)
+        #print('Speed data:' + str(speed_data))        
+
+        self.device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
         self.device_info['format'] = data_format
         self.device_info['adcs'] = data_adcs
         self.device_info['channel_seq'] = data_channel_seq
+        self.device_info['speed_str'] = speed_str
+        self.device_info['freq'] = speed_data[-1]
         # Create a list for each channel and fill it later with streams
         self.channel_streams = [None] * (max(data_channel_seq) + 1)
         
