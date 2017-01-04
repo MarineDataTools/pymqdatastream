@@ -27,6 +27,7 @@ import pymqdatastream
 import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
 try:
     import pymqdatastream.connectors.pyqtgraph.pymqds_plotxy as pymqds_plotxy
+    from pymqdatastream.connectors.pyqtgraph import pyqtgraphDataStream
     FLAG_PLOTXY=True
 except Exception as e:
     logger.warning('Could not import pymqds_plotxy, this is not fatal, but there will be no real time plotting (original error: ' + str(e) + ' )')
@@ -60,16 +61,16 @@ def serial_ports():
     result = []
     for port in ports:
         try:
-            print("Testing serial port", port)
+            logger.debug("serial_ports(): Testing serial port " + str(port))
             ret = test_serial_lock_file(port)
             if(ret == False):
-                print("Opening serial port", port)
+                logger.debug("serial_ports(): Opening serial port " + str(port))
                 s = serial.Serial(port)
                 s.close()
                 result.append(port)
         #except (OSError, serial.SerialException):
         except Exception as e:
-            print('Exception:' + str(e))
+            logger.debug('serial_ports(): Exception:' + str(e))
             pass
 
     return result
@@ -320,7 +321,7 @@ class sam4logConfig(QtWidgets.QWidget):
 
             
 
-def _start_pymqds_plotxy():
+def _start_pymqds_plotxy_old():
     """
     
     Start a pymqds_plotxy session
@@ -332,7 +333,44 @@ def _start_pymqds_plotxy():
     plotxywindow = pymqds_plotxy.pyqtgraphMainWindow()
     plotxywindow.show()
     sys.exit(app.exec_())    
-    print('FSFDS')    
+    print('FSFDS')
+
+
+def _start_pymqds_plotxy(addresses):
+    """
+    
+    Start a pymqds_plotxy session and plots the streams given in the addresses list
+    Args:
+        addresses: List of addresses of pymqdatastream Streams
+    
+    """
+
+    print('AFDFS')
+    print(addresses)
+    logging_level = logging.DEBUG
+    #datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)
+    datastream = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)
+    datastream2 = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)    
+    for addr in addresses:
+        stream = datastream.subscribe_stream(addr)
+        datastream.init_stream_settings(stream,plot_data = True)
+        stream = datastream2.subscribe_stream(addr)
+        datastream2.init_stream_settings(stream,plot_data = True)        
+
+        
+
+    datastream.plot_datastream(True)
+    datastream.set_plotting_mode(mode='cont')
+    
+    datastream2.plot_datastream(True)
+    datastream2.set_plotting_mode(mode='xr',xl=10)
+    
+    app = QtWidgets.QApplication([])
+    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastream)
+    plotxywindow.add_graph(datastream=datastream2)
+    plotxywindow.show()
+    sys.exit(app.exec_())    
+    print('FSFDS')        
 
 
 class sam4logMainWindow(QtWidgets.QMainWindow):
@@ -730,16 +768,19 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def _plot_clicked(self):
         """
         
-        Starts a plotting process ( at the moment pymqds_plotxy )
+        Starts a pyqtgraph plotting process
 
         """
 
-        print('Plotting')
+        logger.debug('Plotting the streams')
         # http://stackoverflow.com/questions/29556291/multiprocessing-with-qt-works-in-windows-but-not-linux
         # this does not work with python 2.7 
-        multiprocessing.set_start_method('spawn',force=True)        
-        self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy)
-        self._plotxyprocess.start()
+        multiprocessing.set_start_method('spawn',force=True)
+        for stream in self.sam4log.streams:
+            print(stream.get_family)
+        #stream_addrs.append(RDS.get_stream_address(stream))
+        #self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy)
+        #self._plotxyprocess.start()
 
         
     def _record_clicked(self):
@@ -751,7 +792,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         
 
         t = self._info_record_bu.text()
-        print('Click ' + str(t))
+        logger.debug('Click ' + str(t))
         if(t == self._recording_status[0]):
             print('Record')            
             fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");

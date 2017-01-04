@@ -274,8 +274,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
         rawvar = pymqdatastream.StreamVariable(name = 'serial binary',unit = '',datatype = 'b')
         variables = ['serial binary',]
         name = 'serial binary'
-
-        stream = self.add_pub_stream(socket = self.sockets[-1],name=name,variables=[rawvar])
+        famstr = 'sam4log raw'
+        stream = self.add_pub_stream(socket = self.sockets[-1], name=name, variables=[rawvar], family = famstr)
         self.raw_stream = stream
         self.raw_stream_thread = threading.Thread(target=self.push_raw_stream_data,args = (self.Streams[-1],))
         self.raw_stream_thread.daemon = True
@@ -561,7 +561,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     variables.append(datavar)
 
                 name = 'sam4log ad ch' + str(ch)
-                self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables))
+                famstr = 'sam4log adc'
+                self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables,family = famstr))
                 self.channel_streams[ch] = self.conv_streams[-1]
                 
             self.logger.debug(funcname + ': Starting thread')

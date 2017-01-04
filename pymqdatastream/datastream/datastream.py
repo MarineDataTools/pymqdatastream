@@ -81,7 +81,7 @@ class zmq_socket(object):
           * pubstream: A publish socket (zmq.PUB), the standard way to distribute data
           * substream: A subscribe socket (zmq.SUB), used to subscribe to a pubstream socket
           * repstream: A reply socket (zmq.REP) answering request send from a reqstream
-          * reqstream: A request socket (zmq.REQ), sending request and expecting answer from a repstream 
+          * reqstream: A request socket (zmq.REQ), sending request and expecting answer from a repstream
 
        address (str): zmq address string, e.g. address = 'tcp://127.0.0.1:20000'
        deque:
@@ -971,6 +971,23 @@ class Stream(object):
             self.logger.debug(funcname + ': disconnecting socket')
             self.socket.stop_poll_substream_thread()
             self.logger.debug(funcname + ': disconnecting socket done')
+
+
+    def get_name(self):
+        """
+
+        Returns the name string
+        
+        """
+        return self.name
+
+    def get_family(self):
+        """
+
+        Returns the family string
+        
+        """
+        return self.family    
 
             
     def get_info_dict(self):
