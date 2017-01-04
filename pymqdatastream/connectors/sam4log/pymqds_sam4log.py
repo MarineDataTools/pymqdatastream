@@ -26,7 +26,7 @@ logger.setLevel(logging.DEBUG)
 # SAM4LOG speeds for version 0.4
 s4lv0_4_speeds        = [30   ,12 ,10 ,8  ,6  ,4   ,2   ]
 s4lv0_4_speeds_hz_adc = [6.875,110,220,439,879,1760,3520]
-s4lv0_4_speeds_td     = [2000 ,100,25 , 50,20 ,20  ,18  ]
+s4lv0_4_speeds_td     = [2000 ,100,25 ,50 ,20 ,16  ,16  ]
 s4lv0_4_speeds_hz     = []
 s4lv0_4_tfreq         = 10000.0
 for i,speed in enumerate(s4lv0_4_speeds):
@@ -178,7 +178,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     for n,deque in enumerate(self.deques_raw_serial):
                         deque.appendleft(data)
                 except Exception as e:
-                    logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
+                    pass
+                    #logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
 
                     
             # Try to read from the queue, if something was read, quit

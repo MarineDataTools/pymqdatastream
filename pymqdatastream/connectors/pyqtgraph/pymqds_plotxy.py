@@ -60,7 +60,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         self.pyqtgraph['modes_short'] = ['cont','xl','xr']            
 
 
-    def init_stream_settings(self,stream,color = None, bufsize=10000, ind_x = 0, ind_y = 1, plot_data=False):
+    def init_stream_settings(self,stream,color = None, bufsize=20000, ind_x = 0, ind_y = 1, plot_data=False, plot_nth_point = 1):
         """
 
         Initialises the stream with standard settings for plotting if they
@@ -111,6 +111,12 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             stream.pyqtgraph_line
         except:                    
             stream.pyqtgraph_line = None
+
+
+        try:
+            stream.pyqtgraph['nth_pt']
+        except:                    
+            stream.pyqtgraph['nth_pt'] = plot_nth_point
 
         # Test if we have bufsize etc.
         try:
@@ -676,7 +682,8 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         # update the figure once in a while
         timer = QtCore.QTimer(self)
         timer.timeout.connect(self.update_plot)
-        timer.start(25)
+        #timer.start(25)
+        timer.start(100)
         self.update_timer = timer
         
         self.setLayout(layout)
@@ -726,7 +733,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                             time_plot_data = data['info']['ts']
                             ind_start = stream.pyqtgraph_npdata['ind_start']
                             ind_end = stream.pyqtgraph_npdata['ind_end']
-                            for n in range(len(plot_data)):
+                            for n in range(0,len(plot_data),stream.pyqtgraph['nth_pt']):
                                 stream.pyqtgraph_cmod += 1
                                 if(stream.pyqtgraph_cmod >= stream.pyqtgraph_nplot):
                                     stream.pyqtgraph_cmod = 0
@@ -772,12 +779,14 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                                                       self.Datastream.pyqtgraph['xrs']+
                                                                       self.Datastream.pyqtgraph['xl'])
                                         
+
                                     # finally set the data for the line
                                     stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
 
 
                                     # check for a buffer overflow
                                     if(ind_end == stream.pyqtgraph['bufsize'] ):
+                                        logger.debug('overflow')
                                         stream.pyqtgraph_npdata['time'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['time'][-stream.pyqtgraph['buf_tilesize']:]
                                         stream.pyqtgraph_npdata['x'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['x'][-stream.pyqtgraph['buf_tilesize']:]
                                         stream.pyqtgraph_npdata['y'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['y'][-stream.pyqtgraph['buf_tilesize']:]
