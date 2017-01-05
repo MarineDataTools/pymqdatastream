@@ -22,6 +22,33 @@ logger = logging.getLogger('pymqds_sam4log')
 logger.setLevel(logging.DEBUG)
 
 
+def serial_lock_file(port,remove=False):
+    """
+    Creates or removes a lock file for a serial port in linux
+    """
+    devicename = port.split('/')[-1]
+    filename = '/var/lock/LCK..'+devicename
+    print('serial_lock_file(): filename:' + str(filename))
+        
+    if(remove == False):
+        try:
+            flock = open(filename,'w')
+            flock.write(str(os.getpid()) + '\n')
+            flock.close()
+        except Exception as e:
+            print('serial_lock_file():' + str(e))
+    else:
+        try:
+            print('serial_lock_file(): removing filename:' + str(filename))
+            flock = open(filename,'r')
+            line = flock.readline()
+            print('data',line)
+            flock.close()
+            os.remove(filename)
+        except Exception as e:
+            print('serial_lock_file():' + str(e))        
+
+
 
 # SAM4LOG speeds for version 0.4
 s4lv0_4_speeds        = [30   ,12 ,10 ,8  ,6  ,4   ,2   ]
@@ -137,21 +164,22 @@ class sam4logDataStream(pymqdatastream.DataStream):
         """
         """
         funcname = self.__class__.__name__ + '.add_serial_device()'
-        #try:
-        if(True):
-            self.logger.debug(funcname + ': Opening: ' + port)            
+        try:
+            self.logger.debug(funcname + ': Opening: ' + port)
             self.bytes_read = 0
             self.serial = serial.Serial(port,baud)
+            num_bytes = self.serial.inWaiting()            
             self.logger.debug(funcname + ': Starting thread')            
             self.serial_thread = threading.Thread(target=self.read_serial_data)
             self.serial_thread.daemon = True
             self.serial_thread.start()            
             self.logger.debug(funcname + ': Starting thread done')
+            serial_lock_file(port)            
             self.status = 0
-        else:
-        #except Exception as e:
+        except Exception as e:
             self.logger.debug(funcname + ': Exception: ' + str(e))            
             self.logger.debug(funcname + ': Could not open device at: ' + str(port))
+            
 
             
     def read_serial_data(self, dt = 0.003):
@@ -222,7 +250,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data = self.serial_thread_queue_ans.get()
         self.logger.debug(funcname + ': Got data, thread stopped')
         self._rem_raw_data_stream()
+        port = self.serial.name        
         self.serial.close()
+        serial_lock_file(port,remove=True)
         self.status = -1
 
         
@@ -458,6 +488,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
         # Parse the received data for a valid reply
         if( '>>>stop' in data_str ):
             FLAG_IS_SAM4LOG=True
+            boardversion = '??'
+            firmwareversion = '??'
             self.logger.debug(funcname + ': Found a valid stop reply')
             for line in data_str.split('\n'):
                 print(line)
@@ -895,7 +927,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
             time.sleep(dt)
             while(len(deque) > 0):
                 data = deque.pop()
-                data_str += data.decode(encoding='utf-8')
+                try:
+                    data_str += data.decode(encoding='utf-8')
+                except Exception as e:
+                    logger.debug('Problems decoding data string:' + str(data) + '( Exception:' + str(e) + ' )')
+
                 #data_list = [packet_num,packet_time]
                 data_packets = []
                 #for line in data_str.splitlines():
@@ -905,7 +941,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 else:
                     data_str = data_str_split[-1]
                 for line in data_str_split:
-                    if(len(line)>0):
+                    if(len(line)>3):
                         data_split = line.split(';')
                         packet_time = int(data_split[0])/self.device_info['counterfreq']
                         packet_num = int(data_split[1])

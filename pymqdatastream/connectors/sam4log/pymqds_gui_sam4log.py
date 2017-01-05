@@ -76,6 +76,7 @@ def serial_ports():
 
     return result
 
+
 def test_serial_lock_file(port):
     """
     Creates or removes a lock file for a serial port in linux
@@ -91,6 +92,7 @@ def test_serial_lock_file(port):
         print('serial_lock_file():' + str(e))
         return False
 
+    
 def serial_lock_file(port,remove=False):
     """
     Creates or removes a lock file for a serial port in linux
@@ -115,8 +117,9 @@ def serial_lock_file(port,remove=False):
             flock.close()
             os.remove(filename)
         except Exception as e:
-            print('serial_lock_file():' + str(e))        
+            print('serial_lock_file():' + str(e))
 
+            
 # Serial baud rates
 baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
 
@@ -338,21 +341,6 @@ class sam4logConfig(QtWidgets.QWidget):
 
             
 
-def _start_pymqds_plotxy_old():
-    """
-    
-    Start a pymqds_plotxy session
-    
-    """
-
-    print('AFDFS')
-    app = QtWidgets.QApplication([])
-    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow()
-    plotxywindow.show()
-    sys.exit(app.exec_())    
-    print('FSFDS')
-
-
 def _start_pymqds_plotxy(addresses):
     """
     
@@ -450,8 +438,10 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._show_data_layout = QtWidgets.QGridLayout(self._show_data_widget)
         self.show_textdata = QtWidgets.QPlainTextEdit()
         self.show_textdata.setReadOnly(True)
+        self.show_textdata.setMaximumBlockCount(10000)
         self.check_show_textdata = QtWidgets.QCheckBox('Show data')
         self.check_show_textdata.setChecked(True)
+        
         self._show_data_bu = QtWidgets.QPushButton('Show data')
         self._show_data_bu.clicked.connect(self._clicked_show_data_bu)
         self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
@@ -551,7 +541,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         # Updating the Voltage table
         self.intraqueuetimer = QtCore.QTimer(self)
-        self.intraqueuetimer.setInterval(100)
+        self.intraqueuetimer.setInterval(25)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()
 
@@ -651,11 +641,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 ser = str(self.combo_serial.currentText())
                 b = int(self.combo_baud.currentText())
                 print('Opening port' + ser + ' with baudrate ' + str(b))
-                self.sam4log.add_serial_device(ser,baud=b)                
-                if(self.sam4log.query_sam4logger() == True):
-                    self.deviceinfo.update(self.sam4log.device_info)
-                    self._s4l_settings_bu.setEnabled(True)
-                    self.serial_open_bu.setText('Open')
+                self.sam4log.add_serial_device(ser,baud=b)
+                if(self.sam4log.status == 0): # Succesfull opened
+                    if(self.sam4log.query_sam4logger() == True):
+                        self.deviceinfo.update(self.sam4log.device_info)
+                        self._s4l_settings_bu.setEnabled(True)
+                        self.serial_open_bu.setText('Open')
+                else:
+                    logger.warning('Could not open port:' + str(ser))
                     
             elif(t == 'Open'):
                 #ser = str(self.combo_serial.currentText())

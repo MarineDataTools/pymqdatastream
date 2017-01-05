@@ -719,7 +719,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                         # Create a new line object for the stream
                         if(stream.pyqtgraph_line == None):
                             FLAG_CHANGED = True
-                            print('None')
+                            print('None, add Item')
                             sname = stream.name + ' x: ' + stream.variables[ind_x]['name'] +  ' y:' + stream.variables[ind_y]['name']
                             stream.pyqtgraph_line = pg.PlotDataItem( pen=stream.pyqtgraph['color'],name = sname)
                             li = self.pyqtgraph_axes.addItem(stream.pyqtgraph_line,name= 'test')
