@@ -358,24 +358,26 @@ def _start_pymqds_plotxy(addresses):
     for addr in addresses:
         datastream = pyqtgraphDataStream(name = 'plotxy_cont', logging_level=logging_level)
         stream = datastream.subscribe_stream(addr)
-        datastream.init_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 6)
+        datastream.init_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 10)
         datastream.plot_datastream(True)
         datastream.set_plotting_mode(mode='cont')        
         datastreams.append(datastream)
 
-        datastream_xr = pyqtgraphDataStream(name = 'plotxy_xr', logging_level=logging_level)
-        stream_xr = datastream_xr.subscribe_stream(addr)
-        datastream_xr.init_stream_settings(stream_xr, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 6)
-        datastream_xr.plot_datastream(True)
-        datastream_xr.set_plotting_mode(mode='xr',xl=5)        
-        datastreams.append(datastream_xr)        
+        if(False):
+            datastream_xr = pyqtgraphDataStream(name = 'plotxy_xr', logging_level=logging_level)
+            stream_xr = datastream_xr.subscribe_stream(addr)
+            datastream_xr.init_stream_settings(stream_xr, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 6)
+            datastream_xr.plot_datastream(True)
+            datastream_xr.set_plotting_mode(mode='xr',xl=5)        
+            datastreams.append(datastream_xr)        
 
 
     app = QtWidgets.QApplication([])
     plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0])
-    for i,datastream in enumerate(datastreams):
-        if(i > 0):
-            plotxywindow.add_graph(datastream=datastream)
+    if(False):
+        for i,datastream in enumerate(datastreams):
+            if(i > 0):
+                plotxywindow.add_graph(datastream=datastream)
         
     plotxywindow.show()
     sys.exit(app.exec_())    
@@ -541,7 +543,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         # Updating the Voltage table
         self.intraqueuetimer = QtCore.QTimer(self)
-        self.intraqueuetimer.setInterval(25)
+        self.intraqueuetimer.setInterval(200)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()
 
@@ -747,6 +749,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # Get all data
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
+
+        if(True):
             if(len(data)>0):
                 # Get channel
                 ch = data['ch']

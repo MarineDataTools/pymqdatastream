@@ -786,7 +786,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
                                     # check for a buffer overflow
                                     if(ind_end == stream.pyqtgraph['bufsize'] ):
-                                        logger.debug('overflow')
+                                        #logger.debug('overflow')
                                         stream.pyqtgraph_npdata['time'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['time'][-stream.pyqtgraph['buf_tilesize']:]
                                         stream.pyqtgraph_npdata['x'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['x'][-stream.pyqtgraph['buf_tilesize']:]
                                         stream.pyqtgraph_npdata['y'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['y'][-stream.pyqtgraph['buf_tilesize']:]
