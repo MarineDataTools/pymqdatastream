@@ -168,13 +168,13 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.logger.debug(funcname + ': Opening: ' + port)
             self.bytes_read = 0
             self.serial = serial.Serial(port,baud)
-            num_bytes = self.serial.inWaiting()            
+            num_bytes = self.serial.inWaiting()
+            serial_lock_file(port)            
             self.logger.debug(funcname + ': Starting thread')            
             self.serial_thread = threading.Thread(target=self.read_serial_data)
             self.serial_thread.daemon = True
             self.serial_thread.start()            
             self.logger.debug(funcname + ': Starting thread done')
-            serial_lock_file(port)            
             self.status = 0
         except Exception as e:
             self.logger.debug(funcname + ': Exception: ' + str(e))            

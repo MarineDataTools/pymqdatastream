@@ -18,6 +18,7 @@ import time
 import multiprocessing
 #import subprocess
 import binascii
+import psutil
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_gui_sam4log')
@@ -77,17 +78,47 @@ def serial_ports():
     return result
 
 
-def test_serial_lock_file(port):
+def test_serial_lock_file(port, brutal = False):
     """
     Creates or removes a lock file for a serial port in linux
+    Args:
+       port: Device string
+       brutal: Remove lock file if a nonexisting PID was found or no PID at all within the file
+    Return:
+       True if port is already in use, False otherwise
     """
     devicename = port.split('/')[-1]
     filename = '/var/lock/LCK..'+devicename
     print('serial_lock_file(): filename:' + str(filename))
     try:
         flock = open(filename,'r')
+        pid_str = flock.readline()
         flock.close()
-        return True            
+        print('test_serial_lock_file(): PID:' + pid_str)
+        PID_EXIST=None
+        try:
+            pid = int(pid_str)
+            PID_EXIST = psutil.pid_exists(pid)
+        except Exception as e:
+            print('No valid PID value' + str(e))
+
+            
+        if(PID_EXIST == True):
+            return True
+        elif(PID_EXIST == False):
+            if(brutal == False):
+                return True
+            else: # Lock file with "old" PID
+                print('Removing lock file, as it has a not existing PID')
+                os.remove(filename)
+                return False
+        elif(PID_EXIST == None): # No valid PID value
+            if(brutal):
+                print('Removing lock file, as it no valid PID')
+                os.remove(filename)
+                return False
+            else:
+                return True
     except Exception as e:
         print('serial_lock_file():' + str(e))
         return False
