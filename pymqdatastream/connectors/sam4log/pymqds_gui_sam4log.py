@@ -64,7 +64,7 @@ def serial_ports():
     for port in ports:
         try:
             logger.debug("serial_ports(): Testing serial port " + str(port))
-            ret = test_serial_lock_file(port)
+            ret = test_serial_lock_file(port,brutal=True)
             if(ret == False):
                 logger.debug("serial_ports(): Opening serial port " + str(port))
                 s = serial.Serial(port)
@@ -99,6 +99,10 @@ def test_serial_lock_file(port, brutal = False):
         try:
             pid = int(pid_str)
             PID_EXIST = psutil.pid_exists(pid)
+            pid_ex = ' does not exist.'
+            if(PID_EXIST):
+                pid_ex = ' exists.'
+            print('Process with PID:' + pid_str[:-1] + pid_ex)
         except Exception as e:
             print('No valid PID value' + str(e))
 
@@ -135,7 +139,9 @@ def serial_lock_file(port,remove=False):
     if(remove == False):
         try:
             flock = open(filename,'w')
-            flock.write(str(os.getpid()) + '\n')
+            lockstr = str(os.getpid()) + '\n'
+            print('Lockstr:' + lockstr)
+            flock.write(lockstr)
             flock.close()
         except Exception as e:
             print('serial_lock_file():' + str(e))
