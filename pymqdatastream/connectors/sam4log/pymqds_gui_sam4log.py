@@ -395,6 +395,10 @@ def _start_pymqds_plotxy(addresses):
     for addr in addresses:
         datastream = pyqtgraphDataStream(name = 'plotxy_cont', logging_level=logging_level)
         stream = datastream.subscribe_stream(addr)
+        if(stream == None): # Could not subscribe
+            logger.warning("_start_pymqs_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
+            return False
+        
         datastream.init_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 10)
         datastream.plot_datastream(True)
         datastream.set_plotting_mode(mode='cont')        

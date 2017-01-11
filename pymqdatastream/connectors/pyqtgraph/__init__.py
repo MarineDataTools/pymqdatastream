@@ -1,2 +1,3 @@
-# 
-from .pymqds_plotxy import pyqtgraphDataStream# as pyqtgraphDatastream
+#
+from .pymqds_plotxy import pyqtgraphDataStream
+

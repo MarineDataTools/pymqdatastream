@@ -362,6 +362,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         self.color_ind = 0
 
         self.handle_button_subscribed()
+        self.update_button_plot_stream(self.button_plot)
         #.pyqtgraph['ind_x']
 
     def _set_combo_mode(self):
@@ -397,12 +398,20 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                          
 
     def handle_button_plot_stream(self):
+        sender = self.sender()
         if(self.Datastream.pyqtgraph['plot_datastream'] == False):
             self.Datastream.pyqtgraph['plot_datastream'] = True
-            self.button_plot.setText('Pause Plot')
+            sender.setText('Pause Plot')
         else:
             self.Datastream.pyqtgraph['plot_datastream'] = False
-            self.button_plot.setText('Plot Streams')
+            sender.setText('Plot Streams')
+
+
+    def update_button_plot_stream(self,button):
+        if(self.Datastream.pyqtgraph['plot_datastream'] == False):
+            button.setText('Plot Streams')
+        else:
+            button.setText('Pause Plot')            
 
 
     def handle_button_plot_clear(self):
@@ -659,6 +668,11 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.button_streams = QtWidgets.QPushButton('Streams', self)
         self.button_streams.clicked.connect(self.handle_streams)
 
+        self.button_plot = QtWidgets.QPushButton('Plot', self)
+        self.button_plot.clicked.connect(self.datastream_subscribe.handle_button_plot_stream)
+        self.button_clear = QtWidgets.QPushButton('Clear', self)
+        self.button_clear.clicked.connect(self.datastream_subscribe.handle_button_plot_clear)
+
         self.button_close = QtWidgets.QPushButton('Close', self)
         self.button_close.clicked.connect(self.handle_close)                
 
@@ -671,6 +685,8 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.graph_layout.addWidget(self.pyqtgraph_layout)
         
         self.button_layout.addWidget(self.button_streams)
+        self.button_layout.addWidget(self.button_plot)
+        self.button_layout.addWidget(self.button_clear)                
         self.button_layout.addWidget(self.button_close)
         
         
@@ -687,6 +703,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.update_timer = timer
         
         self.setLayout(layout)
+        self.datastream_subscribe.update_button_plot_stream(self.button_plot)
         
 
     def update_plot(self):
@@ -837,21 +854,33 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         """
         Show/hide stream subscribe/plot widget
         """
+        # Update the pause plot button
+        self.datastream_subscribe.update_button_plot_stream(self.button_plot)
+        self.datastream_subscribe.update_button_plot_stream(self.datastream_subscribe.button_plot)        
         if(self.sender() == self.datastream_subscribe.button_close):
             #self.graph_layout.replaceWidget(self.datastream_subscribe,self.button_streams)
             self.button_layout.addWidget(self.button_streams)
-            self.button_layout.removeWidget(self.button_close)
+            self.button_layout.addWidget(self.button_plot)
+            self.button_layout.addWidget(self.button_clear)            
+            self.button_layout.addWidget(self.button_close)
+            #self.button_layout.removeWidget(self.button_close)
             self.button_layout.removeWidget(self.datastream_subscribe)                                    
             self.datastream_subscribe.hide()
             self.button_streams.show()
             self.button_close.show()
+            self.button_plot.show()
+            self.button_clear.show()            
         else:
             #self.graph_layout.replaceWidget(self.button_streams,self.datastream_subscribe)
             self.button_layout.removeWidget(self.button_streams)
             self.button_layout.removeWidget(self.button_close)
+            self.button_layout.removeWidget(self.button_plot)
+            self.button_layout.removeWidget(self.button_clear)      
             self.button_layout.addWidget(self.datastream_subscribe)                        
             self.button_streams.hide()
-            self.button_close.hide()            
+            self.button_close.hide()
+            self.button_plot.hide()
+            self.button_clear.hide()                                    
             self.datastream_subscribe.show()
 
 
