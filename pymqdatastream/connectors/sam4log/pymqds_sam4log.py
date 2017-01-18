@@ -942,30 +942,33 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     data_str = data_str_split[-1]
                 for line in data_str_split:
                     if(len(line)>3):
-                        data_split = line.split(';')
-                        packet_time = int(data_split[0])/self.device_info['counterfreq']
-                        packet_num = int(data_split[1])
-                        channel = int(data_split[2])
-                        ad_data = data_split[3:]
-                        # Fill the data list
-                        data_list = [packet_num,packet_time]                    
-                        # Fill the data packet dictionary
-                        data_packet = {}
-                        data_packet = {'num':packet_num,'50khz':packet_time}
-                        data_packet['ch'] = channel
-                        data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
-                        # Test if the lengths are same
-                        if(len(ad_data) == len(self.device_info['adcs'] * 2)):
-                            for n,i in enumerate(range(0,len(ad_data)-1,2)):
-                                V = float(ad_data[i+1])
-                                data_packet['V'][n] = V
-                                data_list.append(V)
-                        else:
-                           logger.debug(funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])))
+                        try:
+                            data_split = line.split(';')
+                            packet_time = int(data_split[0])/self.device_info['counterfreq']
+                            packet_num = int(data_split[1])
+                            channel = int(data_split[2])
+                            ad_data = data_split[3:]
+                            # Fill the data list
+                            data_list = [packet_num,packet_time]                    
+                            # Fill the data packet dictionary
+                            data_packet = {}
+                            data_packet = {'num':packet_num,'50khz':packet_time}
+                            data_packet['ch'] = channel
+                            data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
+                            # Test if the lengths are same
+                            if(len(ad_data) == len(self.device_info['adcs'] * 2)):
+                                for n,i in enumerate(range(0,len(ad_data)-1,2)):
+                                    V = float(ad_data[i+1])
+                                    data_packet['V'][n] = V
+                                    data_list.append(V)
+                            else:
+                               logger.debug(funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])))
 
 
-                        data_packets.append(data_packet)
-                        data_stream[channel].append(data_list)
+                            data_packets.append(data_packet)
+                            data_stream[channel].append(data_list)
+                        except Exception as e:
+                            logger.debug(funcname + ':' + str(e))
             # Push the read data
             ti = time.time()
             
