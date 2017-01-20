@@ -56,10 +56,10 @@ def query(address):
 
 
     #Datastream = pymqdatastream.DataStream(name='scan')            
-    #datastream = 
+    #datastream =
 
 
-if __name__ == '__main__':
+def main():
     datastream_help  = 'Query datastream with address e.g. -d tcp://192.168.178.97:18055'
     information_help = 'Print full information of each found datastream'
     parser = argparse.ArgumentParser()
@@ -103,4 +103,11 @@ if __name__ == '__main__':
             if(args.full_information):
                 print(rdatastream.get_info_str('short'))
             else:
-                print(rdatastream.get_info_str('standard'))
+                print(rdatastream.get_info_str('standard'))    
+
+
+if __name__ == '__main__':
+    main()
+
+
+
