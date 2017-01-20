@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-from PyQt5 import QtCore, QtGui, QtWidgets
+try:
+    from PyQt5 import QtCore, QtGui, QtWidgets
+except:
+    from PyQt4 import QtCore, QtGui, QtWidgets
+    
 import sys
 import json
 import logging
