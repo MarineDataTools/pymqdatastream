@@ -1783,6 +1783,7 @@ class DataStream(object):
             stream = self.Streams[stream]
             
         if(more_info):
+            ret_str = ''
             for i,tstream in enumerate(self.Streams):
                 if(tstream == stream):
                     ret_str += '#' + str(i) + ' Name: "' + str(stream.name) + '"'\
