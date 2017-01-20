@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 try:
-    from PyQt4 import QtCore, QtGui, QtWidgets
+    from PyQt5 import QtCore, QtGui, QtWidgets
 except:
     from qtpy import QtCore, QtGui, QtWidgets
     
