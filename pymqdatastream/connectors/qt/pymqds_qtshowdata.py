@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 try:
-    from PyQt5 import QtCore, QtGui, QtWidgets
-except:
     from PyQt4 import QtCore, QtGui, QtWidgets
+except:
+    from qtpy import QtCore, QtGui, QtWidgets
+    
     
 import sys
 import json
