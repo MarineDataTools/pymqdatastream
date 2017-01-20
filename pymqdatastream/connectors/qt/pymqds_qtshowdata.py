@@ -102,7 +102,8 @@ class qtshowstreamdataMainWindow(QtWidgets.QMainWindow):
         sys.exit()                        
 
 
-if __name__ == "__main__":
+
+def main():
     # Remove string and then quit gives segfault!
     # Verbosity of datastream objects
     datastream_help = 'Query datastream with address e.g. -d tcp://192.168.178.97:18055'    
@@ -136,3 +137,7 @@ if __name__ == "__main__":
     window = qtshowstreamdataMainWindow(logging_level = logging_level)
     window.show()
     sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()

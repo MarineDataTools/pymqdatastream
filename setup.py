@@ -34,6 +34,7 @@ if sys.version_info >= (3,4):
           entry_points={ 'console_scripts': ['NMEA0183grabber=pymqdatastream.connectors.nmea.NMEA0183grabber:main',\
           'pymqds_query=pymqdatastream:query',\
           'pymqds_scan=pymqdatastream.connectors.basic.pymqds_scan:main',\
+          'pymqds_qtshowdata=pymqdatastream.connectors.qt.pymqds_qtshowdata:main',\
           'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
           package_data = {'microrider':['data/*.DAT'],'':['VERSION']},
           zip_safe=False)
