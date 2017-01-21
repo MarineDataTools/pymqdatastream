@@ -568,7 +568,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         button = self.sender()
         
         layoutH = QtWidgets.QHBoxLayout()  # layout for the central widget
-        widget = QtGui.QWidget()  # central widget        
+        widget = QtWidgets.QWidget()  # central widget        
         widget.setLayout(layoutH)        
         layoutX = QtWidgets.QVBoxLayout()  # layout for the central widget
         layoutY = QtWidgets.QVBoxLayout()  # layout for the central widget
@@ -595,13 +595,13 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         layoutX.addWidget(labX)
         layoutY.addWidget(labY)
         for i,var in enumerate(button.stream.variables):
-            rX = QtGui.QRadioButton(str(i) + ': ' + var['name'])
+            rX = QtWidgets.QRadioButton(str(i) + ': ' + var['name'])
             rX.var_ind = i
             rX.var_name = var['name']            
             self._number_groupX.addButton(rX)
             layoutX.addWidget(rX)
 
-            rY = QtGui.QRadioButton(str(i) + ': ' + var['name'])
+            rY = QtWidgets.QRadioButton(str(i) + ': ' + var['name'])
             rY.var_ind = i
             rY.var_name = var['name']
             self._number_groupY.addButton(rY)
