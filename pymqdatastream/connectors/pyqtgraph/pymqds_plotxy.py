@@ -125,8 +125,10 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
 
         try:
             stream.pyqtgraph['nth_pt']
+            stream.pyqtgraph['n_pt_recvd']
         except:                    
             stream.pyqtgraph['nth_pt'] = plot_nth_point
+            stream.pyqtgraph['n_pt_recvd'] = 0            
 
         # Test if we have bufsize etc.
         try:
@@ -136,8 +138,6 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             stream.pyqtgraph['buf_tilesize'] = bufsize
             bufsize = stream.pyqtgraph['bufsize']            
             stream.pyqtgraph_npdata = {'time':np.zeros((bufsize,)),'x':np.zeros((bufsize,)),'y':np.zeros((bufsize,)),'ind_start':0,'ind_end':0}
-            stream.pyqtgraph_nplot = 1
-            stream.pyqtgraph_cmod = 0
 
 
     def set_stream_settings(self,stream,color=None,ind_x = None,ind_y = None, plot_data = None, bufsize = None, plot_nth_point = None):
@@ -173,8 +173,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             stream.pyqtgraph['buf_tilesize'] = bufsize
             bufsize = stream.pyqtgraph['bufsize']
             stream.pyqtgraph_npdata = {'time':np.zeros((bufsize,)),'x':np.zeros((bufsize,)),'y':np.zeros((bufsize,)),'ind_start':0,'ind_end':0}
-            stream.pyqtgraph_nplot = 1
-            stream.pyqtgraph_cmod = 0
+
 
         if(plot_nth_point != None):
             stream.pyqtgraph['nth_pt'] = plot_nth_point
@@ -276,47 +275,6 @@ def setup_stream_pyqtgraph(stream):
     pass
     
 
-class SetupStreamStyle(QtWidgets.QWidget):
-    """
-    A widget to setup the plotting style of the stream
-    """
-    def __init__(self,stream):
-        QtWidgets.QWidget.__init__(self)
-        layout = QtWidgets.QVBoxLayout(self)
-        self.stream = stream
-        self.button_ok = QtWidgets.QPushButton('Ok', self)
-        self.button_ok.clicked.connect(self.handle_ok)
-        self.button_cancel = QtWidgets.QPushButton('Cancel', self)
-        self.button_cancel.clicked.connect(self.handle_cancel)
-        print('Hallo stream:',stream)
-        self.label_nplot = QtGui.QLabel('Plot every nth point')
-        self.spin_nplot = QtGui.QSpinBox()
-        self.spin_nplot.setRange(1, 100000)
-        try:
-            nplot = self.stream.pyqtgraph_nplot
-        except:
-            nplot = 1
-            
-        self.spin_nplot.setValue(nplot)
-        layout.addWidget(self.label_nplot)
-        layout.addWidget(self.spin_nplot)
-        wi = QtWidgets.QWidget()
-        layoutH = QtWidgets.QHBoxLayout(wi)
-        layoutH.addWidget(self.button_ok)
-        layoutH.addWidget(self.button_cancel)        
-        layout.addWidget(wi)        
-
-
-    def handle_ok(self):
-        print('Ok')
-        self.stream.pyqtgraph_nplot = self.spin_nplot.value()
-        print('Ok',self.stream.pyqtgraph_nplot)
-        
-    def handle_cancel(self):
-        print('Cancel')
-        self.close()
-        
-
 class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget):
     """
 
@@ -339,10 +297,6 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         # For the plotting setup
         self.treeWidgetsub.itemClicked.connect(self.handleItemClicked)
         self.button_unsubscribe.clicked.connect(self.handle_unsubscribe_clicked_setup)
-        # Plotting options
-        self.button_plotting_setup = QtWidgets.QPushButton('Plotting Setup', self)
-        self.button_plotting_setup.clicked.connect(self.handle_button_plotting_setup)
-        self.button_plotting_setup.setEnabled(False)
 
         # Plotting option widgets
         self.combo_plotmode = QtWidgets.QComboBox(self)
@@ -354,9 +308,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         self.lined_xlim.returnPressed.connect(self._set_xlim)
         self.lined_xlim.setText(str(float(self.Datastream.pyqtgraph['xl'])))
         self.label_xlunit = QtWidgets.QLabel('[]')        
-        #self.Datastream.pyqtgraph['mode']
         self.layout_options = QtWidgets.QVBoxLayout()
-        self.layout_options.addWidget(self.button_plotting_setup)
         self.layout_options.addWidget(self.combo_plotmode)
         self.layout_options.addWidget(xll)
         self.layout_options.addWidget(self.lined_xlim)
@@ -407,15 +359,6 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
             logger.info("Setting xlim to, " + str(xlim) + ".")            
         except ValueError:
             logger.info("Please select a number, " + str(xlim) + " is not valid.")
-
-    def handle_button_plotting_setup(self):
-        print('HALLO')
-        print(self.unsubscribe_item)        
-        if(self.unsubscribe_item != None):
-            print('JO')
-            print(self.unsubscribe_item.stream)
-            self.__style = SetupStreamStyle(self.unsubscribe_item.stream)
-            self.__style.show()
                          
 
     def handle_button_plot_stream(self):
@@ -532,10 +475,35 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 check_plot.stateChanged.connect(self.handle_check_plot_changed)
                 check_plot.pyqtgraph = childitem.stream.pyqtgraph
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])                
-                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , check_plot)                
+                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , check_plot)
+                # Create a plot every nth point option
+                label_nplot = QtGui.QLabel('Plot every nth point')
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])
+                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , label_nplot)                
+                spin_nplot = QtGui.QSpinBox()
+                spin_nplot.setRange(1, 100000)
+                spin_nplot.setValue(childitem.stream.pyqtgraph['nth_pt'])
+                spin_nplot.valueChanged.connect(self.handle_plot_nth_point_changed)
+                spin_nplot.pyqtgraph = childitem.stream.pyqtgraph
+                
+
+                
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, ['spin'])
+                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , spin_nplot)
+
             else:
                 print('All here already')
 
+    def handle_plot_nth_point_changed(self):
+        """
+        Changes the nth point 
+        """
+        spin_plot = self.sender()
+        nth_point = spin_plot.value()
+        logger.debug('Changing spin plot to' + str(nth_point))
+        spin_plot.pyqtgraph['nth_pt'] = nth_point
+        
+        
     def handle_check_plot_changed(self):
         """
         """
@@ -693,8 +661,9 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.datastream_subscribe.button_close.setText('Hide')
 
         # The pyqtgraph stuff
-        self.pyqtgraph_layout = pg.GraphicsLayoutWidget()
-        self.pyqtgraph_axes = self.pyqtgraph_layout.addPlot()
+        #self.pyqtgraph_layout = pg.GraphicsLayoutWidget()
+        #self.pyqtgraph_axes = self.pyqtgraph_layout.addPlot()
+        self.pyqtgraph_axes = pg.PlotWidget(name='plot')
         self.pyqtgraph_leg = self.pyqtgraph_axes.addLegend()
         #self.pyqtgraph_axes.setTitle("Title")
         self.pyqtgraph_axes.setLabel('left', "Y Axis")
@@ -709,6 +678,10 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.button_clear = QtWidgets.QPushButton('Clear', self)
         self.button_clear.clicked.connect(self.datastream_subscribe.handle_button_plot_clear)
 
+        if False:
+            self.button_meas = QtWidgets.QPushButton('Meas.', self)
+            self.button_meas.clicked.connect(self.handle_meas)        
+
         self.button_close = QtWidgets.QPushButton('Close', self)
         self.button_close.clicked.connect(self.handle_close)                
 
@@ -718,11 +691,15 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.button_layout.setAlignment(QtCore.Qt.AlignTop)
 
         self.graph_layout.addLayout(self.button_layout)        
-        self.graph_layout.addWidget(self.pyqtgraph_layout)
+        #self.graph_layout.addWidget(self.pyqtgraph_layout)
+        self.graph_layout.addWidget(self.pyqtgraph_axes)
         
         self.button_layout.addWidget(self.button_streams)
         self.button_layout.addWidget(self.button_plot)
-        self.button_layout.addWidget(self.button_clear)                
+        self.button_layout.addWidget(self.button_clear)
+        if False:        
+            self.button_layout.addWidget(self.button_meas)
+            
         self.button_layout.addWidget(self.button_close)
         
         
@@ -786,10 +763,9 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                             time_plot_data = data['info']['ts']
                             ind_start = stream.pyqtgraph_npdata['ind_start']
                             ind_end = stream.pyqtgraph_npdata['ind_end']
-                            for n in range(0,len(plot_data),stream.pyqtgraph['nth_pt']):
-                                stream.pyqtgraph_cmod += 1
-                                if(stream.pyqtgraph_cmod >= stream.pyqtgraph_nplot):
-                                    stream.pyqtgraph_cmod = 0
+                            for n in range(len(plot_data)):
+                                stream.pyqtgraph['n_pt_recvd'] += 1                                
+                                if(( stream.pyqtgraph['n_pt_recvd'] % stream.pyqtgraph['nth_pt'] ) == 0):
                                     stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
                                     stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
                                     stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
@@ -881,9 +857,33 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                     self.pyqtgraph_axes.setLabel('left', yaxis_title)
                     self.datastream_subscribe.label_xlunit.setText(xaxis_title)
                             
-                    
+
+    #http://stackoverflow.com/questions/17783428/how-to-draw-crosshair-and-plot-mouse-position-in-pyqtgraph
+    def handle_meas(self):
+        logger.debug('Handle measure')
+        self.vLine = pg.InfiniteLine(angle=90, movable=False)
+        self.hLine = pg.InfiniteLine(angle=0, movable=False)
+        self.pyqtgraph_axes.addItem(self.vLine, ignoreBounds=True)
+        self.pyqtgraph_axes.addItem(self.hLine, ignoreBounds=True)
+        self.vb = self.pyqtgraph_axes.plotItem.vb
+        proxy = pg.SignalProxy(self.pyqtgraph_axes.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
+        self.pyqtgraph_axes.scene().sigMouseMoved.connect(self.mouseMoved)
 
 
+    def mouseMoved(self,evt):
+        print(evt)
+        print(evt.x(),evt.y())
+        pos = (evt.x(),evt.y())
+        #if self.pyqtgraph_axes.sceneBoundingRect().contains(pos):
+        if True:
+            mousePoint = self.vb.mapSceneToView(evt)
+            print(mousePoint)
+        #    index = int(mousePoint.x())
+        #    #label.setText("<span style='font-size: 12pt'>x=%0.1f, <span style='color: red'>y1=%0.1f</span>" % (mousePoint.x(), y[index], data2[index]))
+        #    print(mousePoint.x(),mousePoint.y())
+            self.vLine.setPos(mousePoint.x())
+            self.hLine.setPos(mousePoint.y())   
+        
 
     def handlePlot(self):
         print('Plotting Streams...')
