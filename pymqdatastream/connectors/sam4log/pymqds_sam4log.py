@@ -994,7 +994,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
             
 
                 
-if __name__ == '__main__':
+
+def main():    
     s = sam4logDataStream(logging_level='DEBUG')
     s.add_serial_device('/dev/ttyUSB0')
     
@@ -1013,4 +1014,8 @@ if __name__ == '__main__':
         #print('Raw bytes read ' + str(s.bytes_read))
         #print(s.get_info_str('short'))
         time.sleep(5)
+
+
+if __name__ == '__main__':
+    main()
     

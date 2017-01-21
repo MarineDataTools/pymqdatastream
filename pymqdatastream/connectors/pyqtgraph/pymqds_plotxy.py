@@ -2,7 +2,12 @@
 
 #
 #
-from PyQt5 import QtCore, QtGui, QtWidgets
+try:
+    from PyQt5 import QtCore, QtGui, QtWidgets
+except:
+    from qtpy import QtCore, QtGui, QtWidgets
+
+
 import sys
 import json
 import numpy as np
@@ -37,13 +42,15 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         super(pyqtgraphDataStream, self).__init__(*args,**kwargs)
         self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
         self.color_ind = 0
-        self.pyqtgraph = {}
+        self.pyqtgraph = {}        
+        self.pyqtgraph['modes']       = ['continous','xlim','xreset']
+        self.pyqtgraph['modes_short'] = ['cont','xl','xr']        
         self.pyqtgraph['plot_datastream'] = False
         # Define the plotting mode
         try:
             self.pyqtgraph['mode']
         except:                    
-            self.pyqtgraph['mode'] = 'cont' # continous mode
+            self.set_plotting_mode()
             
         try:
             self.pyqtgraph['xl']
@@ -56,8 +63,10 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             self.pyqtgraph['xrs'] = None
 
 
-        self.pyqtgraph['modes']       = ['continous','xlim','xreset']
-        self.pyqtgraph['modes_short'] = ['cont','xl','xr']            
+
+
+        self.subscribe_stream_orig = self.subscribe_stream
+        self.subscribe_stream  = self.subscribe_stream_pyqtgraph
 
 
     def init_stream_settings(self,stream,color = None, bufsize=20000, ind_x = 0, ind_y = 1, plot_data=False, plot_nth_point = 1):
@@ -130,7 +139,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             stream.pyqtgraph_cmod = 0
 
 
-    def set_stream_settings(self,stream,color=None,ind_x = None,ind_y = None, plot_data = None, bufsize = None):
+    def set_stream_settings(self,stream,color=None,ind_x = None,ind_y = None, plot_data = None, bufsize = None, plot_nth_point = None):
         """
         Sets the plotting settings of the stream
         """
@@ -164,7 +173,10 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             bufsize = stream.pyqtgraph['bufsize']
             stream.pyqtgraph_npdata = {'time':np.zeros((bufsize,)),'x':np.zeros((bufsize,)),'y':np.zeros((bufsize,)),'ind_start':0,'ind_end':0}
             stream.pyqtgraph_nplot = 1
-            stream.pyqtgraph_cmod = 0                        
+            stream.pyqtgraph_cmod = 0
+
+        if(plot_nth_point != None):
+            stream.pyqtgraph['nth_pt'] = plot_nth_point
 
             
     def plot_stream(self,stream,plot_stream=False):
@@ -199,6 +211,14 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             modes = self.pyqtgraph['modes']
             
         return modes
+
+
+    def subscribe_stream_pyqtgraph(self,*args,**kwargs):
+        """
+        """
+        stream = self.subscribe_stream_orig(*args,**kwargs)
+        self.init_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 0, ind_y = 1, plot_nth_point = 1)
+        return stream
         
             
     def set_plotting_mode(self,mode='cont',xl=None):
@@ -547,14 +567,14 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         print('Clicked XY')
         button = self.sender()
         
-        layoutH = QtGui.QHBoxLayout()  # layout for the central widget
+        layoutH = QtWidgets.QHBoxLayout()  # layout for the central widget
         widget = QtGui.QWidget()  # central widget        
         widget.setLayout(layoutH)        
-        layoutX = QtGui.QVBoxLayout()  # layout for the central widget
-        layoutY = QtGui.QVBoxLayout()  # layout for the central widget        
-        widgetX = QtGui.QWidget()  # central widget        
+        layoutX = QtWidgets.QVBoxLayout()  # layout for the central widget
+        layoutY = QtWidgets.QVBoxLayout()  # layout for the central widget
+        widgetX = QtWidgets.QWidget()  # central widget        
         widgetX.setLayout(layoutX)
-        widgetY = QtGui.QWidget()  # central widget        
+        widgetY = QtWidgets.QWidget()  # central widget        
         widgetY.setLayout(layoutY)
         layoutH.addWidget(widgetX)
         layoutH.addWidget(widgetY)
@@ -652,7 +672,11 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         # Datastream stuff
         self.datastream_subscribe = DataStreamChoosePlotWidget(self.Datastream,hide_myself = True, stream_type='pubstream')
         # Connect the close button to a different function
-        self.datastream_subscribe.button_close.disconnect()
+        try: # Disconnect throws an error with pyqt4
+            self.datastream_subscribe.button_close.disconnect()
+        except:
+            pass
+        
         self.datastream_subscribe.button_close.clicked.connect(self.handle_streams)
         self.datastream_subscribe.button_close.setText('Hide')
 
@@ -949,13 +973,13 @@ class pyqtgraphMainWindow(QtWidgets.QMainWindow):
 
 
 # If run from the command line
-if __name__ == "__main__":
 
+def main():
     datastream_help = 'Subscribe to datastream with address e.g. -d tcp://192.168.178.97:18055'
     stream_help = 'Plots stream of address: e.g. -pd e47e9e56-ae34-11e6-8b71-00247ee0ea87::tcp://127.0.0.1:28736@tcp://127.0.0.1:18055'            
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)
+    #parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)
     parser.add_argument('--plot_stream', '-pd', nargs = '+', action = 'append', help=stream_help)
     args = parser.parse_args()
 
@@ -973,10 +997,11 @@ if __name__ == "__main__":
     
     datastream = None
     print('Hallo',args.plot_stream)
+    datastream = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)
     if(args.plot_stream != None):
         num_streams = len(args.plot_stream)
         logger.debug('main: creating a datastream')        
-        datastream = pymqdatastream.DataStream(name = 'plotxy', logging_level=logging_level)        
+        
         for sp in args.plot_stream:
             if(len(sp) == 1 or len(sp) == 3):
                 logger.debug('main: Plotting stream: ' + str(sp))
@@ -1010,3 +1035,7 @@ if __name__ == "__main__":
     window = pyqtgraphMainWindow(datastream = datastream, logging_level = logging_level)
     window.show()
     sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()

@@ -4,7 +4,7 @@
 try:
     from PyQt5 import QtCore, QtGui, QtWidgets
 except:
-	from qtpy import QtCore, QtGui, QtWidgets
+    from qtpy import QtCore, QtGui, QtWidgets
     
     
 import sys

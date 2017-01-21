@@ -3,7 +3,12 @@
 
 #
 #
-from PyQt5 import QtCore, QtGui, QtWidgets
+try:
+    from PyQt5 import QtCore, QtGui, QtWidgets
+except:
+    from qtpy import QtCore, QtGui, QtWidgets
+
+
 import sys
 import json
 import numpy as np
@@ -35,126 +40,11 @@ except Exception as e:
     logger.warning('Could not import pymqds_plotxy, this is not fatal, but there will be no real time plotting (original error: ' + str(e) + ' )')
     FLAG_PLOTXY=False
     
-import pymqds_sam4log
+import pymqdatastream.connectors.sam4log.pymqds_sam4log as pymqds_sam4log
+from pymqdatastream.utils.utils_serial import serial_ports, test_serial_lock_file, serial_lock_file
 
 
 
-def serial_ports():
-    """ Lists serial port names
-
-        :raises EnvironmentError:
-            On unsupported or unknown platforms
-        :returns:
-            A list of the serial ports available on the system
-
-        found here: http://stackoverflow.com/questions/12090503/listing-available-com-ports-with-python
-    """
-    
-    if sys.platform.startswith('win'):
-        ports = ['COM%s' % (i + 1) for i in range(256)]
-    elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
-        # this excludes your current terminal "/dev/tty"
-        ports = glob.glob('/dev/tty[A-Za-z]*')
-    elif sys.platform.startswith('darwin'):
-        ports = glob.glob('/dev/tty.*')
-    else:
-        raise EnvironmentError('Unsupported platform')
-
-    result = []
-    for port in ports:
-        try:
-            logger.debug("serial_ports(): Testing serial port " + str(port))
-            ret = test_serial_lock_file(port,brutal=True)
-            if(ret == False):
-                logger.debug("serial_ports(): Opening serial port " + str(port))
-                s = serial.Serial(port)
-                s.close()
-                result.append(port)
-        #except (OSError, serial.SerialException):
-        except Exception as e:
-            logger.debug('serial_ports(): Exception:' + str(e))
-            pass
-
-    return result
-
-
-def test_serial_lock_file(port, brutal = False):
-    """
-    Creates or removes a lock file for a serial port in linux
-    Args:
-       port: Device string
-       brutal: Remove lock file if a nonexisting PID was found or no PID at all within the file
-    Return:
-       True if port is already in use, False otherwise
-    """
-    devicename = port.split('/')[-1]
-    filename = '/var/lock/LCK..'+devicename
-    print('serial_lock_file(): filename:' + str(filename))
-    try:
-        flock = open(filename,'r')
-        pid_str = flock.readline()
-        flock.close()
-        print('test_serial_lock_file(): PID:' + pid_str)
-        PID_EXIST=None
-        try:
-            pid = int(pid_str)
-            PID_EXIST = psutil.pid_exists(pid)
-            pid_ex = ' does not exist.'
-            if(PID_EXIST):
-                pid_ex = ' exists.'
-            print('Process with PID:' + pid_str[:-1] + pid_ex)
-        except Exception as e:
-            print('No valid PID value' + str(e))
-
-            
-        if(PID_EXIST == True):
-            return True
-        elif(PID_EXIST == False):
-            if(brutal == False):
-                return True
-            else: # Lock file with "old" PID
-                print('Removing lock file, as it has a not existing PID')
-                os.remove(filename)
-                return False
-        elif(PID_EXIST == None): # No valid PID value
-            if(brutal):
-                print('Removing lock file, as it no valid PID')
-                os.remove(filename)
-                return False
-            else:
-                return True
-    except Exception as e:
-        print('serial_lock_file():' + str(e))
-        return False
-
-    
-def serial_lock_file(port,remove=False):
-    """
-    Creates or removes a lock file for a serial port in linux
-    """
-    devicename = port.split('/')[-1]
-    filename = '/var/lock/LCK..'+devicename
-    print('serial_lock_file(): filename:' + str(filename))
-        
-    if(remove == False):
-        try:
-            flock = open(filename,'w')
-            lockstr = str(os.getpid()) + '\n'
-            print('Lockstr:' + lockstr)
-            flock.write(lockstr)
-            flock.close()
-        except Exception as e:
-            print('serial_lock_file():' + str(e))
-    else:
-        try:
-            print('serial_lock_file(): removing filename:' + str(filename))
-            flock = open(filename,'r')
-            line = flock.readline()
-            print('data',line)
-            flock.close()
-            os.remove(filename)
-        except Exception as e:
-            print('serial_lock_file():' + str(e))
 
             
 # Serial baud rates
@@ -395,11 +285,13 @@ def _start_pymqds_plotxy(addresses):
     for addr in addresses:
         datastream = pyqtgraphDataStream(name = 'plotxy_cont', logging_level=logging_level)
         stream = datastream.subscribe_stream(addr)
+        print('HAllo,stream'+ str(stream))
         if(stream == None): # Could not subscribe
             logger.warning("_start_pymqs_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
             return False
         
-        datastream.init_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 10)
+        print('HAllo hallo hallo hallo\n hallo hallo!!!!' + str(stream))
+        datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 10)
         datastream.plot_datastream(True)
         datastream.set_plotting_mode(mode='cont')        
         datastreams.append(datastream)
@@ -915,9 +807,13 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     
 
 # If run from the command line
-if __name__ == "__main__":
+def main():
     print(sys.version_info)
     app = QtWidgets.QApplication(sys.argv)
     window = sam4logMainWindow()
     window.show()
-    sys.exit(app.exec_())    
+    sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()

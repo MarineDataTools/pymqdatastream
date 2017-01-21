@@ -20,10 +20,7 @@ if sys.version_info >= (3,4):
           scripts = ['pymqdatastream/connectors/test/pymqds_rand.py',\
                      'pymqdatastream/connectors/test/pymqds_bare.py',\
                      'pymqdatastream/connectors/test/pymqds_bare_reqrep.py',\
-                     'pymqdatastream/connectors/pyqtgraph/pymqds_plotxy.py',\
                      'pymqdatastream/connectors/basic/pymqds_scan.py',\
-                     'pymqdatastream/connectors/sam4log/pymqds_sam4log.py',\
-                     'pymqdatastream/connectors/sam4log/pymqds_gui_sam4log.py',\
                      'pymqdatastream/connectors/math_operator/pymqds_math_op.py',\
                      'pymqdatastream/connectors/test/pymqds_test.py',\
                      'pymqdatastream/connectors/nmea/pymqds_NMEA0183.py',\
@@ -35,6 +32,9 @@ if sys.version_info >= (3,4):
           'pymqds_query=pymqdatastream:query',\
           'pymqds_scan=pymqdatastream.connectors.basic.pymqds_scan:main',\
           'pymqds_qtshowdata=pymqdatastream.connectors.qt.pymqds_qtshowdata:main',\
+          'pymqds_plotxy=pymqdatastream.connectors.pyqtgraph.pymqds_plotxy:main',\
+          'pymqds_sam4log=pymqdatastream.connectors.sam4log.pymqds_sam4log:main',\
+          'pymqds_gui_sam4log=pymqdatastream.connectors.sam4log.pymqds_gui_sam4log:main',\
           'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
           package_data = {'microrider':['data/*.DAT'],'':['VERSION']},
           zip_safe=False)
