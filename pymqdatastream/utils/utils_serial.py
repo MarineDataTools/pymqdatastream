@@ -2,6 +2,7 @@ import serial
 import sys
 import os
 import logging
+import glob
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('utils_serial')

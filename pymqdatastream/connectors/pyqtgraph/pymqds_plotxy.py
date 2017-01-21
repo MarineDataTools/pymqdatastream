@@ -43,9 +43,10 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
         self.color_ind = 0
         self.pyqtgraph = {}        
-        self.pyqtgraph['modes']       = ['continous','xlim','xreset']
-        self.pyqtgraph['modes_short'] = ['cont','xl','xr']        
+        self.pyqtgraph['modes']           = ['continous','xlim','xreset']
+        self.pyqtgraph['modes_short']     = ['cont','xl','xr']        
         self.pyqtgraph['plot_datastream'] = False
+        self.pyqtgraph['flag_change']     = False        
         # Define the plotting mode
         try:
             self.pyqtgraph['mode']
@@ -587,8 +588,6 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         # To get the indices
         self._number_groupX.pyqtgraph = button.stream.pyqtgraph
         self._number_groupY.pyqtgraph = button.stream.pyqtgraph        
-        
-
             
         labX = QtWidgets.QLabel('X-Axis')
         labY = QtWidgets.QLabel('Y-Axis')
@@ -597,13 +596,19 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         for i,var in enumerate(button.stream.variables):
             rX = QtWidgets.QRadioButton(str(i) + ': ' + var['name'])
             rX.var_ind = i
-            rX.var_name = var['name']            
+            rX.var_name = var['name']
+            if(i == self._number_groupX.pyqtgraph['ind_x']):
+                rX.toggle()
+
             self._number_groupX.addButton(rX)
             layoutX.addWidget(rX)
 
             rY = QtWidgets.QRadioButton(str(i) + ': ' + var['name'])
             rY.var_ind = i
             rY.var_name = var['name']
+            if(i == self._number_groupY.pyqtgraph['ind_y']):
+                rY.toggle()
+                
             self._number_groupY.addButton(rY)
             layoutY.addWidget(rY)               
 
@@ -633,6 +638,8 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
     def handle_button_XY_appl_cancl_clicked(self):
         ind_x = self._number_groupX.checkedButton().var_ind
         ind_y = self._number_groupY.checkedButton().var_ind
+        ind_x_old = self._number_groupX.pyqtgraph['ind_x']
+        ind_y_old = self._number_groupY.pyqtgraph['ind_y']        
         name_x = self._number_groupX.checkedButton().var_name
         name_y = self._number_groupY.checkedButton().var_name       
         print(ind_x,ind_y)
@@ -642,7 +649,12 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
             streamx_txt = 'X Data: ' + name_x + ' (' + str(ind_x) + ')'            
             self._number_groupY.pyqtgraph['itemX'].setText(0,streamx_txt)
             streamy_txt = 'Y Data: ' + name_y + ' (' + str(ind_y) + ')'
-            self._number_groupY.pyqtgraph['itemY'].setText(0,streamy_txt)            
+            self._number_groupY.pyqtgraph['itemY'].setText(0,streamy_txt)
+            # If something has changed, clear and set change flag
+            if((ind_x != ind_x_old) or (ind_y != ind_y_old)):
+                self.handle_button_plot_clear()
+                self.Datastream.pyqtgraph['flag_change'] = True
+                
             self._XY_widget.close()            
         if(self.sender() == self._button_XY_cancl):
             self._XY_widget.close()
@@ -736,7 +748,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         """
         if(self.Datastream.pyqtgraph['plot_datastream']):
             # Load data and plot
-            FLAG_CHANGED = False
+            FLAG_CHANGED = self.Datastream.pyqtgraph['flag_change']
             for i,stream in enumerate(self.Datastream.Streams):
                 if(stream.stream_type == 'substream'):
                     # No plotting of this stream
@@ -840,6 +852,9 @@ class pyqtgraphWidget(QtWidgets.QWidget):
             
             if(FLAG_CHANGED):
                 print('FLAG_CHANGED!!!')
+                FLAG_CHANGED = False
+                self.Datastream.pyqtgraph['flag_change'] = False
+                
                 self.pyqtgraph_axes.clear()
                 self.pyqtgraph_leg.close()                
                 self.pyqtgraph_leg = self.pyqtgraph_axes.addLegend()

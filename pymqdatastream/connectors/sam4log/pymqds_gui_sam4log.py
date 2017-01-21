@@ -21,9 +21,7 @@ import glob
 import collections
 import time
 import multiprocessing
-#import subprocess
 import binascii
-import psutil
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_gui_sam4log')
