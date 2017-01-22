@@ -141,7 +141,8 @@ class RandDataStream(pymqdatastream.DataStream):
             stream.pub_data(data_all)                                
 
                 
-if __name__ == '__main__':
+
+def main():
     # For different loggers see also:
     # http://stackoverflow.com/questions/8837615/different-levels-of-logging-in-python
     publish_datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network, no argument take standard address, otherwise specify zeromq compatible address e.g. tcp://192.168.178.10'            
@@ -184,6 +185,10 @@ if __name__ == '__main__':
     for i in range(1):
         RDS.add_sine_stream(dt = 0.2, f = 2, num_elements = 20)
 
+
+    for i in range(1):
+        RDS.add_sine_stream(dt = 0.1, f = 0.05, num_elements = 2)        
+
     for i in range(1):
         RDS.add_random_str_stream(dt = 0.5, num_elements = 5)
 
@@ -191,5 +196,9 @@ if __name__ == '__main__':
     while True:
         time.sleep(5)
         print('Schnarch')
+
+
+if __name__ == '__main__':
+    main()
 
 

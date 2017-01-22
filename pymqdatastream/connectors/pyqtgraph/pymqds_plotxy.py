@@ -9,7 +9,6 @@ except:
 
 
 import sys
-import json
 import numpy as np
 import logging
 import threading
@@ -678,34 +677,40 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         self.button_clear = QtWidgets.QPushButton('Clear', self)
         self.button_clear.clicked.connect(self.datastream_subscribe.handle_button_plot_clear)
 
-        if False:
-            self.button_meas = QtWidgets.QPushButton('Meas.', self)
-            self.button_meas.clicked.connect(self.handle_meas)        
+        self.label_meas = QtWidgets.QLabel('X: ? Y: ?')        
 
         self.button_close = QtWidgets.QPushButton('Close', self)
         self.button_close.clicked.connect(self.handle_close)                
 
         # Layout
-        self.graph_layout = QtWidgets.QHBoxLayout()
+        self.graph_layout = QtWidgets.QGridLayout()
         self.button_layout = QtWidgets.QVBoxLayout()
-        self.button_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.button_bottom_layout = QtWidgets.QHBoxLayout()        
 
-        self.graph_layout.addLayout(self.button_layout)        
+        self.graph_layout.addLayout(self.button_layout,0,0)
+        self.graph_layout.addLayout(self.button_bottom_layout,1,1)                
         #self.graph_layout.addWidget(self.pyqtgraph_layout)
-        self.graph_layout.addWidget(self.pyqtgraph_axes)
+        self.graph_layout.addWidget(self.pyqtgraph_axes,0,1)
         
         self.button_layout.addWidget(self.button_streams)
         self.button_layout.addWidget(self.button_plot)
         self.button_layout.addWidget(self.button_clear)
-        if False:        
-            self.button_layout.addWidget(self.button_meas)
-            
+        self.button_layout_stretch = self.button_layout.addStretch()
         self.button_layout.addWidget(self.button_close)
+        # Thue buttons at the bottom
+        self.button_bottom_layout.addStretch()        
+        self.button_bottom_layout.addWidget(self.label_meas)
+
         
         
         layout = QtWidgets.QVBoxLayout()
         #layout.addWidget(self.splitter)
         layout.addLayout(self.graph_layout)
+
+        # Add a position label
+        self.vb = self.pyqtgraph_axes.plotItem.vb
+        proxy = pg.SignalProxy(self.pyqtgraph_axes.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
+        self.pyqtgraph_axes.scene().sigMouseMoved.connect(self.mouseMoved)        
 
 
         # update the figure once in a while
@@ -858,31 +863,13 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                     self.datastream_subscribe.label_xlunit.setText(xaxis_title)
                             
 
-    #http://stackoverflow.com/questions/17783428/how-to-draw-crosshair-and-plot-mouse-position-in-pyqtgraph
-    def handle_meas(self):
-        logger.debug('Handle measure')
-        self.vLine = pg.InfiniteLine(angle=90, movable=False)
-        self.hLine = pg.InfiniteLine(angle=0, movable=False)
-        self.pyqtgraph_axes.addItem(self.vLine, ignoreBounds=True)
-        self.pyqtgraph_axes.addItem(self.hLine, ignoreBounds=True)
-        self.vb = self.pyqtgraph_axes.plotItem.vb
-        proxy = pg.SignalProxy(self.pyqtgraph_axes.scene().sigMouseMoved, rateLimit=60, slot=self.mouseMoved)
-        self.pyqtgraph_axes.scene().sigMouseMoved.connect(self.mouseMoved)
-
-
+    # http://stackoverflow.com/questions/17783428/how-to-draw-crosshair-and-plot-mouse-position-in-pyqtgraph
     def mouseMoved(self,evt):
-        print(evt)
-        print(evt.x(),evt.y())
         pos = (evt.x(),evt.y())
-        #if self.pyqtgraph_axes.sceneBoundingRect().contains(pos):
         if True:
             mousePoint = self.vb.mapSceneToView(evt)
-            print(mousePoint)
-        #    index = int(mousePoint.x())
-        #    #label.setText("<span style='font-size: 12pt'>x=%0.1f, <span style='color: red'>y1=%0.1f</span>" % (mousePoint.x(), y[index], data2[index]))
-        #    print(mousePoint.x(),mousePoint.y())
-            self.vLine.setPos(mousePoint.x())
-            self.hLine.setPos(mousePoint.y())   
+            #self.label_meas.setText("<span style='font-size: 12pt'>x=%f, <span style='color: red'>y1=%f</span>" % (mousePoint.x(), mousePoint.y()))
+            self.label_meas.setText("<span style='font-size: 8pt'>x=%f, y=%f</span>" % (mousePoint.x(), mousePoint.y()))
         
 
     def handlePlot(self):

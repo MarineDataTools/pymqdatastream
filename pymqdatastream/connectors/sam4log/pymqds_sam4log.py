@@ -4,6 +4,7 @@ import os
 import pymqdatastream
 import pymqdatastream.connectors.sam4log.netstring as netstring
 import pymqdatastream.connectors.sam4log.ltc2442 as ltc2442
+from pymqdatastream.utils.utils_serial import serial_ports, test_serial_lock_file, serial_lock_file
 import logging
 try:
     import queue as queue # python 3
@@ -20,34 +21,6 @@ from cobs import cobs
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_sam4log')
 logger.setLevel(logging.DEBUG)
-
-
-def serial_lock_file(port,remove=False):
-    """
-    Creates or removes a lock file for a serial port in linux
-    """
-    devicename = port.split('/')[-1]
-    filename = '/var/lock/LCK..'+devicename
-    print('serial_lock_file(): filename:' + str(filename))
-        
-    if(remove == False):
-        try:
-            flock = open(filename,'w')
-            flock.write(str(os.getpid()) + '\n')
-            flock.close()
-        except Exception as e:
-            print('serial_lock_file():' + str(e))
-    else:
-        try:
-            print('serial_lock_file(): removing filename:' + str(filename))
-            flock = open(filename,'r')
-            line = flock.readline()
-            print('data',line)
-            flock.close()
-            os.remove(filename)
-        except Exception as e:
-            print('serial_lock_file():' + str(e))        
-
 
 
 # SAM4LOG speeds for version 0.4

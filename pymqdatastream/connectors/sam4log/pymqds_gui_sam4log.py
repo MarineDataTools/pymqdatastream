@@ -288,7 +288,7 @@ def _start_pymqds_plotxy(addresses):
             logger.warning("_start_pymqs_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
             return False
         
-        print('HAllo hallo hallo hallo\n hallo hallo!!!!' + str(stream))
+
         datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 10)
         datastream.plot_datastream(True)
         datastream.set_plotting_mode(mode='cont')        
@@ -314,6 +314,7 @@ def _start_pymqds_plotxy(addresses):
     sys.exit(app.exec_())    
     logger.debug("_start_pymqs_plotxy(): done")
 
+    
 
 class sam4logMainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -333,7 +334,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.statusBar()
 
         self.mainwidget = QtWidgets.QWidget()
-        layout = QtWidgets.QGridLayout(self.mainwidget)
+        self.layout = QtWidgets.QGridLayout(self.mainwidget)
 
         self.deviceinfo = sam4logInfo()
 
@@ -398,9 +399,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._show_data_layout.addWidget(self.combo_format,2,1)
         self._show_data_layout.addWidget(self.show_textdata,3,0,1,4)
         #self._show_data_layout.addWidget(self.show_comdata,1,1)
-
-
-
+        
+        
+        
         #
         # An information, saving, loading and plotting widget
         #
@@ -413,37 +414,49 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._info_plot_bu.setEnabled(FLAG_PLOTXY)
         self._info_plot_bu.clicked.connect(self._plot_clicked)
         self._info_record_bu.clicked.connect(self._record_clicked)
-
+        
         info_layout.addWidget(self._info_record_bu,0,2)
         info_layout.addWidget(self._info_record_info,1,2)
         info_layout.addWidget(self._info_plot_bu,0,1)
         info_layout.addWidget(self._show_data_bu,0,0)        
-
-        #
+        
+        # 
         # Add a qtable for realtime data showing of voltage/packets number/counter
         # http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
-        #
+        # 
         self._ad_table = QtWidgets.QTableWidget()
+        # http://stackoverflow.com/questions/14143506/resizing-table-columns-when-window-is-maximized
+        self._ad_table.horizontalHeader().setResizeMode(QtGui.QHeaderView.Stretch)
         #self._ad_table.setMinimumSize(300, 300)
         #self._ad_table.setMaximumSize(300, 300)
         self._ad_table_setup()
-
         
+        # Source
+        sources = ['serial','file']
+        
+        
+        self.combo_source = QtWidgets.QComboBox(self)
+        for s in sources:
+            self.combo_source.addItem(str(s))        
+
+
+        self.layout_source = QtWidgets.QHBoxLayout(self)
+        
+        self.button_open_file = QtWidgets.QPushButton('Open file')
+        self.button_open_file.clicked.connect(self.open_file)
+        
+        self.combo_source.currentIndexChanged.connect(self.get_source)
+        # Do the layout of the source
+        self.get_source()
 
         # The main layout
-        layout.addWidget(self.serial_test_bu,0,0)        
-        layout.addWidget(self.combo_serial,0,1)
-        layout.addWidget(self.combo_baud,0,2)
-        layout.addWidget(self.serial_open_bu,0,3)
-        layout.addWidget(self.bytesreadlcd,0,4)        
-        layout.addWidget(self._s4l_settings_bu,1,3)
-        layout.addWidget(self.deviceinfo,1,0,1,3)        
-        
+        self.layout.addLayout(self.layout_source,0,0,1,3)
+        self.layout.addWidget(self._s4l_settings_bu,1,3)
+        self.layout.addWidget(self.deviceinfo,1,0,1,3)
         #layout.addWidget(self._ad_choose_bu,3,1)        
-        layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
-        layout.addWidget(self._ad_table,4,0,2,5)
+        self.layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
+        self.layout.addWidget(self._ad_table,4,0,2,5)
         
-
         self.setCentralWidget(self.mainwidget)
         
         self.show()
@@ -477,6 +490,50 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.intraqueuetimer.setInterval(200)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()
+
+    def get_source(self):
+        """
+        Changes the source of the logger
+        """
+        # The source data layout (serial, files)
+        widgets_serial = [ self.combo_source,self.serial_test_bu,self.combo_serial,
+                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd ]
+        widgets_file   = [ self.combo_source,self.button_open_file ]
+
+        logger.debug('get_source()')
+        data_source = str( self.combo_source.currentText() )
+
+        if(data_source == 'serial'):
+            for w in widgets_file:
+                try:
+                    self.layout_source.removeWidget(w)
+                    w.hide()
+                except Exception as e:
+                    print(str(e))
+                    pass
+
+            for w in widgets_serial:
+                try:
+                    self.layout_source.addWidget(w)
+                    w.show()
+                except Exception as e:
+                    print(str(e))                    
+                    pass
+                
+        elif(data_source == 'file'):
+            for w in widgets_serial:
+                try:
+                    self.layout_source.removeWidget(w)
+                    w.hide()
+                except:
+                    pass
+
+            for w in widgets_file:
+                try:
+                    self.layout_source.addWidget(w)
+                    w.show()
+                except:
+                    pass                            
 
 
     def _ad_table_setup(self):
@@ -560,9 +617,19 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def _clicked_settings_bu(self):
         """
         """
-        print('Settings')
+        logger.debug('Settings')        
         self._settings_widget = sam4logConfig(self.sam4log)
         self._settings_widget.show()
+
+    def open_file(self):
+        """
+        Opens a datafile
+        """
+        logger.debug('Open file')
+        fname = QtWidgets.QFileDialog.getOpenFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
+        print(fname)
+        if(len(fname[0]) > 0):
+            pass
 
     def clicked_open_bu(self):
         """

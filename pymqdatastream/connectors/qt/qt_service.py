@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import sys
-try:
-	from PyQt5 import QtCore, QtGui, QtWidgets
-except:
-	from qtpy import QtCore, QtGui, QtWidgets
+
+#try:
+if True:
+        from PyQt5 import QtCore, QtGui, QtWidgets
+else:
+#except:
+        from qtpy import QtCore, QtGui, QtWidgets
 	
 import sys
 import json
