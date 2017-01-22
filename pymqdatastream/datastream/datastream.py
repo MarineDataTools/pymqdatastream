@@ -163,7 +163,7 @@ class zmq_socket(object):
                 else:
                     raise Exception("zmq_socket_init_failed")
 
-        # pubstream 
+        # pubstream
         elif(socket_type == 'pubstream'):
             self.zmq_socket_type = zmq.PUB
 
@@ -171,7 +171,8 @@ class zmq_socket(object):
             if((connect == True) and (remote == False)):
                 ret = self.bind_socket(self.zmq_socket_type,self.address)
                 # Start the pubstream thread, to put the socket into a thread
-                self.start_pub_data_thread()
+                if(ret):
+                    self.start_pub_data_thread()
         #
         #   
         # These sockets need a zmq 'connect'
@@ -290,7 +291,7 @@ class zmq_socket(object):
         zmq_socket_type = self.zmq_socket_type
         self.logger.debug(funcname + ': Connecting to address: ' + str(address))
         try:
-            self.logger.debug(funcname + ': Connecting to address: ' + address)
+            self.logger.debug(funcname + ': Connecting to address: ' + str(address))
             # Finally lets connect a socket
             self.zmq_socket       = self.context.socket(zmq_socket_type)
             if(zmq_socket_type == zmq.SUB):
@@ -298,12 +299,12 @@ class zmq_socket(object):
                 self.zmq_socket.setsockopt(zmq.SUBSCRIBE, filter_uuid.encode('utf-8')) # subscribe uuid
             self.zmq_socket.connect(address)
             #self.zmq_socket.linger = 50
-            self.logger.debug(funcname + ': Connecting to address: ' + address + ' done')
+            self.logger.debug(funcname + ': Connecting to address: ' + str(address) + ' done')
             self.connected = True
             return True
         except Exception as e :
             self.logger.warning(funcname + ': Exception:' + str(e))    
-            self.logger.warning(funcname + ': Couldnt connect zmq to address: ' + address)
+            self.logger.warning(funcname + ': Couldnt connect zmq to address: ' + str(address))
             self.connected = False
             return False
 
@@ -1115,7 +1116,7 @@ class StreamVariable(dict):
 
 # Standard datastream ports
 
-__num_ports__ = 20 # The total number of ports to be used
+__num_ports__ = 200 # The total number of ports to be used
 standard_datastream_control_port    = 18055 # First port number of the req/rep port for general information
 standard_stream_publish_port        = 28719 # First port number for the general use ports
 standard_datastream_address         = '127.0.0.1'
@@ -1370,7 +1371,7 @@ class DataStream(object):
         Args:
             address: An address string compatible with zeromq or a list of addresses pymqds will try to connect the socket to
         Return:
-            socket
+            socket or None if not successfull
         """
         funcname = '.add_pub_socket()'
         self.logger.debug(funcname)
@@ -1380,7 +1381,9 @@ class DataStream(object):
 
         #self.logger.debug(funcname + ': ' + str(address))            
         pub_socket = zmq_socket(socket_type = 'pubstream',address = address,logging_level = self.logging_level)
-        self.sockets.append(pub_socket)
+        if(pub_socket != None):
+            self.sockets.append(pub_socket)
+            
         return pub_socket
 
         

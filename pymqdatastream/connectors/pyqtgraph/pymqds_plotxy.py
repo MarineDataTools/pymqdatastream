@@ -69,7 +69,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         self.subscribe_stream  = self.subscribe_stream_pyqtgraph
 
 
-    def init_stream_settings(self,stream,color = None, bufsize=20000, ind_x = 0, ind_y = 1, plot_data=False, plot_nth_point = 1):
+    def init_stream_settings(self,stream,color = None, bufsize=500000, ind_x = 0, ind_y = 1, plot_data=False, plot_nth_point = 1):
         """
 
         Initialises the stream with standard settings for plotting if they
@@ -400,16 +400,14 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         try:
             item.stream
         except:
-            self.button_plotting_setup.setEnabled(False)
             return
-        if(item != None):
-            self.button_plotting_setup.setEnabled(True)
+
 
     def handle_unsubscribe_clicked_setup(self):
         """
         Grey out plotting setup, if the stream was unsubscribed
         """
-        self.button_plotting_setup.setEnabled(False)
+        pass
 
     def handle_button_subscribed(self):
         """

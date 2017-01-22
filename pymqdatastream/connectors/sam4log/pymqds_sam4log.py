@@ -83,19 +83,29 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.data_format = 0
 
 
-    def load_file(self,filename):
+    def load_file(self,filename,dt=0.01,num_bytes=200,start_read=True):
         """
         loads a file and reads it chunk by chunk
         """
         funcname = self.__class__.__name__ + '.load_file()'
         self.bytes_read = 0
-        self.data_file = file(filename)
-        self.logger.debug(funcname + ': Starting thread')            
-        self.file_thread = threading.Thread(target=self.read_file_data)
+        self.data_file = open(filename,'rb')
+        self.logger.debug(funcname + ': Starting thread')
+        if(start_read):
+            self.start_read_file(dt,num_bytes)
+
+        
+    def start_read_file(self,dt=0.01,num_bytes=200):
+        funcname = self.__class__.__name__ + '.start_read_file()'        
+        self.file_thread = threading.Thread(target=self.read_file_data,kwargs={'dt':dt,'num_bytes':num_bytes})
         self.file_thread.daemon = True
         self.file_thread.start()            
         self.logger.debug(funcname + ': Starting thread done')
 
+
+    def stop_read_file(self):
+        funcname = self.__class__.__name__ + '.stop_read_file()'        
+        self.serial_thread_queue.put('stop')
         
     def read_file_data(self, dt = 0.01, num_bytes = 200):
         """
@@ -110,7 +120,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             if(True):
                 try:
                     data = self.data_file.read(num_bytes)
-                    if(data == ''):
+                    if(len(data) == 0):
                         self.logger.debug(funcname + ': EOF')
                         return True
                     
@@ -130,6 +140,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             except queue.Empty:
                 pass
                     
+        self.logger.debug(funcname + ': done_exiting')
         return True                    
 
         
@@ -340,7 +351,28 @@ class sam4logDataStream(pymqdatastream.DataStream):
             except queue.Empty:
                 pass                                
 
-                
+    def init_data_format(self,data_format):
+        """
+        Sets the data format of the input data
+        """
+        funcname = self.__class__.__name__ + '.init_data_format()'
+        self.logger.debug(funcname)
+        if(data_format == 0):
+            self.data_format = 0
+            self.init_data_format_functions()
+
+
+        if(data_format == 2):
+            self.data_format = 2
+            self.init_data_format_functions()            
+
+
+        # CSV style
+        if((data_format == 3) or (data_format == 'csv')):
+            self.data_format = 3
+            self.init_data_format_functions()
+
+        
     def init_data_format_functions(self):
         """
         
@@ -891,12 +923,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.logger.debug(funcname)
         ad0_converted = 0
         data_packets = []
+        data_str = ''
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
             nstreams = (max(self.device_info['channel_seq']) + 1)
             # Create a list of data to be submitted for each stream
             data_stream = [[] for _ in range(nstreams) ] 
-            data_str = ''
             time.sleep(dt)
             while(len(deque) > 0):
                 data = deque.pop()
@@ -913,6 +945,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     data_str = ''
                 else:
                     data_str = data_str_split[-1]
+                    data_str_split.pop()
+
                 for line in data_str_split:
                     if(len(line)>3):
                         try:
@@ -935,13 +969,15 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                     data_packet['V'][n] = V
                                     data_list.append(V)
                             else:
-                               logger.debug(funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])))
+                               logger.debug( funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])) + ' str:' +  data_str_split)
 
 
                             data_packets.append(data_packet)
                             data_stream[channel].append(data_list)
                         except Exception as e:
-                            logger.debug(funcname + ':' + str(e))
+                            pass
+                            #logger.debug(funcname + ':' + str(e))
+                            
             # Push the read data
             ti = time.time()
             

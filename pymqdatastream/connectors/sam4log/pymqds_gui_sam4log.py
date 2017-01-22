@@ -629,7 +629,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         fname = QtWidgets.QFileDialog.getOpenFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
         print(fname)
         if(len(fname[0]) > 0):
-            pass
+            filename = ntpath.basename(fname[0])
+            path = ntpath.dirname(fname[0])
+            logger.debug('Open file:' + str(fname[0]))
+            self.sam4log.load_file(fname[0])
+            
 
     def clicked_open_bu(self):
         """
