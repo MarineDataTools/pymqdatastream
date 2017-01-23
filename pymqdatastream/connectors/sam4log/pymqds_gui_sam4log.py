@@ -259,7 +259,7 @@ class sam4logConfig(QtWidgets.QWidget):
     def _query(self):
         self.sam4log.query_sam4logger()
         self._update_status()
-        self.deviceinfo.update(self.sam4log.device_info)        
+        self.deviceinfo.update(self.sam4log.device_info)
 
     def _close(self):
         self.close()
@@ -632,7 +632,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             filename = ntpath.basename(fname[0])
             path = ntpath.dirname(fname[0])
             logger.debug('Open file:' + str(fname[0]))
-            self.sam4log.load_file(fname[0])
+            ret = self.sam4log.load_file(fname[0])
+            if(ret):
+                
+                self.deviceinfo.update(self.sam4log.device_info)
+                self.sam4log.add_raw_data_stream()
+                self.sam4log.start_converting_raw_data()
             
 
     def clicked_open_bu(self):

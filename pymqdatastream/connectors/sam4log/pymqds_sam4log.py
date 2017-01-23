@@ -33,6 +33,9 @@ for i,speed in enumerate(s4lv0_4_speeds):
     s4lv0_4_speeds_hz.append(s4lv0_4_tfreq/s4lv0_4_speeds_td[i])
 
 
+file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'    
+
+
 
 
 
@@ -56,7 +59,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.logger.debug(funcname)
         self.dequelen = 10000 # Length of the deque used to store data
         self.flag_adcs = [] # List of adcs to be send by the logger hardware
-        self.device_info = None
+        self.device_info = {}
         self.print_serial_data = False
         self.serial_thread_queue = queue.Queue()
         self.serial_thread_queue_ans = queue.Queue()
@@ -80,7 +83,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.commands = []
 
         # The data format
-        self.data_format = 0
+        self.device_info['format'] = 0
 
 
     def load_file(self,filename,dt=0.01,num_bytes=200,start_read=True):
@@ -90,10 +93,34 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.load_file()'
         self.bytes_read = 0
         self.data_file = open(filename,'rb')
+        # Reading the first part of the file and looking for known patterns
+        file_header_end
+        maxbytes = 10000
+        bytes_read = 0
+        data = b''
+        while True:
+            bytes_read += 1
+            if(bytes_read >= maxbytes):
+                logger.warning(funcname + ': Could not read file')
+                return False
+            
+            b = self.data_file.read(1)
+            data += b
+            if(len(data) > len(file_header_end)):
+                if(data[-len(file_header_end):] == file_header_end):
+                    logger.debug(funcname + ': Found a valid data file')
+                    data_str = data.decode('utf-8')
+                    self.parse_device_info(data_str)
+                    self.init_data_format_functions()
+                    self.flag_adcs = self.device_info['adcs']                
+                    break
+
+        
         self.logger.debug(funcname + ': Starting thread')
         if(start_read):
             self.start_read_file(dt,num_bytes)
 
+        return True
         
     def start_read_file(self,dt=0.01,num_bytes=200):
         funcname = self.__class__.__name__ + '.start_read_file()'        
@@ -251,6 +278,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self._log_thread_queue_ans = queue.Queue()
         self.logfile = open(filename,'wb')
         self.logfile_bytes_wrote = 0
+        # Writing the info header
+        info_str = self.device_info['info_str'].encode('utf-8')
+        info_str += file_header_end
+        self.logfile.write(info_str)
+        self.logfile_bytes_wrote += len(info_str)
         self._logfile_thread = threading.Thread(target=self._logging_thread,args=(deque,self.logfile))
         self._logfile_thread.daemon = True
         self._logfile_thread.start()
@@ -311,6 +343,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.raw_stream_thread.start()
         return stream
 
+    
     def _rem_raw_data_stream(self):
         """
         Stops the raw_data thread and removes self.raw_data
@@ -351,6 +384,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             except queue.Empty:
                 pass                                
 
+            
     def init_data_format(self,data_format):
         """
         Sets the data format of the input data
@@ -358,18 +392,18 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.init_data_format()'
         self.logger.debug(funcname)
         if(data_format == 0):
-            self.data_format = 0
+            self.device_info['format'] = 0
             self.init_data_format_functions()
 
 
         if(data_format == 2):
-            self.data_format = 2
+            self.device_info['format'] = 2
             self.init_data_format_functions()            
 
 
         # CSV style
         if((data_format == 3) or (data_format == 'csv')):
-            self.data_format = 3
+            self.device_info['format'] = 3
             self.init_data_format_functions()
 
         
@@ -380,13 +414,16 @@ class sam4logDataStream(pymqdatastream.DataStream):
         """
         funcname = self.__class__.__name__ + '.init_data_format_functions()'
         self.logger.debug(funcname)                
-        if(self.data_format == 0):
+        if(self.device_info['format'] == 0):
+            self.logger.debug(funcname + ': Setting format to 0')                
             self.convert_raw_data = self.convert_raw_data_format0
 
-        if(self.data_format == 2):
+        if(self.device_info['format'] == 2):
+            self.logger.debug(funcname + ': Setting format to 2')                            
             self.convert_raw_data = self.convert_raw_data_format2
 
-        if(self.data_format == 3):
+        if(self.device_info['format'] == 3):
+            self.logger.debug(funcname + ': Setting format to 3')                            
             self.convert_raw_data = self.convert_raw_data_format3
 
 
@@ -425,7 +462,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.logger.debug(funcname + ' sending:' + cmd)
             
             # Data format
-            self.data_format = data_format
+            self.device_info['format'] = data_format
             self.init_data_format_functions()
             cmd = 'format ' + str(data_format) + '\n'
             self.send_serial_data(cmd)
@@ -449,6 +486,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         else:
             self.logger.debug(funcname + ': No serial port opened')
 
+            
     def query_sam4logger(self):
         """
         
@@ -533,9 +571,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.send_serial_data('channels\n')
         time.sleep(0.1)
         self.send_serial_data('info\n')
-        time.sleep(0.1)                
-        self.print_serial_data = False                
-        self.send_serial_data('start\n')
+        time.sleep(0.1)
 
         # Get the fresh data
         data_str = ''
@@ -543,13 +579,57 @@ class sam4logDataStream(pymqdatastream.DataStream):
             data = deque.pop()
             data_str += data.decode(encoding='utf-8')
             #data_str += data
+            
+        self.parse_device_info(data_str)
 
+        # TODO, replace by device_info dict
+        self.init_data_format_functions()
+        self.flag_adcs = self.device_info['adcs']
+
+        self.print_serial_data = False                
+        self.send_serial_data('start\n')
+        
+        return True
+
+    
+    def parse_device_info(self,data_str):
+        """
+        Parses a device info string
+        """
+        funcname = self.__class__.__name__ + '.parse_device_info()'
+        self.logger.debug(funcname)
+
+        boardversion = '??'
+        firmwareversion = '??'        
+        for line in data_str.split('\n'):
+            if( ' board version:' in line ):
+                # Expecting a string like this:
+                # >>> --  board version: 9.00 --
+                boardversion = line.rsplit(': ')
+                try:
+                    boardversion = boardversion[1].split(' --')[0]
+                except:                    
+                    self.logger.debug(funcname + ': No valid version string')
+                    
+            elif( 'firmware version:' in line ):
+                # Expecting a string like this:
+                # >>> --  firmware version: 0.30 --
+                firmwareversion = line.rsplit(': ')
+                try:
+                    firmwareversion = firmwareversion[1].split(' --')[0]
+                except:
+                    self.logger.debug(funcname + ': No valid version string')
+                print('Firmware version:',firmwareversion)        
+
+        self.device_info['board'] = boardversion
+        self.device_info['firmware'] = firmwareversion                            
         #print(data_str)
         #print('Data str:' + data_str)
         # Parse the data
         #print('Info is')
         #data_str= ">>>format\n>>> is a command with length 7\n>>>format is 2\n>>>ad\n>>> is a command with length 3\n>>>adcs: 0 2 4\n"
         # Look for a format string ala ">>>format is 2"
+        
         data_format = None
         format_str = ''
         for i,me in enumerate(re.finditer(r'>>>format:.*\n',data_str)):
@@ -577,7 +657,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
         #print('Speed str:' + speed_str)
         #print('Speed data:' + str(speed_data))        
-
+        self.device_info['info_str'] = data_str
         self.device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
         self.device_info['format'] = data_format
         self.device_info['adcs'] = data_adcs
@@ -589,11 +669,6 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         # Update the local parameters
         self.logger.debug(funcname + ': format:' + str(data_format) + ' adcs:' + str(data_adcs) + ' channel sequence:' + str(data_channel_seq))
-        # TODO, replace by device_info dict
-        self.data_format = data_format
-        self.init_data_format_functions()
-        self.flag_adcs = data_adcs
-        return True
         
         
     def start_converting_raw_data(self):

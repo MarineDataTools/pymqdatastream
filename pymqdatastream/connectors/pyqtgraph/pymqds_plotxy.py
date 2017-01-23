@@ -30,6 +30,7 @@ logger = logging.getLogger('pymqds_plotxy')
 logger.setLevel(logging.DEBUG)
 
 
+standard_bufsize=10000
 
 class pyqtgraphDataStream(pymqdatastream.DataStream):
     """
@@ -37,7 +38,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
     A child of a datastream with extensions for pyqtgraph plotting.
 
     """
-    def __init__(self,*args,**kwargs):
+    def __init__(self,*args,bufsize=standard_bufsize,**kwargs):
         super(pyqtgraphDataStream, self).__init__(*args,**kwargs)
         self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
         self.color_ind = 0
@@ -62,14 +63,12 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         except:                                    
             self.pyqtgraph['xrs'] = None
 
-
-
-
+        self.bufsize = bufsize # The standard bufsize of plotted streams
         self.subscribe_stream_orig = self.subscribe_stream
         self.subscribe_stream  = self.subscribe_stream_pyqtgraph
 
 
-    def init_stream_settings(self,stream,color = None, bufsize=500000, ind_x = 0, ind_y = 1, plot_data=False, plot_nth_point = 1):
+    def init_stream_settings(self,stream,color = None, bufsize=standard_bufsize, ind_x = 0, ind_y = 1, plot_data=False, plot_nth_point = 1):
         """
 
         Initialises the stream with standard settings for plotting if they
@@ -216,7 +215,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         """
         """
         stream = self.subscribe_stream_orig(*args,**kwargs)
-        self.init_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 0, ind_y = 1, plot_nth_point = 1)
+        self.init_stream_settings(stream, bufsize = self.bufsize, plot_data = True, ind_x = 0, ind_y = 1, plot_nth_point = 1)
         return stream
         
             
@@ -439,6 +438,11 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
             # Add plot options as grandchilds if initialized the first time
             if(grandchild_count == 0):
                 childitem.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
+                # Show bufsize
+                bsize = childitem.stream.pyqtgraph['buf_tilesize']
+                label_bsize = QtGui.QLabel('Bufsize: ' + str(bsize) + ' points')
+                grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])
+                self.treeWidgetsub.setItemWidget(grandchilditem, 0 , label_bsize)
                 # Create X axis and Y axis data indicators
                 ind_x = childitem.stream.pyqtgraph['ind_x']
                 ind_y = childitem.stream.pyqtgraph['ind_y']

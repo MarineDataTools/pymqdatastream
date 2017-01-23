@@ -238,14 +238,18 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
                     self.address_list.pop(i)
                     break
 
-        # Tree
+        # Tree of Datastreams with their streams
         self.treeWidget = QtWidgets.QTreeWidget()
         self.treeWidget.setHeaderHidden(True)
         self.treeWidget.itemClicked.connect(self.handleItemChanged)
+        self.treeWidget.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.treeWidget.header().setStretchLastSection(False)        
         # Subscribed Tree
         self.treeWidgetsub = QtWidgets.QTreeWidget()
         self.treeWidgetsub.setHeaderHidden(True)
         self.treeWidgetsub.itemClicked.connect(self.handleItemChangedsub)
+        self.treeWidgetsub.header().setResizeMode(QtGui.QHeaderView.ResizeToContents)
+        self.treeWidgetsub.header().setStretchLastSection(False)
         #
         self.info_stream = QtWidgets.QPlainTextEdit()
         self.info_stream.setReadOnly(True)
