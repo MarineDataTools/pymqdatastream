@@ -275,7 +275,7 @@ def _start_pymqds_plotxy(addresses):
     
     """
 
-    logger.debug("_start_pymqs_plotxy():" + str(addresses))
+    logger.debug("_start_pymqds_plotxy():" + str(addresses))
 
     logging_level = logging.DEBUG
     datastreams = []
@@ -285,7 +285,7 @@ def _start_pymqds_plotxy(addresses):
         stream = datastream.subscribe_stream(addr)
         print('HAllo,stream'+ str(stream))
         if(stream == None): # Could not subscribe
-            logger.warning("_start_pymqs_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
+            logger.warning("_start_pymqds_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
             return False
         
 
@@ -312,7 +312,7 @@ def _start_pymqds_plotxy(addresses):
         
     plotxywindow.show()
     sys.exit(app.exec_())    
-    logger.debug("_start_pymqs_plotxy(): done")
+    logger.debug("_start_pymqds_plotxy(): done")
 
     
 
