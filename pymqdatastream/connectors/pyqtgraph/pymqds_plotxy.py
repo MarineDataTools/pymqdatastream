@@ -440,7 +440,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 childitem.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
                 # Show bufsize
                 bsize = childitem.stream.pyqtgraph['buf_tilesize']
-                label_bsize = QtGui.QLabel('Bufsize: ' + str(bsize) + ' points')
+                label_bsize = QtWidgets.QLabel('Bufsize: ' + str(bsize) + ' points')
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])
                 self.treeWidgetsub.setItemWidget(grandchilditem, 0 , label_bsize)
                 # Create X axis and Y axis data indicators
@@ -478,10 +478,10 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])                
                 self.treeWidgetsub.setItemWidget(grandchilditem, 0 , check_plot)
                 # Create a plot every nth point option
-                label_nplot = QtGui.QLabel('Plot every nth point')
+                label_nplot = QtWidgets.QLabel('Plot every nth point')
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])
                 self.treeWidgetsub.setItemWidget(grandchilditem, 0 , label_nplot)                
-                spin_nplot = QtGui.QSpinBox()
+                spin_nplot = QtWidgets.QSpinBox()
                 spin_nplot.setRange(1, 100000)
                 spin_nplot.setValue(childitem.stream.pyqtgraph['nth_pt'])
                 spin_nplot.valueChanged.connect(self.handle_plot_nth_point_changed)

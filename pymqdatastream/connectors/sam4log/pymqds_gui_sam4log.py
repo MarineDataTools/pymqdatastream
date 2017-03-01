@@ -426,7 +426,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # 
         self._ad_table = QtWidgets.QTableWidget()
         # http://stackoverflow.com/questions/14143506/resizing-table-columns-when-window-is-maximized
-        self._ad_table.horizontalHeader().setResizeMode(QtGui.QHeaderView.Stretch)
+        self._ad_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
         #self._ad_table.setMinimumSize(300, 300)
         #self._ad_table.setMaximumSize(300, 300)
         self._ad_table_setup()
@@ -629,6 +629,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         fname = QtWidgets.QFileDialog.getOpenFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
         print(fname)
         if(len(fname[0]) > 0):
+            if(isinstance(fname, str)):
+                fname = [fname]
             filename = ntpath.basename(fname[0])
             path = ntpath.dirname(fname[0])
             logger.debug('Open file:' + str(fname[0]))

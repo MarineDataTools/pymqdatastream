@@ -33,7 +33,8 @@ for i,speed in enumerate(s4lv0_4_speeds):
     s4lv0_4_speeds_hz.append(s4lv0_4_tfreq/s4lv0_4_speeds_td[i])
 
 
-file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'    
+file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'
+file_header_end_dos = b'>>><<<\r\n>>><<<\r\n>>><<<\r\n'
 
 
 
@@ -90,12 +91,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
         """
         loads a file and reads it chunk by chunk
         """
+        VALID_HEADER=False        
         funcname = self.__class__.__name__ + '.load_file()'
         self.bytes_read = 0
         self.data_file = open(filename,'rb')
         # Reading the first part of the file and looking for known patterns
-        file_header_end
-        maxbytes = 10000
+        maxbytes = 10000 # should be larger as len(file_header_len)
         bytes_read = 0
         data = b''
         while True:
@@ -109,11 +110,20 @@ class sam4logDataStream(pymqdatastream.DataStream):
             if(len(data) > len(file_header_end)):
                 if(data[-len(file_header_end):] == file_header_end):
                     logger.debug(funcname + ': Found a valid data file')
-                    data_str = data.decode('utf-8')
-                    self.parse_device_info(data_str)
-                    self.init_data_format_functions()
-                    self.flag_adcs = self.device_info['adcs']                
-                    break
+                    VALID_HEADER=True
+
+            if(len(data) > len(file_header_end_dos)):
+                if(data[-len(file_header_end_dos):] == file_header_end_dos):
+                    logger.debug(funcname + ': Found a valid data file (DOS)')
+                    VALID_HEADER=True
+
+
+            if(VALID_HEADER):
+                data_str = data.decode('utf-8')
+                self.parse_device_info(data_str)
+                self.init_data_format_functions()
+                self.flag_adcs = self.device_info['adcs']                
+                break
 
         
         self.logger.debug(funcname + ': Starting thread')
