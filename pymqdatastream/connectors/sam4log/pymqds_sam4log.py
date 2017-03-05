@@ -33,6 +33,10 @@ for i,speed in enumerate(s4lv0_4_speeds):
     s4lv0_4_speeds_hz.append(s4lv0_4_tfreq/s4lv0_4_speeds_td[i])
 
 
+
+s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]    
+
+
 file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'
 file_header_end_dos = b'>>><<<\r\n>>><<<\r\n>>><<<\r\n'
 
@@ -425,7 +429,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.init_data_format_functions()'
         self.logger.debug(funcname)                
         if(self.device_info['format'] == 0):
-            self.logger.debug(funcname + ': Setting format to 0')                
+            self.logger.debug(funcname + ': Setting format to 0')              
             self.convert_raw_data = self.convert_raw_data_format0
 
         if(self.device_info['format'] == 2):
@@ -435,6 +439,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
         if(self.device_info['format'] == 3):
             self.logger.debug(funcname + ': Setting format to 3')                            
             self.convert_raw_data = self.convert_raw_data_format3
+
+        if(self.device_info['format'] == 4):
+            self.logger.debug(funcname + ': Setting format to 4')
+            self.convert_raw_data = self.convert_raw_data_format4            
 
 
     def init_sam4logger(self,adcs,data_format=3,channels=[0],speed=30):
@@ -534,7 +542,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             try:
                 data_str += data.decode(encoding='utf-8')
             except Exception as e:
-                self.logger.debug(funcname + ': Exception:' + e)
+                self.logger.debug(funcname + ': Exception:' + str(e))
                 return False
 
         return_str = data_str
@@ -666,7 +674,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
         speed_data = [float(s) for s in re.findall(r'\d+\.\d+', speed_str)]
 
         #print('Speed str:' + speed_str)
-        #print('Speed data:' + str(speed_data))        
+        #print('Speed data:' + str(speed_data))
+        if(len(speed_data) == 0):
+            speed_data = [-9999]
         self.device_info['info_str'] = data_str
         self.device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
         self.device_info['format'] = data_format
@@ -847,16 +857,16 @@ class sam4logDataStream(pymqdatastream.DataStream):
         1    FLAG LTC (see comment)
         2    LTC COMMAND 0 (as send to the AD Converter)
         3    LTC COMMAND 1
-        5    LTC COMMAND 2
-        6    counter msb
+        4    LTC COMMAND 2
+        5    counter msb
         ...   
-        13   counter lsb
-        14   clock 50 khz msb
+        12   counter lsb
+        13   clock 50 khz msb
         ...    
-        21   clock 50 khz lsb
-        22   LTC2442 0 msb
-        23   LTC2442 1 
-        24   LTC2442 2 lsb 
+        20   clock 50 khz lsb
+        21   LTC2442 0 msb
+        22   LTC2442 1 
+        23   LTC2442 2 lsb 
         .    3 bytes per activated LTC2442
 
         ==== ====
@@ -1084,7 +1094,176 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 self.conversion_thread_queue_ans.put('stopping')
                 break
             except queue.Empty:
-                pass                            
+                pass
+
+
+    def convert_raw_data_format4(self, deque, dt = 0.1):
+        """
+
+        Converts raw data of the format 4, which is popped from the deque
+        given as argument 
+        The data is sends in binary packages using the the consistent overhead
+        byte stuffing (`COBS
+        <https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing>`_)
+        algorithm.
+        After decoding cobs the binary data has the following content
+
+        ==== ====
+        Byte Usage
+        ==== ====
+        0    0xAE (Packet type)
+        1    FLAG LTC (see comment)
+        2    LTC COMMAND 0 (as send to the AD Converter)
+        3    LTC COMMAND 1
+        4    LTC COMMAND 2
+        5    packet counter msb
+        ...   
+        9    packet counter lsb
+        10   clock 10 khz msb
+        ...    
+        14   clock 10 khz lsb
+        15   LTC2442 0 msb
+        16   LTC2442 1 
+        17   LTC2442 2 lsb 
+        .    3 bytes per activated LTC2442
+
+        ==== ====
+
+        FLAG LTC: Every bit is dedicted to one of the eight physically
+        available LTC2442 and is set to one if activated
+
+        Args:
+            deque:
+            stream:
+            dt: Time interval for polling [s]
+        Returns:
+            []: List of data
+
+        """
+        funcname = self.__class__.__name__ + '.convert_raw_data_format4()'
+        self.logger.debug(funcname)
+        ad0_converted = 0
+        data_str = b''
+        ind_ltcs = [0,0,0,0,0,0,0,0]
+        while True:
+            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
+            # Create an empty list for every channel
+            #http://stackoverflow.com/questions/8713620/appending-items-to-a-list-of-lists-in-python
+            nstreams = (max(self.device_info['channel_seq']) + 1)
+            data_stream = [[] for _ in range(nstreams) ]
+            time.sleep(dt)
+            while(len(deque) > 0):
+                data = deque.pop()
+                data_str += data
+                # Get commands first
+                # 
+                #for i,me in enumerate(re.finditer(b'[><][><][><].*\n',data_str)):
+                #    print('COMMAND!',i)
+                #    print(me)
+                #    print(me.group(0))
+                #    print(me.span(0))
+                #    self.commands.append(me.group(0))
+                    
+            #print('data_str')
+            #print(data_str)
+            #print(type(data_str))
+            #print('Hallo!!! ENDE')            
+            data_split = data_str.split(b'\x00')
+            if(len(data_split) > 0):
+                if(len(data_split[-1]) == 0): # The last byte was a 0x00
+                   data_str = b''
+                else:
+                   data_str = data_split[-1]
+
+                for data_cobs in data_split:
+                    #print('Cobs data:')
+                    #print(data_cobs)
+                    try:
+                        #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
+                        if(len(data_cobs) > 3):
+                            data_decobs = cobs.decode(data_cobs)
+                            #print('decobs data:')
+                            #print(data_decobs)
+                            #print(data_decobs[0],type(data_decobs[0]))                            
+                            packet_ident    = data_decobs[0]
+                            #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
+                            if(packet_ident == 0xae):
+                                #print('JA')
+                                #packet_flag_ltc = ord(data_decobs[1]) # python2
+                                packet_flag_ltc = data_decobs[1]
+                                num_ltcs        = bin(packet_flag_ltc).count("1")
+                                # Convert ltc flat bits into indices
+                                # If this is slow, this is a hot cython candidate
+                                for i in range(8):
+                                    ind_ltcs[i] = (packet_flag_ltc >> i) & 1
+                                    
+                                ind_ltc = ind_ltcs
+                                packet_size = 5 + 5 + 5 + num_ltcs * 3
+                                packet_com_ltc0 = data_decobs[2]
+                                packet_com_ltc1 = data_decobs[3]
+                                packet_com_ltc2 = data_decobs[4]
+                                # Decode the command
+                                speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
+                                ind = 5
+                                #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
+                                #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
+                                #self.logger.debug(funcname + ': Ind ltc '  + str(ind_ltc))
+                                #self.logger.debug(funcname + ': channel '  + str(channel))                                
+                                #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
+                                #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
+                                if(len(data_decobs) == packet_size):
+                                    packet_num_bin  = data_decobs[ind:ind+5]
+                                    packet_num      = int(packet_num_bin.hex(), 16) # python3
+                                    ind += 5
+                                    packet_time_bin  = data_decobs[ind:ind+5]
+                                    packet_time     = int(packet_time_bin.hex(), 16)/self.device_info['counterfreq']
+                                    data_list = [packet_num,packet_time]
+                                    data_packet = {'num':packet_num,'50khz':packet_time}
+                                    data_packet['spd'] = speed
+                                    data_packet['ch'] = channel
+                                    data_packet['ind'] = ind_ltcs
+                                    data_packet['V'] = [9999.99] * num_ltcs
+                                    ind += 5
+                                    #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
+                                    #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
+                                    for n,i in enumerate(range(0,num_ltcs*3,3)):
+                                        data_ltc = data_decobs[ind+i:ind+i+3]
+                                        data_ltc += 0x88.to_bytes(1,'big') # python3
+                                        if(len(data_ltc) == 4):
+                                            conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
+                                            #print(conv)
+                                            data_packet['V'][n] = conv['V'][0]
+                                            # This could make trouble if the list is too short ...
+                                            data_list.append(conv['V'][0])
+                                            self.packets_converted += 1
+                                        #else:
+                                        #    data_packet.append(9999.99)
+                                    data_stream[channel].append(data_list)
+                                else:
+                                    self.logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
+
+                                        
+                    except cobs.DecodeError:
+                        self.logger.debug(funcname + ': COBS DecodeError')
+                        pass
+
+            # Lets publish the converted data!
+            for i in range(len(self.channel_streams)):
+                if(len(data_stream[i])>0):
+                    self.channel_streams[i].pub_data(data_stream[i])
+                    # Put a different format into the intraqueue,
+                    # since the channels are seperate datastreams
+                    # TODO, this is only the last, have to create a list!
+                    self.intraqueue.appendleft(data_packet)
+
+            # Try to read from the queue, if something was read, quit
+            try:
+                data = self.conversion_thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self.conversion_thread_queue_ans.put('stopping')
+                break
+            except queue.Empty:
+                pass            
             
 
                 

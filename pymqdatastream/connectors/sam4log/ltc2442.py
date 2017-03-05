@@ -38,10 +38,13 @@ channels.append([0,0,0,+1,-1])
 # Speeds
 # From table 4 of the datasheet
 # [OSR3,OSR2,OSR1,OSR0,TWOX, Conversion speed (internal clock)]
+# int   ltc2442_speed[] = {   30,   18,   16,  14,  12,  10,   8,   6,   4,   2,   31,  19,  17,  15,  13,  11,   9,   7,   5,   3};
+# float ltc2442_freqs[] = {6.875,13.73, 27.5,  55, 110, 220, 439, 879,1760,3520,13.73,27.5,  55, 111, 220, 439, 879,1760,3520,7030}; 
 modes = []
 speeds = []
 modes.append([0,0,0,0,0])
 speeds.append(NaN)    # 'keep previous resolution'
+# No latency modes
 modes.append([0,0,0,1,0])
 speeds.append(3.52e3)
 modes.append([0,0,1,0,0])
@@ -62,6 +65,28 @@ modes.append([1,0,0,1,0])
 speeds.append(13.73)
 modes.append([1,1,1,1,0])
 speeds.append(6.875)
+
+# Latency modes, conversion speeds are from Table 7 in the Datasheet
+modes.append([0,0,0,1,1]) # 3
+speeds.append(7030)
+modes.append([0,0,1,0,1]) # 5
+speeds.append(3520)
+modes.append([0,0,1,1,1]) # 7
+speeds.append(1760)
+modes.append([0,1,0,0,1]) # 9
+speeds.append( 879)
+modes.append([0,1,0,1,1]) # 11
+speeds.append( 439)
+modes.append([0,1,1,0,1]) # 13
+speeds.append( 220)
+modes.append([0,1,1,1,1]) # 15
+speeds.append( 110)
+modes.append([1,0,0,0,1]) # 17
+speeds.append(  55)
+modes.append([1,0,0,1,1]) # 19
+speeds.append(27.5)
+modes.append([1,1,1,1,1]) # 31
+speeds.append(13.73)
 
 modes = asarray(modes)
 
@@ -108,10 +133,10 @@ def interprete_ltc2442_command(command,channel_naming = 0):
     #print('TWOX ',TWOX)
     # Test which speed we have
     com       = [OSR3,OSR2,OSR1,OSR0,TWOX]
-    com2      = asarray([com] * 11)
+    com2      = asarray([com] * len(modes))
     tmp       = (modes ^ com2)
     ind_speed = where(sum(tmp,1) == 0)[0]
-    #print(speeds[ind_speed])
+    #print('speeds',speeds[ind_speed])
     # Test which channels have been measured
     addr      = [SGL,ODD,A2,A1,A0]
     addr2     = asarray([addr] * 8)
