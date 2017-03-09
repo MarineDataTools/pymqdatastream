@@ -12,7 +12,6 @@ Supporting functions for the (`LTC2442
 from numpy import *
 
 
-
 # Channels
 # From table 3 of the datasheet
 # address = [SGL,ODD/SIGN,A2,A1,A0]
@@ -27,13 +26,13 @@ address.append([0,1,0,0,0])
 channels.append([-1,+1,0,0,0])
 address.append([0,1,0,0,1])
 channels.append([0,0,-1,+1,0])
-address.append([1,0,0,0,0])
+address.append([1,0,0,0,0]) # 16, com mode
 channels.append([+1,0,0,0,-1])
-address.append([1,0,0,0,1])
+address.append([1,0,0,0,1]) # 17, com mode
 channels.append([0,0,+1,0,-1])
-address.append([1,1,0,0,0])
+address.append([1,1,0,0,0]) # 24, com mode
 channels.append([0,+1,0,0,-1])
-address.append([1,1,0,0,1])
+address.append([1,1,0,0,1]) # 25, com mode
 channels.append([0,0,0,+1,-1])
 # Speeds
 # From table 4 of the datasheet
@@ -42,31 +41,30 @@ channels.append([0,0,0,+1,-1])
 # float ltc2442_freqs[] = {6.875,13.73, 27.5,  55, 110, 220, 439, 879,1760,3520,13.73,27.5,  55, 111, 220, 439, 879,1760,3520,7030}; 
 modes = []
 speeds = []
-modes.append([0,0,0,0,0])
+modes.append([0,0,0,0,0]) # 0
 speeds.append(NaN)    # 'keep previous resolution'
 # No latency modes
-modes.append([0,0,0,1,0])
+modes.append([0,0,0,1,0]) # 2
 speeds.append(3.52e3)
-modes.append([0,0,1,0,0])
+modes.append([0,0,1,0,0]) # 4
 speeds.append(1.76e3)
-modes.append([0,0,1,1,0])
+modes.append([0,0,1,1,0]) # 6
 speeds.append(879)
-modes.append([0,1,0,0,0])
+modes.append([0,1,0,0,0]) # 8
 speeds.append(439)
-modes.append([0,1,0,1,0])
+modes.append([0,1,0,1,0]) # 10
 speeds.append(220)
-modes.append([0,1,1,0,0])
+modes.append([0,1,1,0,0]) # 12
 speeds.append(110)
-modes.append([0,1,1,1,0])
+modes.append([0,1,1,1,0]) # 14
 speeds.append(55)
-modes.append([1,0,0,0,0])
+modes.append([1,0,0,0,0]) # 16
 speeds.append(27.5)
-modes.append([1,0,0,1,0])
+modes.append([1,0,0,1,0]) # 18
 speeds.append(13.73)
-modes.append([1,1,1,1,0])
+modes.append([1,1,1,1,0]) # 30
 speeds.append(6.875)
-
-# Latency modes, conversion speeds are from Table 7 in the Datasheet
+# Latency modes
 modes.append([0,0,0,1,1]) # 3
 speeds.append(7030)
 modes.append([0,0,1,0,1]) # 5
@@ -87,6 +85,29 @@ modes.append([1,0,0,1,1]) # 19
 speeds.append(27.5)
 modes.append([1,1,1,1,1]) # 31
 speeds.append(13.73)
+
+# Create int numbers from the bit pattern defined
+modesb = []
+for m in modes:
+    mb = 0
+    for n,i in enumerate(m):
+        if(i):
+            mb += i<<(4-n)
+
+    modesb.append(mb)
+        
+print('Modesb',modesb)
+
+addressb = []
+for m in address:
+    mb = 0
+    for n,i in enumerate(m):
+        if(i):
+            mb += i<<(4-n)
+
+    addressb.append(mb)
+        
+print('Address',addressb)
 
 modes = asarray(modes)
 
@@ -145,7 +166,6 @@ def interprete_ltc2442_command(command,channel_naming = 0):
     #print(channels[ind_addr])
     speed = speeds[ind_speed]
     channel = channels[ind_addr]
-    
     if(channel_naming == 1):
         if(addr == [1,0,0,0,0]):
             return [speed,0]
@@ -154,9 +174,55 @@ def interprete_ltc2442_command(command,channel_naming = 0):
         if(addr == [1,0,0,0,1]):
             return [speed,2]
         if(addr == [1,1,0,0,1]):
-            return [speed,3]                        
+            return [speed,3]
+
     else:
         return [speed,channel]
+
+
+def interprete_ltc2442_command_test(command,channel_naming = 0):
+    """
+    
+    
+    LTC2442 command to human readable form ...
+
+    Args:
+       command: a list of bytes 
+       channel_naming: The way the channels are named (0: standard; 1: SAM4LOG naming)
+                       TODO: Explain what the difference is
+
+    Returns:
+       [speed,channels]: conversion speed in Hz, channels = [CH0,CH1,CH2,CH3,COM]
+    
+    
+    """
+    # Test which speed we have
+    com = command[1] >> 3
+    for ind_speed,m in enumerate(modesb):
+        if(com == m):
+            break
+    #print('speeds',speeds[ind_speed])
+    # Test which channels have been measured    
+    addr      = command[0] & 0x1F
+    for ind_addr,m in enumerate(addressb):
+        if(addr == m):
+            break    
+    speed = speeds[ind_speed]
+    channel = channels[ind_addr]
+    if(channel_naming == 1):
+        if(addr == 16):
+            return [speed,0]
+        if(addr == 24):
+            return [speed,1]
+        if(addr == 17):
+            return [speed,2]
+        if(addr == 25):
+            return [speed,3]
+
+    else:
+        return [speed,channel]    
+
+    
 
     
 def test_convert_binary():
@@ -293,6 +359,78 @@ def convert_binary(ad_raw,ref_voltage=5.0,Voff = 0, Vlarge = 9.9999, Vsmall = -9
     data_rec['FLAG_VALID'] = FLAG_VALID
 
     return data_rec
+
+
+def convert_binary_fast(ad_raw,ref_voltage=5.0,Voff = 0, Vlarge = 9.9999, Vsmall = -9.9999, output_format=0):
+    """ 
+
+    Converts the LTC2442 binary data into voltage
+    Input ad_raw has to be a 8 bit char
+
+    Args:
+       ad_raw: raw binary data as an binary array of length 4 
+       ref_voltage: Reference voltage of (VREF in LTC2442 Datasheet)
+       Voff: Offset voltage to be added to the result. 
+       Vlarge: Output voltage if measured voltage is above ref_voltage [default:  9.9999]
+       Vsmall: Output voltage if measured voltage is below ref_voltage [default: -9.9999]
+       output_format: 0: Returns only the voltage, 1: Returns an numpy recarray
+    Returns:
+       V (output_format == 0): Voltage
+       data_rec (output_format == 1): recarray((1,), dtype=[('V', float64),('SIG', bool), ('DMY', bool),
+                                     ('MSB', bool), ('FLAG_VALID', bool),])
+
+    """
+    # ADC binary status bits (LTC datasheet page 11)
+    #  31   30   29   28   27  ...  0 ( ad_32bit  )
+    #  07   06   05   04   03         ( ad_raw[0] )
+    # /EOC  DMY  SIG  MSB          LSB
+    #print('raw',ad_raw)
+    ad_32bit = (ad_raw[0]<<24) | (ad_raw[1]<<16) | (ad_raw[2]<<8) | ad_raw[3]
+    ad_data = ad_32bit & 0x0FFFFFFF
+    notEOC  = (ad_raw[0]>>7)     & 0x01 # 
+    DMY     = (ad_raw[0]>>6)     & 0x01 # 
+    SIG     = (ad_raw[0]>>5)     & 0x01 # sign
+    MSB     = (ad_raw[0]>>4)     & 0x01 # Most significant bit
+    if((SIG == True) & (MSB == True)): # LTC datasheet page 11
+       #cons = 'Vin > 0.5 * Vref BAD'
+       FLAG_VALID = False
+       Vout = Vsmall
+    if((SIG == True) & (MSB == False)): # LTC datasheet page 11
+       #cons = ' 0 <= Vin < 0.5 * Vref GOOD'
+       FLAG_VALID = True
+    if((SIG == False) & (MSB == True)): # LTC datasheet page 11
+       #cons = ' -0.5 * Vref < Vin < 0 GOOD'
+       FLAG_VALID = True
+    if((SIG == False) & (MSB == False)): # LTC datasheet page 11
+       #cons = 'Vin < -0.5 * Vref BAD'
+       FLAG_VALID = False
+       Vout = Vlarge       
+
+    if(FLAG_VALID):
+        refp = ref_voltage
+        refm = 0.0
+        Vref = 0.5 * (refp - refm)
+
+        if(SIG == 1):
+            bout_shift = - ad_data 
+        else:
+            bout_shift = (2**28) - ad_data
+
+        Vout = 1.0 * bout_shift/(2**28) * Vref + Voff
+
+
+    if(output_format == 0):
+        return Vout
+    if(output_format == 1):
+        data_rec = recarray((1,), dtype=[('V', float64),('SIG', bool), ('DMY', bool),
+                                         ('MSB', bool), ('FLAG_VALID', bool),])
+        data_rec['V'] = Vout
+        data_rec['SIG'] = SIG
+        data_rec['DMY'] = DMY
+        data_rec['MSB'] = MSB
+        data_rec['FLAG_VALID'] = FLAG_VALID
+
+        return data_rec
 
 
 if __name__ == '__main__':

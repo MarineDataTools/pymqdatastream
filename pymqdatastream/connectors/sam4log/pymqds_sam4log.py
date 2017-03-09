@@ -4,6 +4,7 @@ import os
 import pymqdatastream
 import pymqdatastream.connectors.sam4log.netstring as netstring
 import pymqdatastream.connectors.sam4log.ltc2442 as ltc2442
+import pymqdatastream.connectors.sam4log.data_packages as data_packages
 from pymqdatastream.utils.utils_serial import serial_ports, test_serial_lock_file, serial_lock_file
 import logging
 try:
@@ -17,6 +18,7 @@ import time
 import json
 import re
 from cobs import cobs
+import numpy as np
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_sam4log')
@@ -41,6 +43,121 @@ file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'
 file_header_end_dos = b'>>><<<\r\n>>><<<\r\n>>><<<\r\n'
 
 
+
+def parse_device_info(data_str):
+    """
+
+    Parses a device info string and returns an dictionary with sam4log device configuration
+    Args:
+    data_str: String with the device information
+    Returns: device_info
+
+    """
+    funcname = __name__ + '.parse_device_info()'
+    logger.debug(funcname)
+    device_info = {}
+    boardversion = '??'
+    firmwareversion = '??'        
+    for line in data_str.split('\n'):
+        if( ' board version:' in line ):
+            # Expecting a string like this:
+            # >>> --  board version: 9.00 --
+            boardversion = line.rsplit(': ')
+            try:
+                boardversion = boardversion[1].split(' --')[0]
+            except:                    
+                logger.debug(funcname + ': No valid version string')
+
+        elif( 'firmware version:' in line ):
+            # Expecting a string like this:
+            # >>> --  firmware version: 0.30 --
+            firmwareversion = line.rsplit(': ')
+            try:
+                firmwareversion = firmwareversion[1].split(' --')[0]
+            except:
+                logger.debug(funcname + ': No valid version string')
+            logger.debug('Firmware version:' + str(firmwareversion))        
+
+    device_info['board'] = boardversion
+    device_info['firmware'] = firmwareversion                            
+    #print(data_str)
+    #print('Data str:' + data_str)
+    # Parse the data
+    #print('Info is')
+    #data_str= ">>>format\n>>> is a command with length 7\n>>>format is 2\n>>>ad\n>>> is a command with length 3\n>>>adcs: 0 2 4\n"
+    # Look for a format string ala ">>>format is 2"
+
+    data_format = None
+    format_str = ''
+    for i,me in enumerate(re.finditer(r'>>>format:.*\n',data_str)):
+        format_str = me.group()
+
+    adc_str = ''
+    for i,me in enumerate(re.finditer(r'>>>adcs:.*\n',data_str)):
+        adc_str = me.group()
+
+    channel_str = ''
+    for i,me in enumerate(re.finditer(r'>>>channel sequence:.*\n',data_str)):
+        channel_str = me.group()
+
+
+    #print('Channel str:' + channel_str)
+    speed_str = ''
+    for i,me in enumerate(re.finditer(r'>>>speed:.*\n',data_str)):
+        speed_str = me.group()                                    
+
+
+    data_format = [int(s) for s in re.findall(r'\b\d+\b', format_str)][-1]
+    data_adcs = [int(s) for s in re.findall(r'\b\d+\b', adc_str)]
+    data_channel_seq = [int(s) for s in re.findall(r'\b\d+\b', channel_str)]
+    speed_data = [float(s) for s in re.findall(r'\d+\.\d+', speed_str)]
+
+    #print('Speed str:' + speed_str)
+    #print('Speed data:' + str(speed_data))
+    if(len(speed_data) == 0):
+        speed_data = [-9999]
+        
+    device_info['info_str'] = data_str
+    device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
+    device_info['format'] = data_format
+    device_info['adcs'] = data_adcs
+    device_info['channel_seq'] = data_channel_seq
+    device_info['speed_str'] = speed_str
+    device_info['freq'] = speed_data[-1]
+    # Create a list for each channel and fill it later with streams
+
+    # Update the local parameters
+    logger.debug(funcname + ': format:' + str(data_format) + ' adcs:' + str(data_adcs) + ' channel sequence:' + str(data_channel_seq))
+    return device_info
+
+
+def find_sam4log_header(data_file):
+    funcname = __name__ + '.find_sam4log_header()'
+    # Reading the first part of the file and looking for known patterns
+    maxbytes = 10000 # should be larger as len(file_header_len)
+    bytes_read = 0
+    data = b''
+    while True:
+        bytes_read += 1
+        if(bytes_read >= maxbytes):
+            logger.warning(funcname + ': Could not read file')
+            break
+
+        b = data_file.read(1)
+        data += b
+        if(len(data) > len(file_header_end)):
+            if(data[-len(file_header_end):] == file_header_end):
+                logger.debug(funcname + ': Found a valid data file')
+                VALID_HEADER=True
+                break
+
+        if(len(data) > len(file_header_end_dos)):
+            if(data[-len(file_header_end_dos):] == file_header_end_dos):
+                logger.debug(funcname + ': Found a valid data file (DOS)')
+                VALID_HEADER=True
+                break
+
+    return [VALID_HEADER,data]
 
 
 
@@ -99,37 +216,18 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.load_file()'
         self.bytes_read = 0
         self.data_file = open(filename,'rb')
-        # Reading the first part of the file and looking for known patterns
-        maxbytes = 10000 # should be larger as len(file_header_len)
-        bytes_read = 0
-        data = b''
-        while True:
-            bytes_read += 1
-            if(bytes_read >= maxbytes):
-                logger.warning(funcname + ': Could not read file')
-                return False
-            
-            b = self.data_file.read(1)
-            data += b
-            if(len(data) > len(file_header_end)):
-                if(data[-len(file_header_end):] == file_header_end):
-                    logger.debug(funcname + ': Found a valid data file')
-                    VALID_HEADER=True
-
-            if(len(data) > len(file_header_end_dos)):
-                if(data[-len(file_header_end_dos):] == file_header_end_dos):
-                    logger.debug(funcname + ': Found a valid data file (DOS)')
-                    VALID_HEADER=True
+        [VALID_HEADER,data] = find_sam4log_header(self.data_file)
 
 
-            if(VALID_HEADER):
-                data_str = data.decode('utf-8')
-                self.parse_device_info(data_str)
-                self.init_data_format_functions()
-                self.flag_adcs = self.device_info['adcs']                
-                break
+        if(VALID_HEADER):
+            data_str = data.decode('utf-8')
+            self.device_info = parse_device_info(data_str)
+            self.channel_streams = [None] * (max(device_info['channel_seq']) + 1)
+            self.init_data_format_functions()
+            self.flag_adcs = self.device_info['adcs']
+        else:
+            return False
 
-        
         self.logger.debug(funcname + ': Starting thread')
         if(start_read):
             self.start_read_file(dt,num_bytes)
@@ -433,16 +531,16 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.convert_raw_data = self.convert_raw_data_format0
 
         if(self.device_info['format'] == 2):
-            self.logger.debug(funcname + ': Setting format to 2')                            
+            self.logger.debug(funcname + ': Setting format to 2')
             self.convert_raw_data = self.convert_raw_data_format2
 
         if(self.device_info['format'] == 3):
-            self.logger.debug(funcname + ': Setting format to 3')                            
+            self.logger.debug(funcname + ': Setting format to 3')
             self.convert_raw_data = self.convert_raw_data_format3
 
         if(self.device_info['format'] == 4):
             self.logger.debug(funcname + ': Setting format to 4')
-            self.convert_raw_data = self.convert_raw_data_format4            
+            self.convert_raw_data = self.convert_raw_data_format4
 
 
     def init_sam4logger(self,adcs,data_format=3,channels=[0],speed=30):
@@ -598,7 +696,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
             data_str += data.decode(encoding='utf-8')
             #data_str += data
             
-        self.parse_device_info(data_str)
+        self.device_info = parse_device_info(data_str)
+        self.channel_streams = [None] * (max(device_info['channel_seq']) + 1)        
 
         # TODO, replace by device_info dict
         self.init_data_format_functions()
@@ -609,87 +708,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         return True
 
-    
-    def parse_device_info(self,data_str):
-        """
-        Parses a device info string
-        """
-        funcname = self.__class__.__name__ + '.parse_device_info()'
-        self.logger.debug(funcname)
-
-        boardversion = '??'
-        firmwareversion = '??'        
-        for line in data_str.split('\n'):
-            if( ' board version:' in line ):
-                # Expecting a string like this:
-                # >>> --  board version: 9.00 --
-                boardversion = line.rsplit(': ')
-                try:
-                    boardversion = boardversion[1].split(' --')[0]
-                except:                    
-                    self.logger.debug(funcname + ': No valid version string')
-                    
-            elif( 'firmware version:' in line ):
-                # Expecting a string like this:
-                # >>> --  firmware version: 0.30 --
-                firmwareversion = line.rsplit(': ')
-                try:
-                    firmwareversion = firmwareversion[1].split(' --')[0]
-                except:
-                    self.logger.debug(funcname + ': No valid version string')
-                print('Firmware version:',firmwareversion)        
-
-        self.device_info['board'] = boardversion
-        self.device_info['firmware'] = firmwareversion                            
-        #print(data_str)
-        #print('Data str:' + data_str)
-        # Parse the data
-        #print('Info is')
-        #data_str= ">>>format\n>>> is a command with length 7\n>>>format is 2\n>>>ad\n>>> is a command with length 3\n>>>adcs: 0 2 4\n"
-        # Look for a format string ala ">>>format is 2"
-        
-        data_format = None
-        format_str = ''
-        for i,me in enumerate(re.finditer(r'>>>format:.*\n',data_str)):
-            format_str = me.group()
-
-        adc_str = ''
-        for i,me in enumerate(re.finditer(r'>>>adcs:.*\n',data_str)):
-            adc_str = me.group()
-
-        channel_str = ''
-        for i,me in enumerate(re.finditer(r'>>>channel sequence:.*\n',data_str)):
-            channel_str = me.group()
-
-
-        #print('Channel str:' + channel_str)
-        speed_str = ''
-        for i,me in enumerate(re.finditer(r'>>>speed:.*\n',data_str)):
-            speed_str = me.group()                                    
-
-
-        data_format = [int(s) for s in re.findall(r'\b\d+\b', format_str)][-1]
-        data_adcs = [int(s) for s in re.findall(r'\b\d+\b', adc_str)]
-        data_channel_seq = [int(s) for s in re.findall(r'\b\d+\b', channel_str)]
-        speed_data = [float(s) for s in re.findall(r'\d+\.\d+', speed_str)]
-
-        #print('Speed str:' + speed_str)
-        #print('Speed data:' + str(speed_data))
-        if(len(speed_data) == 0):
-            speed_data = [-9999]
-        self.device_info['info_str'] = data_str
-        self.device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
-        self.device_info['format'] = data_format
-        self.device_info['adcs'] = data_adcs
-        self.device_info['channel_seq'] = data_channel_seq
-        self.device_info['speed_str'] = speed_str
-        self.device_info['freq'] = speed_data[-1]
-        # Create a list for each channel and fill it later with streams
-        self.channel_streams = [None] * (max(data_channel_seq) + 1)
-        
-        # Update the local parameters
-        self.logger.debug(funcname + ': format:' + str(data_format) + ' adcs:' + str(data_adcs) + ' channel sequence:' + str(data_channel_seq))
-        
+           
         
     def start_converting_raw_data(self):
         """
@@ -960,7 +979,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                     packet_time_bin  = data_decobs[ind:ind+8]
                                     packet_time     = int(packet_time_bin.hex(), 16)/self.device_info['counterfreq']
                                     data_list = [packet_num,packet_time]
-                                    data_packet = {'num':packet_num,'50khz':packet_time}
+                                    data_packet = {'num':packet_num,'t':packet_time}
                                     data_packet['spd'] = speed
                                     data_packet['ch'] = channel
                                     data_packet['ind'] = ind_ltcs
@@ -1054,7 +1073,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                             data_list = [packet_num,packet_time]                    
                             # Fill the data packet dictionary
                             data_packet = {}
-                            data_packet = {'num':packet_num,'50khz':packet_time}
+                            data_packet = {'num':packet_num,'t':packet_time}
                             data_packet['ch'] = channel
                             data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
                             # Test if the lengths are same
@@ -1079,13 +1098,17 @@ class sam4logDataStream(pymqdatastream.DataStream):
             #if(len(data0)>0):
             #    streams[0].pub_data(data0)
 
-            for i in range(len(self.channel_streams)):
-                if(len(data_stream[i])>0):
-                    self.channel_streams[i].pub_data(data_stream[i])            
+
 
             for data_packet in data_packets:
                 self.intraqueue.appendleft(data_packet)
                 #self.channel_streams[ch]
+                # Fill the data_stream list
+
+
+            for i in range(len(self.channel_streams)):
+                if(len(data_stream[i])>0):
+                    self.channel_streams[i].pub_data(data_stream[i])                            
 
             # Try to read from the queue, if something was read, quit
             try:
@@ -1096,8 +1119,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
             except queue.Empty:
                 pass
 
-
-    def convert_raw_data_format4(self, deque, dt = 0.1):
+            
+    def convert_raw_data_format4(self, deque, dt = 0.02):
         """
 
         Converts raw data of the format 4, which is popped from the deque
@@ -1144,14 +1167,15 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.logger.debug(funcname)
         ad0_converted = 0
         data_str = b''
-        ind_ltcs = [0,0,0,0,0,0,0,0]
+        cnt = 0
         while True:
-            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
+            cnt += 1
+            # logger.debug(funcname + ': converted: ' + str(ad0_converted))
             # Create an empty list for every channel
-            #http://stackoverflow.com/questions/8713620/appending-items-to-a-list-of-lists-in-python
-            nstreams = (max(self.device_info['channel_seq']) + 1)
-            data_stream = [[] for _ in range(nstreams) ]
+            # http://stackoverflow.com/questions/8713620/appending-items-to-a-list-of-lists-in-python
+            ta = []
             time.sleep(dt)
+            ta.append(time.time())
             while(len(deque) > 0):
                 data = deque.pop()
                 data_str += data
@@ -1163,98 +1187,32 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 #    print(me.group(0))
                 #    print(me.span(0))
                 #    self.commands.append(me.group(0))
-                    
+
             #print('data_str')
             #print(data_str)
             #print(type(data_str))
-            #print('Hallo!!! ENDE')            
-            data_split = data_str.split(b'\x00')
-            if(len(data_split) > 0):
-                if(len(data_split[-1]) == 0): # The last byte was a 0x00
-                   data_str = b''
-                else:
-                   data_str = data_split[-1]
+            #print('Hallo!!! ENDE')
 
-                for data_cobs in data_split:
-                    #print('Cobs data:')
-                    #print(data_cobs)
-                    try:
-                        #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
-                        if(len(data_cobs) > 3):
-                            data_decobs = cobs.decode(data_cobs)
-                            #print('decobs data:')
-                            #print(data_decobs)
-                            #print(data_decobs[0],type(data_decobs[0]))                            
-                            packet_ident    = data_decobs[0]
-                            #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
-                            if(packet_ident == 0xae):
-                                #print('JA')
-                                #packet_flag_ltc = ord(data_decobs[1]) # python2
-                                packet_flag_ltc = data_decobs[1]
-                                num_ltcs        = bin(packet_flag_ltc).count("1")
-                                # Convert ltc flat bits into indices
-                                # If this is slow, this is a hot cython candidate
-                                for i in range(8):
-                                    ind_ltcs[i] = (packet_flag_ltc >> i) & 1
-                                    
-                                ind_ltc = ind_ltcs
-                                packet_size = 5 + 5 + 5 + num_ltcs * 3
-                                packet_com_ltc0 = data_decobs[2]
-                                packet_com_ltc1 = data_decobs[3]
-                                packet_com_ltc2 = data_decobs[4]
-                                # Decode the command
-                                speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
-                                ind = 5
-                                #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
-                                #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
-                                #self.logger.debug(funcname + ': Ind ltc '  + str(ind_ltc))
-                                #self.logger.debug(funcname + ': channel '  + str(channel))                                
-                                #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
-                                #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
-                                if(len(data_decobs) == packet_size):
-                                    packet_num_bin  = data_decobs[ind:ind+5]
-                                    packet_num      = int(packet_num_bin.hex(), 16) # python3
-                                    ind += 5
-                                    packet_time_bin  = data_decobs[ind:ind+5]
-                                    packet_time     = int(packet_time_bin.hex(), 16)/self.device_info['counterfreq']
-                                    data_list = [packet_num,packet_time]
-                                    data_packet = {'num':packet_num,'50khz':packet_time}
-                                    data_packet['spd'] = speed
-                                    data_packet['ch'] = channel
-                                    data_packet['ind'] = ind_ltcs
-                                    data_packet['V'] = [9999.99] * num_ltcs
-                                    ind += 5
-                                    #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
-                                    #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
-                                    for n,i in enumerate(range(0,num_ltcs*3,3)):
-                                        data_ltc = data_decobs[ind+i:ind+i+3]
-                                        data_ltc += 0x88.to_bytes(1,'big') # python3
-                                        if(len(data_ltc) == 4):
-                                            conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
-                                            #print(conv)
-                                            data_packet['V'][n] = conv['V'][0]
-                                            # This could make trouble if the list is too short ...
-                                            data_list.append(conv['V'][0])
-                                            self.packets_converted += 1
-                                        #else:
-                                        #    data_packet.append(9999.99)
-                                    data_stream[channel].append(data_list)
-                                else:
-                                    self.logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
+            if(len(data_str) >17):
+                ta.append( time.time() )
+                print('len',len(data_str))                
+                [data_stream,data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
+                self.packets_converted += len(data_packets)
 
-                                        
-                    except cobs.DecodeError:
-                        self.logger.debug(funcname + ': COBS DecodeError')
-                        pass
+                ta.append( time.time() )                    
+                # Lets publish the converted data!
+                for i in range(len(self.channel_streams)):
+                    if(len(data_stream[i])>0):
+                        self.channel_streams[i].pub_data(data_stream[i])
+                        # Put a different format into the intraqueue,
+                        # since the channels are seperate datastreams
+                        # TODO, this is only the last, have to create a list!
+                        self.intraqueue.appendleft(data_packets[-1])
 
-            # Lets publish the converted data!
-            for i in range(len(self.channel_streams)):
-                if(len(data_stream[i])>0):
-                    self.channel_streams[i].pub_data(data_stream[i])
-                    # Put a different format into the intraqueue,
-                    # since the channels are seperate datastreams
-                    # TODO, this is only the last, have to create a list!
-                    self.intraqueue.appendleft(data_packet)
+
+                ta.append(time.time())
+                ta = np.asarray(ta)
+                print(np.diff(ta))
 
             # Try to read from the queue, if something was read, quit
             try:
@@ -1263,15 +1221,18 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 self.conversion_thread_queue_ans.put('stopping')
                 break
             except queue.Empty:
-                pass            
-            
+                pass                        
 
-                
+
+
+
+
+
 
 def main():    
     s = sam4logDataStream(logging_level='DEBUG')
     s.add_serial_device('/dev/ttyUSB0')
-    
+
     s.add_raw_data_stream()
     #s.load_file('netstring_format1.log')
 
@@ -1281,7 +1242,7 @@ def main():
     s.query_sam4logger()
     time.sleep(0.5)
     #s.print_serial_data = True    
-    s.start_converting_raw_data()    
+    s.start_converting_raw_data()
     print(s.get_info_str('short'))
     while(True):
         #print('Raw bytes read ' + str(s.bytes_read))

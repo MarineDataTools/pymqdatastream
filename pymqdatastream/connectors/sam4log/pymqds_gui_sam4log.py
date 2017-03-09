@@ -702,6 +702,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                             logger.debug('Opening Version 0.45 device setup')
                             self._s4l_settings_bu.close()
                             self._s4l_freq_combo = QtWidgets.QComboBox(self)
+                            #self._s4l_freq_combo.setEnabled(True)                            
                             self._speeds_hz     = pymqds_sam4log.s4lv0_45_speeds_hz
                             for i,speed in enumerate(self._speeds_hz):
                                 self._s4l_freq_combo.addItem(str(speed))
@@ -725,7 +726,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 #ser = str(self.combo_serial.currentText())
                 #b = int(self.combo_baud.currentText())
                 self.serial_open_bu.setText('Close')
-                self._s4l_settings_bu.setEnabled(False)                
+                self._s4l_settings_bu.setEnabled(False)
+                self._s4l_freq_combo.setEnabled(False)                                            
                 #print('Opening port' + ser + ' with baudrate ' + str(b))
                 #self.sam4log.add_serial_device(ser,baud=b)
                 self.sam4log.add_raw_data_stream()
@@ -762,14 +764,19 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def _freq_set_v045(self):
         logger.debug('_freq_set_v045')
         speed_str = self._s4l_freq_combo.currentText()
-        
+        #self.sam4log.stop_converting_raw_data()
+        self.print_serial_data = True                
         self.sam4log.send_serial_data('stop\n')
         self.sam4log.send_serial_data('stop\n')
         self.sam4log.send_serial_data('freq ' + str(speed_str) + '\n')
         self.sam4log.send_serial_data('format 4\n')
-        self.sam4log.send_serial_data('start\n')
+        time.sleep(0.1)        
         if(self.sam4log.query_sam4logger() == True):
             self.deviceinfo.update(self.sam4log.device_info)
+            self.print_serial_data = False
+            time.sleep(0.1)            
+            self.sam4log.send_serial_data('start\n')
+            #self.sam4log.start_converting_raw_data()                    
         else:
             logger.warning('Bad, frequency changed did not work out. ')            
 
@@ -838,13 +845,13 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 if(self.ONECHFLAG):
                     ch = 0
                 num = data['num']
-                c50khz = data['50khz']
+                ct = data['t']
                 V = data['V']
                 # Packet number            
                 item = QtWidgets.QTableWidgetItem(str(num))
                 self._ad_table.setItem(0, ch + 1, item)
                 # Counter
-                item = QtWidgets.QTableWidgetItem(str(c50khz))
+                item = QtWidgets.QTableWidgetItem(str(ct))
                 self._ad_table.setItem(1, ch + 1, item)
                 for n,i in enumerate(self.sam4log.flag_adcs):
                     item = QtWidgets.QTableWidgetItem(str(V[n]))
