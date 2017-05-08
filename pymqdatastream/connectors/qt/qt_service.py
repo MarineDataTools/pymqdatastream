@@ -240,13 +240,19 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         self.treeWidget = QtWidgets.QTreeWidget()
         self.treeWidget.setHeaderHidden(True)
         self.treeWidget.itemClicked.connect(self.handleItemChanged)
-        self.treeWidget.header().setResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        #http://stackoverflow.com/questions/26141161/pyqt4-code-not-working-on-pyqt5-qheaderview                
+        #self.treeWidget.header().setResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.treeWidget.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        
         self.treeWidget.header().setStretchLastSection(False)        
         # Subscribed Tree
         self.treeWidgetsub = QtWidgets.QTreeWidget()
         self.treeWidgetsub.setHeaderHidden(True)
         self.treeWidgetsub.itemClicked.connect(self.handleItemChangedsub)
-        self.treeWidgetsub.header().setResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        #http://stackoverflow.com/questions/26141161/pyqt4-code-not-working-on-pyqt5-qheaderview        
+        #self.treeWidgetsub.header().setResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.treeWidgetsub.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        
         self.treeWidgetsub.header().setStretchLastSection(False)
         #
         self.info_stream = QtWidgets.QPlainTextEdit()

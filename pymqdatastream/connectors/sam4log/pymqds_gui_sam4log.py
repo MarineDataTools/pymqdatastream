@@ -430,9 +430,25 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         #self._ad_table.setMinimumSize(300, 300)
         #self._ad_table.setMaximumSize(300, 300)
         self._ad_table_setup()
+
+        #
+        # Add a table for the IMU
+        # PH: This is a hack TODO, make this clean
+        #
+        self._IMU_table = QtWidgets.QTableWidget()
+        self._IMU_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._IMU_table_setup()
+
+        #
+        # Add a table for the Pyro
+        # PH: This is a hack TODO, make this clean
+        #
+        self._O2_table = QtWidgets.QTableWidget()
+        self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._O2_table_setup()        
         
         # Source
-        sources = ['serial','file']
+        sources = ['serial','file','ip']
         
         
         self.combo_source = QtWidgets.QComboBox(self)
@@ -441,9 +457,13 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
 
         self.layout_source = QtWidgets.QHBoxLayout(self)
-        
+        # File source
         self.button_open_file = QtWidgets.QPushButton('Open file')
         self.button_open_file.clicked.connect(self.open_file)
+
+        # IP source
+        self.text_ip = QtWidgets.QLineEdit()
+        self.button_open_ip = QtWidgets.QPushButton('Connect to IP')
         
         self.combo_source.currentIndexChanged.connect(self.get_source)
         # Do the layout of the source
@@ -455,7 +475,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.layout.addWidget(self.deviceinfo,1,0,1,3)
         #layout.addWidget(self._ad_choose_bu,3,1)        
         self.layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
-        self.layout.addWidget(self._ad_table,4,0,2,5)
+        self.layout.addWidget(self._ad_table,4,0,2,3)
+        self.layout.addWidget(self._IMU_table,4,3,2,2)
+        self.layout.addWidget(self._O2_table,4,5,2,2)                
         
         self.setCentralWidget(self.mainwidget)
         
@@ -499,12 +521,14 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         widgets_serial = [ self.combo_source,self.serial_test_bu,self.combo_serial,
                            self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd ]
         widgets_file   = [ self.combo_source,self.button_open_file ]
+        widgets_ip     = [ self.combo_source,self.text_ip, self.button_open_ip ]        
 
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
 
         if(data_source == 'serial'):
-            for w in widgets_file:
+            whide = widgets_file + widgets_ip
+            for w in whide:
                 try:
                     self.layout_source.removeWidget(w)
                     w.hide()
@@ -521,7 +545,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                     pass
                 
         elif(data_source == 'file'):
-            for w in widgets_serial:
+            whide = widgets_serial + widgets_ip            
+            for w in whide:
                 try:
                     self.layout_source.removeWidget(w)
                     w.hide()
@@ -533,7 +558,23 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                     self.layout_source.addWidget(w)
                     w.show()
                 except:
-                    pass                            
+                    pass
+
+        elif(data_source == 'ip'):
+            whide = widgets_serial + widgets_file                        
+            for w in whide:
+                try:
+                    self.layout_source.removeWidget(w)
+                    w.hide()
+                except:
+                    pass
+
+            for w in widgets_ip:
+                try:
+                    self.layout_source.addWidget(w)
+                    w.show()
+                except:
+                    pass                                            
 
 
     def _ad_table_setup(self):
@@ -601,7 +642,61 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             
         self._ad_table.setFixedHeight(height + hheight + fwidth)        
         print('Hallo!!!',self._ad_table.columnCount())
-        print('Hallo!!!',self._ad_table.rowCount())        
+        print('Hallo!!!',self._ad_table.rowCount())
+
+    def _IMU_table_setup(self):
+        accname = ['x','y','z']
+        self._IMU_table.setColumnCount(2)
+        self._IMU_table.setRowCount(9)
+        self._IMU_table.verticalHeader().setVisible(False)
+        self._IMU_table.setItem(0,
+                               0, QtWidgets.QTableWidgetItem( ' Packet number' ))
+        self._IMU_table.setItem(1,
+                               0, QtWidgets.QTableWidgetItem( ' Counter' ))
+
+        self._IMU_table.setItem(2,
+                               0, QtWidgets.QTableWidgetItem( ' Temp' ))        
+        for i in range(0,3):
+            adname='acc ' + accname[i]            
+            self._IMU_table.setItem(i+3,
+                                0, QtWidgets.QTableWidgetItem( adname ))
+
+        for i in range(0,3):
+            adname='gyro ' + accname[i]
+            self._IMU_table.setItem(i+6,
+                                0, QtWidgets.QTableWidgetItem( adname ))                    
+
+        self._IMU_table.setHorizontalHeaderLabels(['Name','IMU 0'])
+        if(False):
+            # Make width and height of the table such that all entries can be seen
+            vwidth = self._IMU_table.verticalHeader().width()
+            hwidth = self._IMU_table.horizontalHeader().length()
+            fwidth = self._IMU_table.frameWidth() * 2
+            #swidth = self._IMU_table.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
+            self._IMU_table.setFixedWidth(vwidth + hwidth + fwidth)
+            self._IMU_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            height = 0
+            hheight = self._IMU_table.horizontalHeader().height()
+            for i in range(self._IMU_table.rowCount()):
+                height += self._IMU_table.rowHeight(i)
+
+            self._IMU_table.setFixedHeight(height + hheight + fwidth)
+
+    def _O2_table_setup(self):
+        self._O2_table.setColumnCount(2)
+        self._O2_table.setRowCount(4)
+        self._O2_table.verticalHeader().setVisible(False)
+        self._O2_table.setItem(0,
+                               0, QtWidgets.QTableWidgetItem( ' Counter' ))
+
+        self._O2_table.setItem(1,
+                               0, QtWidgets.QTableWidgetItem( ' dphi' ))
+
+        self._O2_table.setItem(2,
+                               0, QtWidgets.QTableWidgetItem( ' umol' ))                
+
+        self._O2_table.setHorizontalHeaderLabels(['Name','O2 0'])
+
 
 
     def _update_status_information(self):
@@ -623,6 +718,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self._ad_widget.close()
         except:
             pass
+
+        try:
+            self._IMU_widget.close()
+        except:
+            pass        
 
         try:
             self._settings_widget.close()
@@ -698,7 +798,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                     if(self.sam4log.query_sam4logger() == True):
                         self.deviceinfo.update(self.sam4log.device_info)
                         # Enable a settings button or if version 0.45 add a frequency combo
-                        if(self.sam4log.device_info['firmware'] == '0.45'):
+                        vers = float(self.sam4log.device_info['firmware'])
+                        # The high speed 0.45 version 
+                        if(vers == 0.45):
                             logger.debug('Opening Version 0.45 device setup')
                             self._s4l_settings_bu.close()
                             self._s4l_freq_combo = QtWidgets.QComboBox(self)
@@ -712,6 +814,21 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                             self._ad_table_setup_1ch()
                             self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set_v045)
                             # TODO Have to resize the widget to have nicer data
+                        # The general purpose 
+                        elif(vers >= 0.46):
+                            logger.debug('Opening Version 0.46 device setup')
+                            self._s4l_settings_bu.close()
+                            self._s4l_freq_combo = QtWidgets.QComboBox(self)
+                            #self._s4l_freq_combo.setEnabled(True)                            
+                            self._speeds_hz     = pymqds_sam4log.s4lv0_46_speeds_hz
+                            for i,speed in enumerate(self._speeds_hz):
+                                self._s4l_freq_combo.addItem(str(speed))
+
+                            self.layout.addWidget(self._s4l_freq_combo,1,3)
+                            self._ad_table.clear()                                                        
+                            self._ad_table_setup()
+                            self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set)
+                            # TODO Have to resize the widget to have nicer data                            
                         else:
                             self._s4l_settings_bu.setEnabled(True)
                             self._ad_table.clear()                            
@@ -778,7 +895,25 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self.sam4log.send_serial_data('start\n')
             #self.sam4log.start_converting_raw_data()                    
         else:
-            logger.warning('Bad, frequency changed did not work out. ')            
+            logger.warning('Bad, frequency changed did not work out. ')
+
+    def _freq_set(self):
+        logger.debug('_freq_set')
+        speed_str = self._s4l_freq_combo.currentText()
+        #self.sam4log.stop_converting_raw_data()
+        self.print_serial_data = True                
+        self.sam4log.send_serial_data('stop\n')
+        self.sam4log.send_serial_data('stop\n')
+        self.sam4log.send_serial_data('freq ' + str(speed_str) + '\n')
+        time.sleep(0.1)        
+        if(self.sam4log.query_sam4logger() == True):
+            self.deviceinfo.update(self.sam4log.device_info)
+            self.print_serial_data = False
+            time.sleep(0.1)            
+            self.sam4log.send_serial_data('start\n')
+            #self.sam4log.start_converting_raw_data()                    
+        else:
+            logger.warning('Bad, frequency changed did not work out. ')                        
 
 
     def poll_serial_bytes(self):
@@ -834,35 +969,82 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         """
         data = []
+        showL = True
+        showA = True
+        showO = True
         # Get all data
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
 
-        if(True):
+        #if(True):
             if(len(data)>0):
-                # Get channel
-                ch = data['ch']
-                if(self.ONECHFLAG):
-                    ch = 0
-                num = data['num']
-                ct = data['t']
-                V = data['V']
-                # Packet number            
-                item = QtWidgets.QTableWidgetItem(str(num))
-                self._ad_table.setItem(0, ch + 1, item)
-                # Counter
-                item = QtWidgets.QTableWidgetItem(str(ct))
-                self._ad_table.setItem(1, ch + 1, item)
-                for n,i in enumerate(self.sam4log.flag_adcs):
-                    item = QtWidgets.QTableWidgetItem(str(V[n]))
-                    self._ad_table.setItem(i+2, ch+1, item )
+                # LTC channel data
+                if((data['type']=='L') and showL):
+                    showL = False
+                    # Get channel
+                    ch = data['ch']
+                    if(self.ONECHFLAG):
+                        ch = 0
+                    num = data['num']
+                    ct = data['t']
+                    V = data['V']
+                    # Packet number            
+                    item = QtWidgets.QTableWidgetItem(str(num))
+                    self._ad_table.setItem(0, ch + 1, item)
+                    # Counter
+                    item = QtWidgets.QTableWidgetItem(str(ct))
+                    self._ad_table.setItem(1, ch + 1, item)
+                    for n,i in enumerate(self.sam4log.flag_adcs):
+                        item = QtWidgets.QTableWidgetItem(str(V[n]))
+                        self._ad_table.setItem(i+2, ch+1, item )
+
+                # IMU data                        
+                if((data['type']=='A') and showA):
+                    showA = False
+                    num = data['num']
+                    ct = data['t']
+                    # Packet number            
+                    item = QtWidgets.QTableWidgetItem(str(num))
+                    self._IMU_table.setItem(0, 1, item)
+                    # Counter
+                    item = QtWidgets.QTableWidgetItem(str(ct))
+                    self._IMU_table.setItem(1, 1, item)
+                    tabdata = data['T']
+                    item = QtWidgets.QTableWidgetItem(str(tabdata))                    
+                    self._IMU_table.setItem(2, 1, item)                    
+                    for i in range(3):
+                        tabdata = data['acc'][i]
+                        item = QtWidgets.QTableWidgetItem(str(tabdata))
+                        self._IMU_table.setItem(i+3, 1, item )
+                    for i in range(3):
+                        tabdata = data['gyro'][i]
+                        item = QtWidgets.QTableWidgetItem(str(tabdata))
+                        self._IMU_table.setItem(i+6, 1, item )
+
+
+                # Oxygen data            
+                if((data['type']=='O') and showO):
+                    showO = False
+                    #data_packet['phi']  = data_dphi 
+                    #data_packet['umol'] = data_umol
+                    ct = data['t']
+                    # Packet number            
+                    item = QtWidgets.QTableWidgetItem(str(ct))
+                    self._O2_table.setItem(0, 1, item)
+                    tabdata = data['phi']
+                    item = QtWidgets.QTableWidgetItem(str(tabdata))                    
+                    self._O2_table.setItem(1, 1, item)
+                    tabdata = data['umol']
+                    item = QtWidgets.QTableWidgetItem(str(tabdata))                    
+                    self._O2_table.setItem(2, 1, item)                                                            
+                    
 
         # Update the recording file status as well (addding file size)
         t = self._info_record_bu.text()
         if(t == self._recording_status[1]):
             self._info_record_info.setText('Status: Logging to file  '
                         + self.filename_log  + ' ( ' + str(self.sam4log.logfile_bytes_wrote)
-                        + ' bytes wrote)')
+                                           + ' bytes written)')
             
 
     def _combo_format(self):
@@ -957,16 +1139,15 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
 
                 
-
-
-
-    
-
 # If run from the command line
 def main():
     print(sys.version_info)
     app = QtWidgets.QApplication(sys.argv)
+    screen_resolution = app.desktop().screenGeometry()
+    width, height = screen_resolution.width(), screen_resolution.height()
     window = sam4logMainWindow()
+    # Resize the window
+    window.resize(width-100,2*height/3)
     window.show()
     sys.exit(app.exec_())
 

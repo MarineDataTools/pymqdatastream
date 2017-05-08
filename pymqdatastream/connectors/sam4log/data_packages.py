@@ -105,6 +105,7 @@ def decode_format4(data_str,device_info):
                             packet_time     = int(packet_time_bin.hex(), 16)/device_info['counterfreq']
                             data_list = [packet_num,packet_time]
                             data_packet = {'num':packet_num,'t':packet_time}
+                            data_packet['type'] = 'L'                            
                             data_packet['spd'] = speed
                             data_packet['ch'] = channel
                             data_packet['ind'] = ind_ltcs
@@ -137,6 +138,11 @@ def decode_format4(data_str,device_info):
 
     return [data_stream,data_packets,data_str]
 
+
+
+# Pyro science data packages and formats
+pyro_science_format1_fields = [{'name':'dphi','unit':'deg','datatype':'float'},
+                               {'name':'O2','unit':'umul/l','datatype':'float'}]
 
 
 

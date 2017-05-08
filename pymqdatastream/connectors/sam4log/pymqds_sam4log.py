@@ -36,7 +36,9 @@ for i,speed in enumerate(s4lv0_4_speeds):
 
 
 
-s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]    
+s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]
+
+s4lv0_46_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 250, 333]
 
 
 file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'
@@ -202,6 +204,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.conv_streams = []
         # A list with Nones or the streams dedicated for the channels
         self.channel_streams = None
+        # A list for other channels (TODO make this clean)
+        self.aux_streams = None        
         self.commands = []
 
         # The data format
@@ -222,7 +226,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         if(VALID_HEADER):
             data_str = data.decode('utf-8')
             self.device_info = parse_device_info(data_str)
-            self.channel_streams = [None] * (max(device_info['channel_seq']) + 1)
+            self.channel_streams = [None] * (max(self.device_info['channel_seq']) + 1)
             self.init_data_format_functions()
             self.flag_adcs = self.device_info['adcs']
         else:
@@ -518,6 +522,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.device_info['format'] = 3
             self.init_data_format_functions()
 
+        # CSV style
+        if((data_format == 31) or (data_format == 'csv31')):
+            self.device_info['format'] = 31
+            self.init_data_format_functions() 
+
         
     def init_data_format_functions(self):
         """
@@ -537,6 +546,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
         if(self.device_info['format'] == 3):
             self.logger.debug(funcname + ': Setting format to 3')
             self.convert_raw_data = self.convert_raw_data_format3
+
+        if(self.device_info['format'] == 31):
+            self.logger.debug(funcname + ': Setting format to 31')
+            self.convert_raw_data = self.convert_raw_data_format31
 
         if(self.device_info['format'] == 4):
             self.logger.debug(funcname + ': Setting format to 4')
@@ -688,6 +701,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
         time.sleep(0.1)
         self.send_serial_data('info\n')
         time.sleep(0.1)
+        # Hack, cleaner or just leave it as it does not hurt if S4L does not know it?
+        self.send_serial_data('o2info\n')
+        time.sleep(0.4)
 
         # Get the fresh data
         data_str = ''
@@ -695,9 +711,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
             data = deque.pop()
             data_str += data.decode(encoding='utf-8')
             #data_str += data
-            
+
+        print(data_str)
         self.device_info = parse_device_info(data_str)
-        self.channel_streams = [None] * (max(device_info['channel_seq']) + 1)        
+        self.channel_streams = [None] * (max(self.device_info['channel_seq']) + 1)        
 
         # TODO, replace by device_info dict
         self.init_data_format_functions()
@@ -715,6 +732,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
 
         Starting a thread to convert the raw data
+        Creating datastreams for the channels
 
         Args:
         Returns:
@@ -729,6 +747,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         if(self.device_info != None):
             deque = collections.deque(maxlen=self.dequelen)
             self.deques_raw_serial.append(deque)
+            # Add datastreams for all LTC channels and devices
             for ch in self.device_info['channel_seq']:
                 self.logger.debug(funcname + ': Adding pub stream for channel:' + str(ch))
                 # Adding a stream with all ltcs for each channel
@@ -742,22 +761,59 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
                 name = 'sam4log ad ch' + str(ch)
                 famstr = 'sam4log adc'
-                self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables,family = famstr))
+                self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables, family = famstr))
                 self.channel_streams[ch] = self.conv_streams[-1]
+
+            # Add datastreams for IMU
+            # TODO, this is a hack for the version 0.46! Make it more clean later!
+            self.aux_streams = [None] * ( 1 + 1 )
+            self.logger.debug(funcname + ': Adding pub stream for IMU ACC, Gyro x,y,z:')
+            variables_IMU = [packetvar,timevar]
+            datavarT     = pymqdatastream.StreamVariable('temp','degC','float')            
+            datavarx_ACC = pymqdatastream.StreamVariable('ACC x','m/s','float')
+            datavary_ACC = pymqdatastream.StreamVariable('ACC y','m/s','float')
+            datavarz_ACC = pymqdatastream.StreamVariable('ACC z','m/s','float')
+            datavarx_GYR = pymqdatastream.StreamVariable('GYR x','?','float')
+            datavary_GYR = pymqdatastream.StreamVariable('GYR y','?','float')
+            datavarz_GYR = pymqdatastream.StreamVariable('GYR z','?','float')
+            variables_IMU.append(datavarT)
+            variables_IMU.append(datavarx_ACC)
+            variables_IMU.append(datavary_ACC)
+            variables_IMU.append(datavarz_ACC)
+            variables_IMU.append(datavarx_GYR)
+            variables_IMU.append(datavary_GYR)
+            variables_IMU.append(datavarz_GYR)
+            name = 'sam4log IMU'
+            famstr = 'sam4log IMU'
+            self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables_IMU, family = famstr))
+            #self.channel_streams[ch] = self.conv_streams[-1]
+            self.aux_streams[0] = self.conv_streams[-1]
+            # Pyro science oxygen fields
+            self.logger.debug(funcname + ': Adding pub stream for Pyroscience')
+            variables_O2 = [packetvar,timevar]
+            for field in data_packages.pyro_science_format1_fields:
+                datavar_O2_dphi = pymqdatastream.StreamVariable(field['name'],field['unit'],field['datatype'])
+                variables_O2.append(datavar_O2_dphi)
                 
+            name = 'sam4log O2 (PyroScience)'
+            famstr = 'sam4log O2'            
+            self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables_O2, family = famstr))
+            self.aux_streams[1] = self.conv_streams[-1]            
+            # TODO, make this clean!
+            
             self.logger.debug(funcname + ': Starting thread')
             # Analyse data format, choose the right conversion functions and start a conversion thread
             self.init_data_format_functions()
             self.packets_converted = 0
-
-            self.convert_thread = threading.Thread(target=self.convert_raw_data,args = (deque,))
+            
+            self.convert_thread = threading.Thread(target=self.convert_raw_data, args = (deque,))
             self.convert_thread.daemon = True
             self.convert_thread.start()            
             self.logger.debug(funcname + ': Starting thread done')
             self.status = 1
             return self.conv_streams
-    
-
+        
+        
     def stop_converting_raw_data(self):
         """
 
@@ -980,6 +1036,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                     packet_time     = int(packet_time_bin.hex(), 16)/self.device_info['counterfreq']
                                     data_list = [packet_num,packet_time]
                                     data_packet = {'num':packet_num,'t':packet_time}
+                                    data_packet['type'] = 'L'                                    
                                     data_packet['spd'] = speed
                                     data_packet['ch'] = channel
                                     data_packet['ind'] = ind_ltcs
@@ -1072,8 +1129,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                             # Fill the data list
                             data_list = [packet_num,packet_time]                    
                             # Fill the data packet dictionary
-                            data_packet = {}
                             data_packet = {'num':packet_num,'t':packet_time}
+                            data_packet['type'] = 'L'                            
                             data_packet['ch'] = channel
                             data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
                             # Test if the lengths are same
@@ -1098,8 +1155,6 @@ class sam4logDataStream(pymqdatastream.DataStream):
             #if(len(data0)>0):
             #    streams[0].pub_data(data0)
 
-
-
             for data_packet in data_packets:
                 self.intraqueue.appendleft(data_packet)
                 #self.channel_streams[ch]
@@ -1109,6 +1164,155 @@ class sam4logDataStream(pymqdatastream.DataStream):
             for i in range(len(self.channel_streams)):
                 if(len(data_stream[i])>0):
                     self.channel_streams[i].pub_data(data_stream[i])                            
+
+            # Try to read from the queue, if something was read, quit
+            try:
+                data = self.conversion_thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                self.conversion_thread_queue_ans.put('stopping')
+                break
+            except queue.Empty:
+                pass
+
+            
+    def convert_raw_data_format31(self, deque, dt = 0.05):
+        """
+        Converts raw data of the format 31, which is popped from the deque given as argument
+        Example:
+        L;00000000692003;00000000000342;2;+2.04882227;-9.99999999
+        10 khz counter; num package;channel;Volt ad; ...
+
+        HACK: This is also converting pyro science O2 data and IMU data, this should be cleaned up 
+
+        """
+        funcname = self.__class__.__name__ + '.convert_raw_data_format31()'
+        self.logger.debug(funcname)
+        ad0_converted = 0
+        data_packets = []
+        data_str = ''
+        while True:
+            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
+            nstreams = (max(self.device_info['channel_seq']) + 1)
+            # Create a list of data to be submitted for each stream
+            data_stream = [[] for _ in range(nstreams) ]
+            # PH: Another hack for the v046, make clear 
+            aux_data_stream = [[],[]]
+            data_packets = []            
+            time.sleep(dt)
+            while(len(deque) > 0):
+                data = deque.pop()
+                try:
+                    data_str += data.decode(encoding='utf-8')
+                except Exception as e:
+                    logger.debug('Problems decoding data string:' + str(data) + '( Exception:' + str(e) + ' )')
+
+                #data_list = [packet_num,packet_time]
+                #for line in data_str.splitlines():
+                data_str_split = data_str.split('\n')
+                if(len(data_str_split[-1]) == 0): # We have a complete last line
+                    data_str = ''
+                else:
+                    data_str = data_str_split[-1]
+                    data_str_split.pop()
+
+                for line in data_str_split:
+                    if(len(line)>3):
+                        try:
+                            data_split = line.split(';')
+                            packet_type = data_split[0]
+                            if(packet_type == 'L'):
+                                packet_time = int(data_split[1])/self.device_info['counterfreq']
+                                packet_num = int(data_split[2])
+                                channel = int(data_split[3])
+                                ad_data = data_split[4:]
+                                # Fill the data list
+                                data_list = [packet_num,packet_time]                    
+                                # Fill the data packet dictionary
+                                data_packet = {}
+                                data_packet = {'num':packet_num,'t':packet_time}
+                                data_packet['type'] = 'L'                                
+                                data_packet['ch'] = channel
+                                data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
+                                
+                                # Test if the lengths are same
+                            #if(len(ad_data) == len(self.device_info['adcs'] * 2)):
+                                #for n,i in enumerate(range(0,len(ad_data))):
+                                for n,i in enumerate(self.device_info['adcs']):
+                                    n = int(n)
+                                    V = float(ad_data[n])
+                                    data_packet['V'][i] = V
+                                    data_list.append(V)
+
+                                #else:
+                                #   logger.debug( funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])) + ' str:' +  str(data_str_split))
+
+
+                                data_packets.append(data_packet)
+                                data_stream[channel].append(data_list)
+                            # IMU data
+                            elif(packet_type == 'A'):
+                                #A;00000021667084;00000000103737;+40.9;-0.09180;-0.02295;-1.01172;-0.05344;-1.02290;-0.63359;0.000000;0.000000;0.000000
+                                packet_time = int(data_split[1])/self.device_info['counterfreq']
+                                packet_num = int(data_split[2])
+                                T = float(data_split[3])
+                                accx = float(data_split[4])
+                                accy = float(data_split[5])
+                                accz = float(data_split[6])
+                                gyrox = float(data_split[7])
+                                gyroy = float(data_split[8])
+                                gyroz = float(data_split[9])                                
+                                aux_data_stream[0].append([packet_num,packet_time,T,accx,accy,accz,gyrox,gyroy,gyroz])
+                                data_packet = {'num':packet_num,'t':packet_time}
+                                data_packet['type'] = 'A'                                
+                                data_packet['T'] = T
+                                data_packet['acc'] = [accx,accy,accz]
+                                data_packet['gyro'] = [gyrox,gyroy,gyroz]
+                                data_packets.append(data_packet)
+                            elif('U3' in packet_type):
+                                print('Pyro science data')
+                                # Packet of the form
+                                #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383
+                                if("RMR1 3 0" in data_split[2]):
+                                    data_pyro   = data_split[2].split(' ')                                    
+                                    if(len(data_pyro) > 4):
+                                        packet_time = int(data_split[1])/self.device_info['counterfreq']
+                                        packet_num  = 0
+                                        data_stat   = float(data_pyro[4])                                        
+                                        data_dphi   = float(data_pyro[5])
+                                        data_umol   = float(data_pyro[6])
+                                        # PH: make this cleaner and more general
+                                        aux_data_stream[1].append([packet_num,packet_time,data_dphi,data_umol])
+                                        data_packet = {'num':packet_num,'t':packet_time}
+                                        data_packet['type'] = 'O'                                
+                                        data_packet['phi']  = data_dphi 
+                                        data_packet['umol'] = data_umol
+                                        data_packets.append(data_packet)                                    
+                                        print(data_dphi)
+
+                        except Exception as e:
+                            logger.debug(funcname + ':' + str(e) + ' ' + str(line))
+                            pass
+                            
+            # Push the read data
+            ti = time.time()
+            
+            #if(len(data0)>0):
+            #    streams[0].pub_data(data0)
+
+            # This data is for local plotting stuff (e.g. the gui)
+            for data_packet in data_packets:
+                self.intraqueue.appendleft(data_packet)
+                #self.channel_streams[ch]
+                # Fill the data_stream list
+
+            # This data is for the remote datastreams ( LTC data ) 
+            for i in range(len(self.channel_streams)):
+                if(len(data_stream[i])>0):
+                    self.channel_streams[i].pub_data(data_stream[i])
+
+            for i in range(len(self.aux_streams)):
+                if(len(aux_data_stream[i])>0):
+                    self.aux_streams[i].pub_data(aux_data_stream[i])
 
             # Try to read from the queue, if something was read, quit
             try:
