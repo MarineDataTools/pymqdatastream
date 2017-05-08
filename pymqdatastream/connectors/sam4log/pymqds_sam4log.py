@@ -13,6 +13,7 @@ except:
     import Queue as queue # python 2.7
 import threading
 import serial
+import socket
 import collections
 import time
 import json
@@ -189,6 +190,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.serial_thread_queue_ans = queue.Queue()
 
         self.bytes_read = 0
+        self.bytes_read_avg = 0 # Average bytes received per time interval of 10 seconds
+        self.bytes_read_avg_dt = 2 # Average bytes received per time interval of 10 seconds
         self.serial = None # The device to be connected to
         # Two initial queues, the first is for internal use (init logger, query_sam4log), the second is for the raw stream
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen),collections.deque(maxlen=self.dequelen)]
@@ -295,6 +298,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.logger.debug(funcname + ': Opening: ' + port)
             self.bytes_read = 0
             self.serial = serial.Serial(port,baud)
+            self.serial_type = ['serial',0]
             num_bytes = self.serial.inWaiting()
             serial_lock_file(port)            
             self.logger.debug(funcname + ': Starting thread')            
@@ -306,10 +310,39 @@ class sam4logDataStream(pymqdatastream.DataStream):
         except Exception as e:
             self.logger.debug(funcname + ': Exception: ' + str(e))            
             self.logger.debug(funcname + ': Could not open device at: ' + str(port))
+
+
+    def add_socket(self,address,port):
+        """
+        Adds a socket for communication with the TODL
+        """
+        funcname = self.__class__.__name__ + '.add_socket()'
+        self.logger.debug(funcname + ': Opening: ' + address + ':' + str(port))        
+        try:
+            self.bytes_read = 0
+            # Make two sockets for the same connection, one received, one send
+            self.serial = []
+            print('One')
+            self.serial_block = False
+            self.serial = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.serial.connect((address, port))
+            self.serial_type = ['socket',1]
+            self.serial.setblocking(0) # Nonblocking
+
+            self.logger.debug(funcname + ': Starting thread')            
+            self.serial_thread = threading.Thread(target=self.read_serial_data)
+            self.serial_thread.daemon = True
+            self.serial_thread.start()            
+            self.logger.debug(funcname + ': Starting thread done')
+            self.status = 0
+        except Exception as e:
+            self.logger.debug(funcname + ': Exception: ' + str(e))            
+            self.logger.debug(funcname + ': Could not open device at: ' + str(port))            
             
 
             
-    def read_serial_data(self, dt = 0.003):
+    #def read_serial_data(self, dt = 0.003):
+    def read_serial_data(self, dt = 0.05):
         """
 
         The serial data polling thread
@@ -320,22 +353,54 @@ class sam4logDataStream(pymqdatastream.DataStream):
         """
         funcname = self.__class__.__name__ + '.read_serial_data()'
         self.logger.debug(funcname)
+        # Calculate average bytes per time interval
+        tstart = time.time()
+        bytes_read = 0
         while True:
             time.sleep(dt)
-            num_bytes = self.serial.inWaiting()
-            if(num_bytes > 0):
-                try:
-                    data = self.serial.read(num_bytes)
-                    if(self.print_serial_data):
-                        print(data)
-                        
-                    self.bytes_read += num_bytes
-                    for n,deque in enumerate(self.deques_raw_serial):
-                        deque.appendleft(data)
-                except Exception as e:
-                    pass
-                    #logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
+            tstop = time.time()
+            if((tstop-tstart) > self.bytes_read_avg_dt):
+                tstart = time.time()
+                self.bytes_read_avg = bytes_read*8/self.bytes_read_avg_dt
+                bytes_read = 0
+                
+            # Distingiush here between serial data and socket data
+            if(self.serial_type[1] == 0): # Serial device
+                num_bytes = self.serial.inWaiting()
+                if(num_bytes > 0):
+                    try:
+                        data = self.serial.read(num_bytes)
+                        if(self.print_serial_data):
+                            print(data)
 
+                        self.bytes_read += num_bytes
+                        bytes_read += num_bytes
+                        for n,deque in enumerate(self.deques_raw_serial):
+                            deque.appendleft(data)
+                    except Exception as e:
+                        pass
+                        #logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
+
+            elif(self.serial_type[1] == 1): # Socket device
+                num_bytes = 0
+                # Check if we are free
+                try:
+                    if(not(self.serial_block)):
+                        data,address = self.serial.recvfrom(10000)
+                        num_bytes = len(data)
+                        if(self.print_serial_data):
+                            print(data)
+
+                        self.bytes_read += num_bytes
+                        bytes_read += num_bytes                        
+                        for n,deque in enumerate(self.deques_raw_serial):
+                            deque.appendleft(data)
+                    else:
+                        print('block!')
+                except Exception as e:
+                    #logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
+                    pass
+                        
                     
             # Try to read from the queue, if something was read, quit
             try:
@@ -356,13 +421,22 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         """
         funcname = self.__class__.__name__ + '.send_serial_data()'
+        # Distingiush here between serial data and socket data
+
         if(self.serial != None):
-            self.logger.debug(funcname + ': Sending to device:' + str(data))
-            # Python2 work with that
-            self.serial.write(str(data).encode('utf-8'))
-            self.logger.debug(funcname + ': Sending done')
+            if(self.serial_type[1] == 0): # Serial device                    
+                self.logger.debug(funcname + ': Sending to device:' + str(data))
+                # Python2 work with that
+                self.serial.write(str(data).encode('utf-8'))
+                self.logger.debug(funcname + ': Sending done')
+            elif(self.serial_type[1] == 1): # Socket
+                self.serial_block = True # Block the reading (thread safe ...)
+                self.logger.debug(funcname + ': Sending to socket (device):' + str(data))
+                self.serial.send(str(data).encode('utf-8'))
+                self.logger.debug(funcname + ': Sending done')
+                self.serial_block = False                
         else:
-            self.logger.warning(funcname + ':Serial port is not open.')
+            self.logger.warning(funcname + ':Serial port/socket is not open.')
 
 
     def stop_serial_data(self):
@@ -377,9 +451,14 @@ class sam4logDataStream(pymqdatastream.DataStream):
         data = self.serial_thread_queue_ans.get()
         self.logger.debug(funcname + ': Got data, thread stopped')
         self._rem_raw_data_stream()
-        port = self.serial.name        
-        self.serial.close()
-        serial_lock_file(port,remove=True)
+        port = self.serial.name
+        # Distingiush here between serial data and socket data
+        if(self.serial_type[1] == 0): # Serial device                            
+            self.serial.close()
+            serial_lock_file(port,remove=True)
+        elif(self.serial_type[1] == 1): # Socket
+            self.serial.close()
+            
         self.status = -1
 
         
@@ -630,7 +709,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         
         funcname = self.__class__.__name__ + '.query_sam4logger()'
         self.logger.debug(funcname)        
-        self.print_serial_data = False
+        self.print_serial_data = True
         self.send_serial_data('stop\n')
         time.sleep(0.1)
         # Flush the serial queue now
@@ -1269,7 +1348,6 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                 data_packet['gyro'] = [gyrox,gyroy,gyroz]
                                 data_packets.append(data_packet)
                             elif('U3' in packet_type):
-                                print('Pyro science data')
                                 # Packet of the form
                                 #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383
                                 if("RMR1 3 0" in data_split[2]):
@@ -1287,7 +1365,6 @@ class sam4logDataStream(pymqdatastream.DataStream):
                                         data_packet['phi']  = data_dphi 
                                         data_packet['umol'] = data_umol
                                         data_packets.append(data_packet)                                    
-                                        print(data_dphi)
 
                         except Exception as e:
                             logger.debug(funcname + ':' + str(e) + ' ' + str(line))

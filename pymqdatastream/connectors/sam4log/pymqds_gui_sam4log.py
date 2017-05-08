@@ -313,6 +313,7 @@ def _start_pymqds_plotxy(addresses):
     sys.exit(app.exec_())    
     logger.debug("_start_pymqds_plotxy(): done")
 
+
     
 
 class sam4logMainWindow(QtWidgets.QMainWindow):
@@ -361,6 +362,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.bytesreadlcd = QtWidgets.QLCDNumber(self)
         self.bytesreadlcd.setDigitCount(15)
         self.bytesreadlcd.display(200)
+        # Widget to show the average transfer rate
+        self.bytesspeedlabel = QtWidgets.QLabel('Bit/s')
+        self.bytesspeed      = QtWidgets.QLabel('NaN')        
 
         # Command stuff
         self.send_le = QtWidgets.QLineEdit(self)
@@ -463,7 +467,11 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         # IP source
         self.text_ip = QtWidgets.QLineEdit()
-        self.button_open_ip = QtWidgets.QPushButton('Connect to IP')
+        # Hack, this should be removed later
+        self.text_ip.setText('192.168.236.18:28117')
+        self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
+        self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
+        self.button_open_socket.clicked.connect(self.clicked_open_socket)
         
         self.combo_source.currentIndexChanged.connect(self.get_source)
         # Do the layout of the source
@@ -519,9 +527,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         """
         # The source data layout (serial, files)
         widgets_serial = [ self.combo_source,self.serial_test_bu,self.combo_serial,
-                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd ]
+                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd, self.bytesspeedlabel,self.bytesspeed]
         widgets_file   = [ self.combo_source,self.button_open_file ]
-        widgets_ip     = [ self.combo_source,self.text_ip, self.button_open_ip ]        
+        widgets_ip     = [ self.combo_source,self.text_ip, self.button_open_socket, self.bytesspeedlabel,self.bytesspeed ]        
 
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
@@ -868,6 +876,57 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             print('bad open close')
 
 
+    def clicked_open_socket(self):
+        """
+        Opens a 
+        """
+        print('Open!')
+        addrraw = str(self.text_ip.text())
+        print(addrraw)
+        try:
+            addr = addrraw.split(':')[0]
+            port = int(addrraw.split(':')[1])
+        except:
+            print('Enter proper address')
+            return
+
+        print(addr,port)
+        if(self.button_open_socket.text() == self._button_sockets_choices[0]):
+            self.sam4log.add_socket(addr,port)
+            if(self.sam4log.status == 0): # Succesfull opened            
+                time.sleep(0.5)
+                if(True):                    
+                    print('Query socket/device')
+                    if(self.sam4log.query_sam4logger() == True):
+                        self.deviceinfo.update(self.sam4log.device_info)
+                        self.button_open_socket.setEnabled(False)
+                        self.text_ip.setEnabled(False)
+                    else:
+                        print('No device found!')
+                        return
+
+                if(True):
+                    #self.sam4log.
+                    self.sam4log.send_serial_data('stop\n')
+                    self.sam4log.send_serial_data('stop\n')
+                    self.sam4log.send_serial_data('freq 200\n')
+                    time.sleep(0.1)        
+                    if(self.sam4log.query_sam4logger() == True):
+                        self.deviceinfo.update(self.sam4log.device_info)
+                        self.print_serial_data = False
+                        time.sleep(0.1)            
+                        self.sam4log.send_serial_data('start\n')
+
+
+                if(True):            
+                    time.sleep(.5)
+                    self.sam4log.add_raw_data_stream()
+                    time.sleep(0.2)
+                    #self.sam4log.init_sam4logger(adcs = [0,2,4])
+                    time.sleep(0.2)                
+                    self.sam4log.start_converting_raw_data()        
+
+
     def clicked_send_bu(self):
         data = self.send_le.text()
         print('Sending ' + str(data))
@@ -918,6 +977,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
     def poll_serial_bytes(self):
         self.bytesreadlcd.display(self.sam4log.bytes_read)
+        self.bytesspeed.setText(str(self.sam4log.bytes_read_avg))
 
 
     def poll_deque(self):
