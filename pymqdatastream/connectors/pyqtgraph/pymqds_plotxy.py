@@ -817,6 +817,10 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                         
 
                                     # finally set the data for the line
+                                    # HACK!!!
+                                    ind_good = yd > -8.0
+                                    xd = xd[ind_good]
+                                    yd = yd[ind_good]                                    
                                     stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
 
 

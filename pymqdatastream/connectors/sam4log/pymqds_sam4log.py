@@ -473,6 +473,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self._log_thread_queue_ans = queue.Queue()
         self.logfile = open(filename,'wb')
         self.logfile_bytes_wrote = 0
+        # Writing local PC Time
+        tlocalstr = time.strftime('# PC Time (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())
+        self.logfile.write(tlocalstr.encode('utf-8'))
+        self.logfile_bytes_wrote += len(tlocalstr)        
         # Writing the info header
         info_str = self.device_info['info_str'].encode('utf-8')
         info_str += file_header_end
@@ -706,12 +710,12 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
         
         """
-        
+        dt = 0.2 # Additional wait between commands
         funcname = self.__class__.__name__ + '.query_sam4logger()'
         self.logger.debug(funcname)        
         self.print_serial_data = True
         self.send_serial_data('stop\n')
-        time.sleep(0.1)
+        time.sleep(0.1+dt)
         # Flush the serial queue now
         deque = self.deques_raw_serial[0]
         while(len(deque) > 0):
@@ -723,10 +727,11 @@ class sam4logDataStream(pymqdatastream.DataStream):
         #
         FLAG_IS_SAM4LOG = False
         self.send_serial_data('stop\n')
-        time.sleep(0.1)        
+        time.sleep(0.1+dt)
+        tlocalstr = time.strftime('# PC Time just before info command (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())        
         self.send_serial_data('info\n')
-        time.sleep(0.1)        
-        data_str = ''        
+        time.sleep(0.1+dt)        
+        data_str = tlocalstr     
         while(len(deque) > 0):
             data = deque.pop()
             try:
@@ -773,16 +778,16 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.device_info['firmware'] = firmwareversion            
             
         self.send_serial_data('format\n')
-        time.sleep(0.1)
+        time.sleep(0.1+dt)
         self.send_serial_data('ad\n')
-        time.sleep(0.1)
+        time.sleep(0.1+dt)
         self.send_serial_data('channels\n')
-        time.sleep(0.1)
+        time.sleep(0.1+dt)
         self.send_serial_data('info\n')
-        time.sleep(0.1)
+        time.sleep(0.1+dt)
         # Hack, cleaner or just leave it as it does not hurt if S4L does not know it?
         self.send_serial_data('o2info\n')
-        time.sleep(0.4)
+        time.sleep(0.4+dt)
 
         # Get the fresh data
         data_str = ''

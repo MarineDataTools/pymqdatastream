@@ -56,10 +56,10 @@ class sam4logInfo(QtWidgets.QWidget):
         QtWidgets.QWidget.__init__(self)
         self.f_version = QtWidgets.QLabel('Firmware: ?')
         self.b_version = QtWidgets.QLabel('Board: ?')
-        self.adcs = QtWidgets.QLabel('ADCS: ?')                
+        self.adcs = QtWidgets.QLabel('ADCS: ?')       
         self.ch_seq = QtWidgets.QLabel('Channels: ?')
         self.data_format = QtWidgets.QLabel('Format: ?')
-        self.freq = QtWidgets.QLabel('Conv. freq: ?')                
+        self.freq = QtWidgets.QLabel('Conv. freq: ?')             
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(self.b_version)
         layout.addWidget(self.f_version)
@@ -314,6 +314,58 @@ def _start_pymqds_plotxy(addresses):
     logger.debug("_start_pymqds_plotxy(): done")
 
 
+
+
+def _start_pymqds_plotxy_test(graphs):
+    """
+    Start a pymqds_plotxy session and plots the streams given in the addresses list
+    Args:
+        streams: Dictionary of a stream with addiotionally information as index to plot etc.
+    
+    """
+
+    logger.debug("_start_pymqds_plotxy_test():" + str(graphs))
+
+    logging_level = logging.DEBUG
+    datastreams = []
+    
+
+    for n,streams in enumerate(graphs):
+        datastream = pyqtgraphDataStream(name = 'plotxy_' + str(n), logging_level=logging_level)
+        for dstream in streams:
+            addr = dstream['address']
+            stream = datastream.subscribe_stream(addr)
+            print('HAllo,stream'+ str(stream))
+            if(stream == None): # Could not subscribe
+                logger.warning("_start_pymqds_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
+                return False
+
+            datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = dstream['ind_x'], ind_y = dstream['ind_y'], plot_nth_point = dstream['nth_point'])
+            datastream.plot_datastream(True)
+            datastream.set_plotting_mode(mode='cont')        
+            datastreams.append(datastream)
+
+            if(False):
+                datastream_xr = pyqtgraphDataStream(name = 'plotxy_xr', logging_level=logging_level)
+                stream_xr = datastream_xr.subscribe_stream(addr)
+                datastream_xr.init_stream_settings(stream_xr, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 6)
+                datastream_xr.plot_datastream(True)
+                datastream_xr.set_plotting_mode(mode='xr',xl=5)        
+                datastreams.append(datastream_xr)        
+
+
+        if(n == 0):
+            app = QtWidgets.QApplication([])            
+            plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0])                        
+        else:
+            plotxywindow.add_graph(datastream=datastream)            
+
+            
+    plotxywindow.show()
+    sys.exit(app.exec_())    
+    logger.debug("_start_pymqds_plotxy(): done")    
+
+
     
 
 class sam4logMainWindow(QtWidgets.QMainWindow):
@@ -418,10 +470,17 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._info_plot_bu.setEnabled(FLAG_PLOTXY)
         self._info_plot_bu.clicked.connect(self._plot_clicked)
         self._info_record_bu.clicked.connect(self._record_clicked)
+        # Plot test
+        self._info_plot_test_bu = QtWidgets.QPushButton('Plot test')
+        self._info_plot_test_bu.clicked.connect(self._plot_test_clicked)
+        self._info_plot_IMU_bu = QtWidgets.QPushButton('Plot IMU')
+        self._info_plot_IMU_bu.clicked.connect(self._plot_test_clicked)                
         
         info_layout.addWidget(self._info_record_bu,0,2)
         info_layout.addWidget(self._info_record_info,1,2)
         info_layout.addWidget(self._info_plot_bu,0,1)
+        info_layout.addWidget(self._info_plot_IMU_bu,1,0)        
+        info_layout.addWidget(self._info_plot_test_bu,1,1)
         info_layout.addWidget(self._show_data_bu,0,0)        
         
         # 
@@ -442,7 +501,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._IMU_table = QtWidgets.QTableWidget()
         self._IMU_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
         self._IMU_table_setup()
-
+        
         #
         # Add a table for the Pyro
         # PH: This is a hack TODO, make this clean
@@ -458,12 +517,21 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.combo_source = QtWidgets.QComboBox(self)
         for s in sources:
             self.combo_source.addItem(str(s))        
-
-
+            
+        
         self.layout_source = QtWidgets.QHBoxLayout(self)
+        
         # File source
-        self.button_open_file = QtWidgets.QPushButton('Open file')
+        self.button_open_file      = QtWidgets.QPushButton('Open file')
         self.button_open_file.clicked.connect(self.open_file)
+        self.label_file_read_dt    = QtWidgets.QLabel('Read in intervals of [s]')
+        self.spin_file_read_dt     = QtWidgets.QDoubleSpinBox()
+        self.spin_file_read_dt.setValue(0.05)
+        self.label_nbytes          = QtWidgets.QLabel('Read number of bytes per dt')        
+        self.spin_file_read_nbytes = QtWidgets.QSpinBox()
+        self.spin_file_read_nbytes.setRange(1, 1024)
+        #self.freqsld.setSingleStep(10)
+        self.spin_file_read_nbytes.setValue(400)
 
         # IP source
         self.text_ip = QtWidgets.QLineEdit()
@@ -528,7 +596,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         # The source data layout (serial, files)
         widgets_serial = [ self.combo_source,self.serial_test_bu,self.combo_serial,
                            self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd, self.bytesspeedlabel,self.bytesspeed]
-        widgets_file   = [ self.combo_source,self.button_open_file ]
+        widgets_file   = [ self.combo_source,self.button_open_file, self.label_nbytes,
+                           self.spin_file_read_nbytes, self.label_file_read_dt, self.spin_file_read_dt]
         widgets_ip     = [ self.combo_source,self.text_ip, self.button_open_socket, self.bytesspeedlabel,self.bytesspeed ]        
 
         logger.debug('get_source()')
@@ -782,9 +851,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             filename = ntpath.basename(fname[0])
             path = ntpath.dirname(fname[0])
             logger.debug('Open file:' + str(fname[0]))
-            ret = self.sam4log.load_file(fname[0])
+            ret = self.sam4log.load_file(fname[0],num_bytes = self.spin_file_read_nbytes.value(),dt=self.spin_file_read_dt.value())
             if(ret):
-                
                 self.deviceinfo.update(self.sam4log.device_info)
                 self.sam4log.add_raw_data_stream()
                 self.sam4log.start_converting_raw_data()
@@ -908,9 +976,12 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 if(True):
                     #self.sam4log.
                     self.sam4log.send_serial_data('stop\n')
+                    time.sleep(0.1)                                                
                     self.sam4log.send_serial_data('stop\n')
+                    time.sleep(0.2)                            
                     self.sam4log.send_serial_data('freq 200\n')
-                    time.sleep(0.1)        
+                    #self.sam4log.send_serial_data('freq 333\n')
+                    time.sleep(0.2)                            
                     if(self.sam4log.query_sam4logger() == True):
                         self.deviceinfo.update(self.sam4log.device_info)
                         self.print_serial_data = False
@@ -922,8 +993,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                     time.sleep(.5)
                     self.sam4log.add_raw_data_stream()
                     time.sleep(0.2)
-                    #self.sam4log.init_sam4logger(adcs = [0,2,4])
-                    time.sleep(0.2)                
                     self.sam4log.start_converting_raw_data()        
 
 
@@ -1139,6 +1208,71 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,))
         self._plotxyprocess.start()
 
+    def _plot_test_clicked(self):
+        """
+        
+        Starts a pyqtgraph plotting process
+
+        """
+        sender = self.sender()
+        t = sender.text()
+        logger.debug('Plotting the streams')
+        plot_IMU = False
+        if('IMU' in t):
+            logger.debug('Plotting IMU')
+            plot_IMU = True
+        else:
+            logger.debug('Plotting test')
+
+        # http://stackoverflow.com/questions/29556291/multiprocessing-with-qt-works-in-windows-but-not-linux
+        # this does not work with python 2.7 
+        multiprocessing.set_start_method('spawn',force=True)
+        addresses = []
+        graphs = []
+        dstreams = []
+        dstreams_IMU = []
+        dstreams_O2 = []
+        
+        iIMU = 0
+        for stream in self.sam4log.Streams:
+            print(stream.get_family())
+            if(stream.get_family() == "sam4log adc"):
+                addresses.append(self.sam4log.get_stream_address(stream))
+                dstream = {}
+                dstream['address'] = addresses[-1]
+                dstream['ind_x'] = 1
+                dstream['ind_y'] = 2
+                dstream['nth_point'] = 1
+                dstreams.append(dstream)
+
+            if(stream.get_family() == "sam4log IMU"):
+                addresses.append(self.sam4log.get_stream_address(stream))
+                for i in range(3):
+                    dstream = {}                
+                    dstream['address'] = addresses[-1]
+                    dstream['ind_x'] = 1
+                    dstream['ind_y'] = 3 + iIMU
+                    iIMU += 1
+                    dstream['nth_point'] = 1
+                    dstreams_IMU.append(dstream)
+                    
+            if(stream.get_family() == "sam4log O2"):
+                addresses.append(self.sam4log.get_stream_address(stream))
+                dstream = {}                
+                dstream['address'] = addresses[-1]
+                dstream['ind_x'] = 1
+                dstream['ind_y'] = 2
+                dstream['nth_point'] = 1
+                dstreams_O2.append(dstream)
+                
+        if(plot_IMU):
+            graphs = [[dstreams_IMU[0]],[dstreams_IMU[1]],[dstreams_IMU[2]]]            
+        else:
+            graphs = [[dstreams[0]],[dstreams[1]],dstreams_O2]            
+            
+        self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy_test,args=(graphs,))
+        self._plotxyprocess.start()        
+
         
     def _record_clicked(self):
         """
@@ -1176,7 +1310,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self._info_record_bu.setText(self._recording_status[0])
             self._info_record_info.setText('Status: Stopped logging to file  '
                         + self.filename_log  + ' ( ' + str(self.sam4log.logfile_bytes_wrote)
-                        + ' bytes wrote)')            
+                                           + ' bytes written)')            
             
         # The more complex slogger object, disable for the moment
         if False:
