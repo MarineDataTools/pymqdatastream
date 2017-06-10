@@ -1,6 +1,16 @@
 from cobs import cobs
 import numpy as np
+import logging
 import pymqdatastream.connectors.sam4log.ltc2442 as ltc2442
+
+logger = logging.getLogger('sam4log_data_packages')
+logger.setLevel(logging.DEBUG)
+
+def decode_format31(data_str,device_info):
+    """
+    Converts raw data of the format 31
+    """
+    pass
 
 
 def decode_format4(data_str,device_info):
@@ -35,6 +45,8 @@ def decode_format4(data_str,device_info):
 
     ==== ====
 
+    Maximum packet size: 17 + 8 * 3 = 41 Byte
+
     FLAG LTC: Every bit is dedicted to one of the eight physically
     available LTC2442 and is set to one if activated
 
@@ -45,17 +57,22 @@ def decode_format4(data_str,device_info):
     Returns:
         []: List of data
 
-    """    
+    """
+    funcname = 'decode_format4'
     data_packets = []
     ind_ltcs = [0,0,0,0,0,0,0,0]
     nstreams = (max(device_info['channel_seq']) + 1)
     data_stream = [[] for _ in range(nstreams) ]    
     data_split = data_str.split(b'\x00')
-    if(len(data_split) > 0):
+    if(len(data_split) > 1):
+        #print('data_str',data_str)
+        #print('data_split',data_split)        
         if(len(data_split[-1]) == 0): # The last byte was a 0x00
            data_str = b''
         else:
            data_str = data_split[-1]
+           data_split.pop() # remove last element           
+
 
         for data_cobs in data_split:
             # Timing
@@ -64,14 +81,14 @@ def decode_format4(data_str,device_info):
             #print('Cobs data:')
             #print(data_cobs)
             try:
-                #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
+                #logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
                 if(len(data_cobs) > 3):
                     data_decobs = cobs.decode(data_cobs)
                     #print('decobs data:')
                     #print(data_decobs)
                     #print(data_decobs[0],type(data_decobs[0]))                            
                     packet_ident    = data_decobs[0]
-                    #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
+                    #logger.debug(funcname + ': packet_ident ' + str(packet_ident))
                     if(packet_ident == 0xae):
                         #print('JA')
                         #packet_flag_ltc = ord(data_decobs[1]) # python2
@@ -91,12 +108,12 @@ def decode_format4(data_str,device_info):
                         #speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
                         speed,channel = ltc2442.interprete_ltc2442_command_test([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)                        
                         ind = 5
-                        #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
-                        #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
-                        #self.logger.debug(funcname + ': Ind ltc '  + str(ind_ltc))
-                        #self.logger.debug(funcname + ': channel '  + str(channel))
-                        #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
-                        #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
+                        #logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
+                        #logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
+                        #logger.debug(funcname + ': Ind ltc '  + str(ind_ltc))
+                        #logger.debug(funcname + ': channel '  + str(channel))
+                        #logger.debug(funcname + ': packet_size ' + str(packet_size))
+                        #logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
                         if(len(data_decobs) == packet_size):
                             packet_num_bin  = data_decobs[ind:ind+5]
                             packet_num      = int(packet_num_bin.hex(), 16) # python3
@@ -111,8 +128,8 @@ def decode_format4(data_str,device_info):
                             data_packet['ind'] = ind_ltcs
                             data_packet['V'] = [9999.99] * num_ltcs
                             ind += 5
-                            #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
-                            #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
+                            #logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
+                            #logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
                             for n,i in enumerate(range(0,num_ltcs*3,3)):
                                 data_ltc = data_decobs[ind+i:ind+i+3]
                                 data_ltc += 0x88.to_bytes(1,'big') # python3
@@ -128,11 +145,14 @@ def decode_format4(data_str,device_info):
                             data_stream[channel].append(data_list)
                             data_packets.append(data_packet)
                         else:
-                            self.logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
+                            logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
+                            #print('data_cobs:',data_cobs)
+                            #print('data_cecobs:',data_decobs)                            
 
-
-            except cobs.DecodeError:
-                self.logger.debug(funcname + ': COBS DecodeError')
+            #except cobs.DecodeError:
+            #    logger.debug(funcname + ': COBS DecodeError')
+            except Exception as e:
+                logger.debug(funcname + ': Error:' + str(e))                
                 pass
 
 

@@ -41,7 +41,7 @@ import pymqdatastream.connectors.sam4log.pymqds_sam4log as pymqds_sam4log
 from pymqdatastream.utils.utils_serial import serial_ports, test_serial_lock_file, serial_lock_file
 
 
-
+counter_test = 0
 
             
 # Serial baud rates
@@ -585,7 +585,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         # Updating the Voltage table
         self.intraqueuetimer = QtCore.QTimer(self)
-        self.intraqueuetimer.setInterval(200)
+        self.intraqueuetimer.setInterval(50)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()
 
@@ -1094,38 +1094,45 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
     def _poll_intraqueue(self):
         """
 
-        Polling the intraque , and displays the data in self._ad_table
+        Polling the intraque , and updates and displays the data in self._ad_table
 
         """
+        global counter_test
+        counter_test += 1
         data = []
         showL = True
         showA = True
         showO = True
-        # Get all data
+        show_channels = [True,True,True,True] # Show each channel once during the
+        # Get all data        
         while(len(self.sam4log.intraqueue) > 0):
             data = self.sam4log.intraqueue.pop()
 
-        #if(True):
+
+        if(True):
             if(len(data)>0):
                 # LTC channel data
                 if((data['type']=='L') and showL):
-                    showL = False
-                    # Get channel
+                    # Get channel                    
                     ch = data['ch']
-                    if(self.ONECHFLAG):
-                        ch = 0
-                    num = data['num']
-                    ct = data['t']
-                    V = data['V']
-                    # Packet number            
-                    item = QtWidgets.QTableWidgetItem(str(num))
-                    self._ad_table.setItem(0, ch + 1, item)
-                    # Counter
-                    item = QtWidgets.QTableWidgetItem(str(ct))
-                    self._ad_table.setItem(1, ch + 1, item)
-                    for n,i in enumerate(self.sam4log.flag_adcs):
-                        item = QtWidgets.QTableWidgetItem(str(V[n]))
-                        self._ad_table.setItem(i+2, ch+1, item )
+                    if(show_channels[ch]):
+                        show_channels[ch] = False
+                        #showL = False
+                        if(self.ONECHFLAG):
+                            ch = 0
+                        num = data['num']
+                        ct = data['t']
+                        V = data['V']
+                        # Packet number            
+                        item = QtWidgets.QTableWidgetItem(str(num))
+                        self._ad_table.setItem(0, ch + 1, item)
+                        # Counter
+                        item = QtWidgets.QTableWidgetItem(str(ct))
+                        self._ad_table.setItem(1, ch + 1, item)
+                        # Update all LTC data of that channel
+                        for n,i in enumerate(self.sam4log.flag_adcs):
+                            item = QtWidgets.QTableWidgetItem(str(V[n]))
+                            self._ad_table.setItem(i+2, ch+1, item )
 
                 # IMU data                        
                 if((data['type']=='A') and showA):

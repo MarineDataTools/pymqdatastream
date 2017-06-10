@@ -39,7 +39,7 @@ for i,speed in enumerate(s4lv0_4_speeds):
 
 s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]
 
-s4lv0_46_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 250, 333]
+s4lv0_46_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 250, 333, 400, 500, 625, 1000, 1250, 2000]
 
 
 file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'
@@ -342,13 +342,13 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
             
     #def read_serial_data(self, dt = 0.003):
-    def read_serial_data(self, dt = 0.05):
+    def read_serial_data(self, dt = 0.01):
         """
 
         The serial data polling thread
 
         Args:
-            dt: Sleeping time between polling [default 0.003]
+            dt: Sleeping time between polling [default 0.01]
 
         """
         funcname = self.__class__.__name__ + '.read_serial_data()'
@@ -728,10 +728,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
         FLAG_IS_SAM4LOG = False
         self.send_serial_data('stop\n')
         time.sleep(0.1+dt)
-        tlocalstr = time.strftime('# PC Time just before info command (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())        
+
         self.send_serial_data('info\n')
         time.sleep(0.1+dt)        
-        data_str = tlocalstr     
+        data_str = ''
         while(len(deque) > 0):
             data = deque.pop()
             try:
@@ -742,7 +742,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
         return_str = data_str
         # Parse the received data for a valid reply
-        if( '>>>stop' in data_str ):
+        if( ('>>>stop' in data_str) or ('><<stop' in data_str) ):
             FLAG_IS_SAM4LOG=True
             boardversion = '??'
             firmwareversion = '??'
@@ -783,6 +783,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         time.sleep(0.1+dt)
         self.send_serial_data('channels\n')
         time.sleep(0.1+dt)
+        tlocalstr = time.strftime('# PC Time just before info command (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())        
         self.send_serial_data('info\n')
         time.sleep(0.1+dt)
         # Hack, cleaner or just leave it as it does not hurt if S4L does not know it?
@@ -790,7 +791,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         time.sleep(0.4+dt)
 
         # Get the fresh data
-        data_str = ''
+        data_str = tlocalstr
         while(len(deque) > 0):
             data = deque.pop()
             data_str += data.decode(encoding='utf-8')
@@ -810,7 +811,6 @@ class sam4logDataStream(pymqdatastream.DataStream):
         return True
 
            
-        
     def start_converting_raw_data(self):
         """
 
@@ -1380,6 +1380,13 @@ class sam4logDataStream(pymqdatastream.DataStream):
             
             #if(len(data0)>0):
             #    streams[0].pub_data(data0)
+            # Debugging frequency
+            if(len(data_packets) >=2):
+                ct = data_packets[1]['t']
+                cto = data_packets[0]['t']
+                dtt = (ct - cto)
+                ftt = 1/dtt
+                print(ftt)                                
 
             # This data is for local plotting stuff (e.g. the gui)
             for data_packet in data_packets:
@@ -1454,6 +1461,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
         ad0_converted = 0
         data_str = b''
         cnt = 0
+        
+        cto = 0 # Get frequency (hack)
+        ct = cto
         while True:
             cnt += 1
             # logger.debug(funcname + ': converted: ' + str(ad0_converted))
@@ -1484,6 +1494,13 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 print('len',len(data_str))                
                 [data_stream,data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
                 self.packets_converted += len(data_packets)
+                if(len(data_packets) >=2):
+                    ct = data_packets[1]['t']
+                    cto = data_packets[0]['t']
+                    dtt = (ct - cto)
+                    ftt = 1/dtt
+                    print(ftt)                    
+
 
                 ta.append( time.time() )                    
                 # Lets publish the converted data!
@@ -1498,7 +1515,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
                 ta.append(time.time())
                 ta = np.asarray(ta)
-                print(np.diff(ta))
+                #print(np.diff(ta))
+
 
             # Try to read from the queue, if something was read, quit
             try:
