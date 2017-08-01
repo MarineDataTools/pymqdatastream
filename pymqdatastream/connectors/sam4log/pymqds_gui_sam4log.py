@@ -21,6 +21,25 @@ import collections
 import time
 import multiprocessing
 import binascii
+import yaml
+
+# Get a standard configuration
+from pkg_resources import Requirement, resource_filename
+filename = resource_filename(Requirement.parse('pymqdatastream'),'pymqdatastream/connectors/sam4log/sam4log_config.yaml')
+filename_version = resource_filename(Requirement.parse('pymqdatastream'),'pymqdatastream/VERSION')
+
+
+with open(filename_version) as version_file:
+    version = version_file.read().strip()
+
+print(filename_version)
+print(version)    
+
+with open(filename) as config_file:
+    config = yaml.load(config_file)
+    print(config)
+    
+    
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_gui_sam4log')
@@ -320,7 +339,7 @@ def _start_pymqds_plotxy_test(graphs):
     """
     Start a pymqds_plotxy session and plots the streams given in the addresses list
     Args:
-        streams: Dictionary of a stream with addiotionally information as index to plot etc.
+        streams: Dictionary of a stream with additionally information as index to plot etc.
     
     """
 
@@ -363,11 +382,31 @@ def _start_pymqds_plotxy_test(graphs):
             
     plotxywindow.show()
     sys.exit(app.exec_())    
-    logger.debug("_start_pymqds_plotxy(): done")    
+    logger.debug("_start_pymqds_plotxy(): done")
 
 
-    
+#
+#
+#
+#
+class sam4logDevice():
+    def __init__(self):
+        self.ready = False
+        print('Hallo init!')
 
+    def setup(self):
+        """
+        Setup of the device
+        """
+        print('Hallo setup!')
+        
+
+
+#
+#
+# The main window
+#
+#
 class sam4logMainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
@@ -387,6 +426,29 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         self.mainwidget = QtWidgets.QWidget()
         self.layout = QtWidgets.QGridLayout(self.mainwidget)
+
+        # Main tasks for the main layout
+        self.tasks = []
+        self.tasks.append({'name':'Devices','widget':QtWidgets.QPushButton('Devices')})
+        self.tasks[-1]['widget'].clicked.connect(self.setup_devices)
+        
+        self.tasks.append({'name':'Info','widget':QtWidgets.QPushButton('Info')})
+        self.tasks.append({'name':'Show','widget':QtWidgets.QPushButton('Show data')})
+        self.tasks.append({'name':'Plot','widget':QtWidgets.QPushButton('Plot data')})
+
+        self.all_widgets = []
+
+        #print(self.tasks.keys())
+        #print('fsdfds')
+        #print('fsdfds')
+        #print('fsdfds')
+        #print('fsdfds')        
+
+        # Widget to collect all information
+        self.disp_widget = QtWidgets.QWidget()
+        self.disp_widget_layout = QtWidgets.QGridLayout(self.disp_widget)
+
+        self.all_widgets.append(self.disp_widget)
 
         self.deviceinfo = sam4logInfo()
         # A flag if only one channel is used
@@ -546,14 +608,30 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.get_source()
 
         # The main layout
-        self.layout.addLayout(self.layout_source,0,0,1,3)
-        self.layout.addWidget(self._s4l_settings_bu,1,3)
-        self.layout.addWidget(self.deviceinfo,1,0,1,3)
-        #layout.addWidget(self._ad_choose_bu,3,1)        
-        self.layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
-        self.layout.addWidget(self._ad_table,4,0,2,3)
-        self.layout.addWidget(self._IMU_table,4,3,2,2)
-        self.layout.addWidget(self._O2_table,4,5,2,2)                
+        # Add all tasks
+        for i,task in enumerate(self.tasks):
+            self.layout.addWidget(task['widget'],i,3)
+            
+        if(False):
+            self.layout.addLayout(self.layout_source,0,0,1,3)
+            self.layout.addWidget(self._s4l_settings_bu,1,3)
+            self.layout.addWidget(self.deviceinfo,1,0,1,3)
+            #layout.addWidget(self._ad_choose_bu,3,1)        
+            self.layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
+            self.layout.addWidget(self._ad_table,4,0,2,3)
+            self.layout.addWidget(self._IMU_table,4,3,2,2)
+            self.layout.addWidget(self._O2_table,4,5,2,2)
+        else:
+            self.disp_widget_layout.addLayout(self.layout_source,0,0,1,3)
+            self.disp_widget_layout.addWidget(self._s4l_settings_bu,1,3)
+            self.disp_widget_layout.addWidget(self.deviceinfo,1,0,1,3)
+            #layout.addWidget(self._ad_choose_bu,3,1)        
+            self.disp_widget_layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
+            self.disp_widget_layout.addWidget(self._ad_table,4,0,2,3)
+            self.disp_widget_layout.addWidget(self._IMU_table,4,3,2,2)
+            self.disp_widget_layout.addWidget(self._O2_table,4,5,2,2)
+            self.disp_widget.show()
+            
         
         self.setCentralWidget(self.mainwidget)
         
@@ -589,6 +667,50 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
         self.intraqueuetimer.start()
 
+    def setup_devices(self):
+        """
+        Bais adding and removing functions for the device setup
+        """
+        self.device_setup_widget        = QtWidgets.QWidget()
+        w = self.device_setup_widget
+        self.device_setup_widget_layout = QtWidgets.QGridLayout(self.device_setup_widget)
+        cl = QtWidgets.QPushButton('Close')
+        cl.clicked.connect(self.device_setup_widget.close)
+
+        dev_add = QtWidgets.QPushButton('Add')
+        dev_add.clicked.connect(self.add_devices)
+
+        self.combo_dev_add     = QtWidgets.QComboBox(w)
+
+        for d in config['devices']:
+            devname = list(d)[0]
+            self.combo_dev_add.addItem(devname)
+        
+
+        self.device_setup_widget_layout.addWidget(self.combo_dev_add,0,0)
+        self.device_setup_widget_layout.addWidget(dev_add,0,1)
+        self.device_setup_widget_layout.addWidget(cl,1,0)
+        self.device_setup_widget.show()
+
+        
+    def add_devices(self):
+        """
+        Adds a device using a device object with the appropriate functions
+        """
+        dev = str( self.combo_dev_add.currentText() )
+        print('Hallo add: ' + dev)
+        for d in config['devices']: # Search for the config entry
+            devname = list(d)[0]
+            if(devname == dev):
+                print('Found device ... with object name ' + str(d[devname]['object']))
+                obj = str(d[devname]['object'])
+                #tmp = getattr(globals(),'sam4logDevice')
+                tmp = globals()[obj]
+                print(tmp())
+                
+        #type
+        #SubClass = type('SubClass', (BaseClass,), {'set_x': set_x})
+        
     def get_source(self):
         """
         Changes the source of the logger
@@ -681,6 +803,25 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             height += self._ad_table.rowHeight(i)
             
         self._ad_table.setFixedHeight(height + hheight + fwidth)
+        # Only select one item
+        self._ad_table.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+        # Add a right click menu to the table
+        self._ad_table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self._ad_table.customContextMenuRequested.connect(self._table_menu)
+
+    def _table_menu(self, event):
+        """
+        Handling right click menu of the table
+        """
+        # From here https://stackoverflow.com/questions/20930764/how-to-add-a-right-click-menu-to-each-cell-of-qtableview-in-pyqt
+        # and here https://stackoverflow.com/questions/7782071/how-can-i-get-right-click-context-menus-for-clicks-in-qtableview-header
+        #index = self.indexAt(event.pos())
+        if self._ad_table.selectionModel().selection().indexes():
+            for i in self._ad_table.selectionModel().selection().indexes():
+                row, column = i.row(), i.column()
+        menu = QtGui.QMenu()
+        # an action for everyone
+        print('HALLLLOO!',str(event),row,column)
 
 
     def _ad_table_setup_1ch(self):
@@ -785,6 +926,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
     def close_application(self):
         logger.debug('Goodbye!')
+
+        for w in self.all_widgets:
+            w.close()
         # Closing potentially open widgets
         try:
             self._show_data_widget_opened.close()
@@ -1348,7 +1492,7 @@ def main():
     width, height = screen_resolution.width(), screen_resolution.height()
     window = sam4logMainWindow()
     # Resize the window
-    window.resize(width-100,2*height/3)
+    #window.resize(width-100,2*height/3)
     window.show()
     sys.exit(app.exec_())
 

@@ -783,7 +783,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         time.sleep(0.1+dt)
         self.send_serial_data('channels\n')
         time.sleep(0.1+dt)
-        tlocalstr = time.strftime('# PC Time just before info command (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())        
+        tlocalstr = time.strftime('# PC Time just before info command (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())
         self.send_serial_data('info\n')
         time.sleep(0.1+dt)
         # Hack, cleaner or just leave it as it does not hurt if S4L does not know it?
@@ -1333,7 +1333,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
                                 data_packets.append(data_packet)
                                 data_stream[channel].append(data_list)
-                            # IMU data
+                            # Time and counter information
+                            elif(packet_type == 'T'):
+                                pass
+
                             elif(packet_type == 'A'):
                                 #A;00000021667084;00000000103737;+40.9;-0.09180;-0.02295;-1.01172;-0.05344;-1.02290;-0.63359;0.000000;0.000000;0.000000
                                 packet_time = int(data_split[1])/self.device_info['counterfreq']

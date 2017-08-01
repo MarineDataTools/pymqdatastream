@@ -34,7 +34,7 @@ if sys.version_info >= (3,4):
           'pymqds_sam4log=pymqdatastream.connectors.sam4log.pymqds_sam4log:main',\
           'pymqds_gui_sam4log=pymqdatastream.connectors.sam4log.pymqds_gui_sam4log:main',\
           'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
-          package_data = {'microrider':['data/*.DAT'],'':['VERSION']},
+          package_data = {'microrider':['data/*.DAT'],'':['VERSION'],'sam4log_gui':['connectors/sam4log/sam4log_config.yaml']},
           zip_safe=False)
 
 else:
