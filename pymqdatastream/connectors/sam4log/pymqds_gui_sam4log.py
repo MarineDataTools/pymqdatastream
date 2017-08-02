@@ -399,6 +399,292 @@ class sam4logDevice():
         Setup of the device
         """
         print('Hallo setup!')
+                # Source
+        sources = ['serial','file','ip']
+        
+        self.setup_widget = QtWidgets.QWidget()
+        w = self.setup_widget
+        w.setWindowTitle('sam4log setup')
+        self.combo_source = QtWidgets.QComboBox(w)
+        for s in sources:
+            self.combo_source.addItem(str(s))        
+            
+        
+        self.layout_source = QtWidgets.QHBoxLayout(w)
+        # Serial interface stuff
+        self.combo_serial = QtWidgets.QComboBox(w)
+        self.combo_baud   = QtWidgets.QComboBox(w)
+        for b in baud:
+            self.combo_baud.addItem(str(b))
+
+        self.combo_baud.setCurrentIndex(len(baud)-1)
+        self.serial_open_bu = QtWidgets.QPushButton('Query')
+        self.serial_open_bu.clicked.connect(self.clicked_open_bu)
+
+        self.serial_test_bu = QtWidgets.QPushButton('Test ports')
+        self.serial_test_bu.clicked.connect(self.test_ports)        
+
+        self._s4l_settings_bu = QtWidgets.QPushButton('Device Setup')
+        self._s4l_settings_bu.setEnabled(False)
+        self._s4l_settings_bu.clicked.connect(self._clicked_settings_bu)
+
+        # Widget to show info about how much bytes have been received
+        # TODO This should be an info widget
+        self.bytesreadlcd = QtWidgets.QLCDNumber(w)
+        self.bytesreadlcd.setDigitCount(15)
+        self.bytesreadlcd.display(200)
+        # Widget to show the average transfer rate
+        self.bytesspeedlabel = QtWidgets.QLabel('Bit/s')
+        self.bytesspeed      = QtWidgets.QLabel('NaN')                
+        
+        # File source
+        self.button_open_file      = QtWidgets.QPushButton('Open file')
+        #self.button_open_file.clicked.connect(self.open_file)
+        self.label_file_read_dt    = QtWidgets.QLabel('Read in intervals of [s]')
+        self.spin_file_read_dt     = QtWidgets.QDoubleSpinBox()
+        self.spin_file_read_dt.setValue(0.05)
+        self.label_nbytes          = QtWidgets.QLabel('Read number of bytes per dt')        
+        self.spin_file_read_nbytes = QtWidgets.QSpinBox()
+        self.spin_file_read_nbytes.setRange(1, 1024)
+        #self.freqsld.setSingleStep(10)
+        self.spin_file_read_nbytes.setValue(400)
+
+        # IP source
+        self.text_ip = QtWidgets.QLineEdit()
+        # Hack, this should be removed later
+        self.text_ip.setText('192.168.236.18:28117')
+        self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
+        self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
+        #self.button_open_socket.clicked.connect(self.clicked_open_socket)
+        
+        self.combo_source.currentIndexChanged.connect(self.get_source)
+        # Do the layout of the source
+        self.test_ports() # Looking for serial ports        
+        self.get_source()
+        w.show()
+
+    def get_source(self):
+        """
+        Changes the source of the logger
+        """
+        # The source data layout (serial, files)
+        widgets_serial = [ self.combo_source,self.serial_test_bu,self.combo_serial,
+                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd, self.bytesspeedlabel,self.bytesspeed]
+        widgets_file   = [ self.combo_source,self.button_open_file, self.label_nbytes,
+                           self.spin_file_read_nbytes, self.label_file_read_dt, self.spin_file_read_dt]
+        widgets_ip     = [ self.combo_source,self.text_ip, self.button_open_socket, self.bytesspeedlabel,self.bytesspeed ]        
+
+        logger.debug('get_source()')
+        data_source = str( self.combo_source.currentText() )
+
+        if(data_source == 'serial'):
+            whide = widgets_file + widgets_ip
+            for w in whide:
+                try:
+                    self.layout_source.removeWidget(w)
+                    w.hide()
+                except Exception as e:
+                    print(str(e))
+                    pass
+
+            for w in widgets_serial:
+                try:
+                    self.layout_source.addWidget(w)
+                    w.show()
+                except Exception as e:
+                    print(str(e))                    
+                    pass
+                
+        elif(data_source == 'file'):
+            whide = widgets_serial + widgets_ip            
+            for w in whide:
+                try:
+                    self.layout_source.removeWidget(w)
+                    w.hide()
+                except:
+                    pass
+
+            for w in widgets_file:
+                try:
+                    self.layout_source.addWidget(w)
+                    w.show()
+                except:
+                    pass
+
+        elif(data_source == 'ip'):
+            whide = widgets_serial + widgets_file                        
+            for w in whide:
+                try:
+                    self.layout_source.removeWidget(w)
+                    w.hide()
+                except:
+                    pass
+
+            for w in widgets_ip:
+                try:
+                    self.layout_source.addWidget(w)
+                    w.show()
+                except:
+                    pass
+
+    def test_ports(self):
+        """
+        
+        Look for serial ports
+
+        """
+        ports = serial_ports()
+        # This could be used to pretest devices
+        #ports_good = self.test_device_at_serial_ports(ports)
+        ports_good = ports
+        self.combo_serial.clear()
+        for port in ports_good:
+            self.combo_serial.addItem(str(port))
+
+    def clicked_open_bu(self):
+        """
+        """
+        t = self.serial_open_bu.text()
+        print('Click ' + str(t))
+        if True:
+            if(t == 'Query'):
+                ser = str(self.combo_serial.currentText())
+                b = int(self.combo_baud.currentText())
+                print('Opening port' + ser + ' with baudrate ' + str(b))
+                self.sam4log.add_serial_device(ser,baud=b)
+                if(self.sam4log.status == 0): # Succesfull opened
+                    if(self.sam4log.query_sam4logger() == True):
+                        self.deviceinfo.update(self.sam4log.device_info)
+                        # Enable a settings button or if version 0.45 add a frequency combo
+                        vers = float(self.sam4log.device_info['firmware'])
+                        # The high speed 0.45 version 
+                        if(vers == 0.45):
+                            logger.debug('Opening Version 0.45 device setup')
+                            self._s4l_settings_bu.close()
+                            self._s4l_freq_combo = QtWidgets.QComboBox(self)
+                            #self._s4l_freq_combo.setEnabled(True)                            
+                            self._speeds_hz     = pymqds_sam4log.s4lv0_45_speeds_hz
+                            for i,speed in enumerate(self._speeds_hz):
+                                self._s4l_freq_combo.addItem(str(speed))
+
+                            self.layout.addWidget(self._s4l_freq_combo,1,3)
+                            self._ad_table.clear()                                                        
+                            self._ad_table_setup_1ch()
+                            self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set_v045)
+                            # TODO Have to resize the widget to have nicer data
+                        # The general purpose 
+                        elif(vers >= 0.46):
+                            logger.debug('Opening Version 0.46 device setup')
+                            self._s4l_settings_bu.close()
+                            self._s4l_freq_combo = QtWidgets.QComboBox(self)
+                            #self._s4l_freq_combo.setEnabled(True)                            
+                            self._speeds_hz     = pymqds_sam4log.s4lv0_46_speeds_hz
+                            for i,speed in enumerate(self._speeds_hz):
+                                self._s4l_freq_combo.addItem(str(speed))
+
+                            self.layout.addWidget(self._s4l_freq_combo,1,3)
+                            self._ad_table.clear()                                                        
+                            self._ad_table_setup()
+                            self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set)
+                            # TODO Have to resize the widget to have nicer data                            
+                        else:
+                            self._s4l_settings_bu.setEnabled(True)
+                            self._ad_table.clear()                            
+                            self._ad_table_setup()                                            
+                        #                            
+                        #
+                        self.serial_open_bu.setText('Open')
+                else:
+                    logger.warning('Could not open port:' + str(ser))
+                    
+            elif(t == 'Open'):
+                #ser = str(self.combo_serial.currentText())
+                #b = int(self.combo_baud.currentText())
+                self.serial_open_bu.setText('Close')
+                self._s4l_settings_bu.setEnabled(False)
+                self._s4l_freq_combo.setEnabled(False)                                            
+                #print('Opening port' + ser + ' with baudrate ' + str(b))
+                #self.sam4log.add_serial_device(ser,baud=b)
+                self.sam4log.add_raw_data_stream()
+                time.sleep(0.2)
+                self.sam4log.query_sam4logger()
+                #self.sam4log.init_sam4logger(adcs = [0,2,4])
+                time.sleep(0.2)                
+                self.sam4log.start_converting_raw_data()
+                self.combo_serial.setEnabled(False)
+                self.combo_baud.setEnabled(False)                
+                self.status = 1
+            else:
+                self.sam4log.stop_serial_data()
+                self.sam4log.stop_converting_raw_data()
+                self.serial_open_bu.setText('Query')
+                self.combo_serial.setEnabled(True)
+                self.combo_baud.setEnabled(True)                                
+                self.status = 0
+
+        else:
+            print('bad open close')
+
+
+    def clicked_open_socket(self):
+        """
+        Opens a 
+        """
+        print('Open!')
+        addrraw = str(self.text_ip.text())
+        print(addrraw)
+        try:
+            addr = addrraw.split(':')[0]
+            port = int(addrraw.split(':')[1])
+        except:
+            print('Enter proper address')
+            return
+
+        print(addr,port)
+        if(self.button_open_socket.text() == self._button_sockets_choices[0]):
+            self.sam4log.add_socket(addr,port)
+            if(self.sam4log.status == 0): # Succesfull opened            
+                time.sleep(0.5)
+                if(True):                    
+                    print('Query socket/device')
+                    if(self.sam4log.query_sam4logger() == True):
+                        self.deviceinfo.update(self.sam4log.device_info)
+                        self.button_open_socket.setEnabled(False)
+                        self.text_ip.setEnabled(False)
+                    else:
+                        print('No device found!')
+                        return
+
+                if(True):
+                    #self.sam4log.
+                    self.sam4log.send_serial_data('stop\n')
+                    time.sleep(0.1)                                                
+                    self.sam4log.send_serial_data('stop\n')
+                    time.sleep(0.2)                            
+                    self.sam4log.send_serial_data('freq 200\n')
+                    #self.sam4log.send_serial_data('freq 333\n')
+                    time.sleep(0.2)                            
+                    if(self.sam4log.query_sam4logger() == True):
+                        self.deviceinfo.update(self.sam4log.device_info)
+                        self.print_serial_data = False
+                        time.sleep(0.1)            
+                        self.sam4log.send_serial_data('start\n')
+
+
+                if(True):            
+                    time.sleep(.5)
+                    self.sam4log.add_raw_data_stream()
+                    time.sleep(0.2)
+                    self.sam4log.start_converting_raw_data()
+
+    def _clicked_settings_bu(self):
+        """
+        """
+        logger.debug('Settings')
+        
+        print('Firmware' + self.sam4log.device_info['firmware'])
+        self._settings_widget = sam4logConfig(self.sam4log)    
+        self._settings_widget.show()                    
         
 
 
@@ -437,6 +723,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.tasks.append({'name':'Plot','widget':QtWidgets.QPushButton('Plot data')})
 
         self.all_widgets = []
+        self.devices = []
 
         #print(self.tasks.keys())
         #print('fsdfds')
@@ -453,32 +740,8 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.deviceinfo = sam4logInfo()
         # A flag if only one channel is used
         self.ONECHFLAG = False
-        # Serial interface stuff
-        self.combo_serial = QtWidgets.QComboBox(self)
-        self.combo_baud   = QtWidgets.QComboBox(self)
-        for b in baud:
-            self.combo_baud.addItem(str(b))
 
-        self.combo_baud.setCurrentIndex(len(baud)-1)
-        self.serial_open_bu = QtWidgets.QPushButton('Query')
-        self.serial_open_bu.clicked.connect(self.clicked_open_bu)
 
-        self.serial_test_bu = QtWidgets.QPushButton('Test ports')
-        self.serial_test_bu.clicked.connect(self.test_ports)        
-
-        self._s4l_settings_bu = QtWidgets.QPushButton('Device Setup')
-        self._s4l_settings_bu.setEnabled(False)
-        self._s4l_settings_bu.clicked.connect(self._clicked_settings_bu)
-
-        # Widget to show info about how much bytes have been received
-        self._bin_info = QtWidgets.QWidget()
-        binlayout = QtWidgets.QGridLayout(self._bin_info)
-        self.bytesreadlcd = QtWidgets.QLCDNumber(self)
-        self.bytesreadlcd.setDigitCount(15)
-        self.bytesreadlcd.display(200)
-        # Widget to show the average transfer rate
-        self.bytesspeedlabel = QtWidgets.QLabel('Bit/s')
-        self.bytesspeed      = QtWidgets.QLabel('NaN')        
 
         # Command stuff
         self.send_le = QtWidgets.QLineEdit(self)
@@ -572,40 +835,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
         self._O2_table_setup()        
         
-        # Source
-        sources = ['serial','file','ip']
-        
-        
-        self.combo_source = QtWidgets.QComboBox(self)
-        for s in sources:
-            self.combo_source.addItem(str(s))        
-            
-        
-        self.layout_source = QtWidgets.QHBoxLayout(self)
-        
-        # File source
-        self.button_open_file      = QtWidgets.QPushButton('Open file')
-        self.button_open_file.clicked.connect(self.open_file)
-        self.label_file_read_dt    = QtWidgets.QLabel('Read in intervals of [s]')
-        self.spin_file_read_dt     = QtWidgets.QDoubleSpinBox()
-        self.spin_file_read_dt.setValue(0.05)
-        self.label_nbytes          = QtWidgets.QLabel('Read number of bytes per dt')        
-        self.spin_file_read_nbytes = QtWidgets.QSpinBox()
-        self.spin_file_read_nbytes.setRange(1, 1024)
-        #self.freqsld.setSingleStep(10)
-        self.spin_file_read_nbytes.setValue(400)
 
-        # IP source
-        self.text_ip = QtWidgets.QLineEdit()
-        # Hack, this should be removed later
-        self.text_ip.setText('192.168.236.18:28117')
-        self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
-        self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
-        self.button_open_socket.clicked.connect(self.clicked_open_socket)
-        
-        self.combo_source.currentIndexChanged.connect(self.get_source)
-        # Do the layout of the source
-        self.get_source()
 
         # The main layout
         # Add all tasks
@@ -622,8 +852,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             self.layout.addWidget(self._IMU_table,4,3,2,2)
             self.layout.addWidget(self._O2_table,4,5,2,2)
         else:
-            self.disp_widget_layout.addLayout(self.layout_source,0,0,1,3)
-            self.disp_widget_layout.addWidget(self._s4l_settings_bu,1,3)
             self.disp_widget_layout.addWidget(self.deviceinfo,1,0,1,3)
             #layout.addWidget(self._ad_choose_bu,3,1)        
             self.disp_widget_layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
@@ -644,7 +872,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.sam4log = pymqds_sam4log.sam4logDataStream(logging_level='DEBUG')
         self.sam4log.deques_raw_serial.append(collections.deque(maxlen=5000))
         self.rawdata_deque = self.sam4log.deques_raw_serial[-1]
-        self.test_ports() # Looking for serial ports
+
 
         # If the configuration changed call the _update function
         self.sam4log.init_notification_functions.append(self._update_status_information)
@@ -673,6 +901,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         """
         self.device_setup_widget        = QtWidgets.QWidget()
         w = self.device_setup_widget
+        self.all_widgets.append(w)        
         self.device_setup_widget_layout = QtWidgets.QGridLayout(self.device_setup_widget)
         cl = QtWidgets.QPushButton('Close')
         cl.clicked.connect(self.device_setup_widget.close)
@@ -703,77 +932,17 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             devname = list(d)[0]
             if(devname == dev):
                 print('Found device ... with object name ' + str(d[devname]['object']))
+                
                 obj = str(d[devname]['object'])
                 #tmp = getattr(globals(),'sam4logDevice')
-                tmp = globals()[obj]
-                print(tmp())
+                deviceobj = globals()[obj]() # Call the object of the device
+                deviceobj.setup()
+                self.devices.append(deviceobj)
                 
         #type
         #SubClass = type('SubClass', (BaseClass,), {'set_x': set_x})
         
-    def get_source(self):
-        """
-        Changes the source of the logger
-        """
-        # The source data layout (serial, files)
-        widgets_serial = [ self.combo_source,self.serial_test_bu,self.combo_serial,
-                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd, self.bytesspeedlabel,self.bytesspeed]
-        widgets_file   = [ self.combo_source,self.button_open_file, self.label_nbytes,
-                           self.spin_file_read_nbytes, self.label_file_read_dt, self.spin_file_read_dt]
-        widgets_ip     = [ self.combo_source,self.text_ip, self.button_open_socket, self.bytesspeedlabel,self.bytesspeed ]        
 
-        logger.debug('get_source()')
-        data_source = str( self.combo_source.currentText() )
-
-        if(data_source == 'serial'):
-            whide = widgets_file + widgets_ip
-            for w in whide:
-                try:
-                    self.layout_source.removeWidget(w)
-                    w.hide()
-                except Exception as e:
-                    print(str(e))
-                    pass
-
-            for w in widgets_serial:
-                try:
-                    self.layout_source.addWidget(w)
-                    w.show()
-                except Exception as e:
-                    print(str(e))                    
-                    pass
-                
-        elif(data_source == 'file'):
-            whide = widgets_serial + widgets_ip            
-            for w in whide:
-                try:
-                    self.layout_source.removeWidget(w)
-                    w.hide()
-                except:
-                    pass
-
-            for w in widgets_file:
-                try:
-                    self.layout_source.addWidget(w)
-                    w.show()
-                except:
-                    pass
-
-        elif(data_source == 'ip'):
-            whide = widgets_serial + widgets_file                        
-            for w in whide:
-                try:
-                    self.layout_source.removeWidget(w)
-                    w.hide()
-                except:
-                    pass
-
-            for w in widgets_ip:
-                try:
-                    self.layout_source.addWidget(w)
-                    w.show()
-                except:
-                    pass                                            
 
 
     def _ad_table_setup(self):
@@ -957,30 +1126,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
             
         self.close()
 
-        
-    def test_ports(self):
-        """
-        
-        Look for serial ports
-
-        """
-        ports = serial_ports()
-        # This could be used to pretest devices
-        #ports_good = self.test_device_at_serial_ports(ports)
-        ports_good = ports
-        self.combo_serial.clear()
-        for port in ports_good:
-            self.combo_serial.addItem(str(port))
-
-
-    def _clicked_settings_bu(self):
-        """
-        """
-        logger.debug('Settings')
-        
-        print('Firmware' + self.sam4log.device_info['firmware'])
-        self._settings_widget = sam4logConfig(self.sam4log)    
-        self._settings_widget.show()
 
     def open_file(self):
         """
@@ -1002,142 +1147,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 self.sam4log.start_converting_raw_data()
             
 
-    def clicked_open_bu(self):
-        """
-        """
-        t = self.serial_open_bu.text()
-        print('Click ' + str(t))
-        if True:
-            if(t == 'Query'):
-                ser = str(self.combo_serial.currentText())
-                b = int(self.combo_baud.currentText())
-                print('Opening port' + ser + ' with baudrate ' + str(b))
-                self.sam4log.add_serial_device(ser,baud=b)
-                if(self.sam4log.status == 0): # Succesfull opened
 
-                    if(self.sam4log.query_sam4logger() == True):
-                        self.deviceinfo.update(self.sam4log.device_info)
-                        # Enable a settings button or if version 0.45 add a frequency combo
-                        vers = float(self.sam4log.device_info['firmware'])
-                        # The high speed 0.45 version 
-                        if(vers == 0.45):
-                            logger.debug('Opening Version 0.45 device setup')
-                            self._s4l_settings_bu.close()
-                            self._s4l_freq_combo = QtWidgets.QComboBox(self)
-                            #self._s4l_freq_combo.setEnabled(True)                            
-                            self._speeds_hz     = pymqds_sam4log.s4lv0_45_speeds_hz
-                            for i,speed in enumerate(self._speeds_hz):
-                                self._s4l_freq_combo.addItem(str(speed))
-
-                            self.layout.addWidget(self._s4l_freq_combo,1,3)
-                            self._ad_table.clear()                                                        
-                            self._ad_table_setup_1ch()
-                            self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set_v045)
-                            # TODO Have to resize the widget to have nicer data
-                        # The general purpose 
-                        elif(vers >= 0.46):
-                            logger.debug('Opening Version 0.46 device setup')
-                            self._s4l_settings_bu.close()
-                            self._s4l_freq_combo = QtWidgets.QComboBox(self)
-                            #self._s4l_freq_combo.setEnabled(True)                            
-                            self._speeds_hz     = pymqds_sam4log.s4lv0_46_speeds_hz
-                            for i,speed in enumerate(self._speeds_hz):
-                                self._s4l_freq_combo.addItem(str(speed))
-
-                            self.layout.addWidget(self._s4l_freq_combo,1,3)
-                            self._ad_table.clear()                                                        
-                            self._ad_table_setup()
-                            self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set)
-                            # TODO Have to resize the widget to have nicer data                            
-                        else:
-                            self._s4l_settings_bu.setEnabled(True)
-                            self._ad_table.clear()                            
-                            self._ad_table_setup()                                            
-                        #                            
-                        #
-                        self.serial_open_bu.setText('Open')
-                else:
-                    logger.warning('Could not open port:' + str(ser))
-                    
-            elif(t == 'Open'):
-                #ser = str(self.combo_serial.currentText())
-                #b = int(self.combo_baud.currentText())
-                self.serial_open_bu.setText('Close')
-                self._s4l_settings_bu.setEnabled(False)
-                self._s4l_freq_combo.setEnabled(False)                                            
-                #print('Opening port' + ser + ' with baudrate ' + str(b))
-                #self.sam4log.add_serial_device(ser,baud=b)
-                self.sam4log.add_raw_data_stream()
-                time.sleep(0.2)
-                self.sam4log.query_sam4logger()
-                #self.sam4log.init_sam4logger(adcs = [0,2,4])
-                time.sleep(0.2)                
-                self.sam4log.start_converting_raw_data()
-                self.combo_serial.setEnabled(False)
-                self.combo_baud.setEnabled(False)                
-                self.status = 1
-            else:
-                self.sam4log.stop_serial_data()
-                self.sam4log.stop_converting_raw_data()
-                self.serial_open_bu.setText('Query')
-                self.combo_serial.setEnabled(True)
-                self.combo_baud.setEnabled(True)                                
-                self.status = 0
-
-        else:
-            print('bad open close')
-
-
-    def clicked_open_socket(self):
-        """
-        Opens a 
-        """
-        print('Open!')
-        addrraw = str(self.text_ip.text())
-        print(addrraw)
-        try:
-            addr = addrraw.split(':')[0]
-            port = int(addrraw.split(':')[1])
-        except:
-            print('Enter proper address')
-            return
-
-        print(addr,port)
-        if(self.button_open_socket.text() == self._button_sockets_choices[0]):
-            self.sam4log.add_socket(addr,port)
-            if(self.sam4log.status == 0): # Succesfull opened            
-                time.sleep(0.5)
-                if(True):                    
-                    print('Query socket/device')
-                    if(self.sam4log.query_sam4logger() == True):
-                        self.deviceinfo.update(self.sam4log.device_info)
-                        self.button_open_socket.setEnabled(False)
-                        self.text_ip.setEnabled(False)
-                    else:
-                        print('No device found!')
-                        return
-
-                if(True):
-                    #self.sam4log.
-                    self.sam4log.send_serial_data('stop\n')
-                    time.sleep(0.1)                                                
-                    self.sam4log.send_serial_data('stop\n')
-                    time.sleep(0.2)                            
-                    self.sam4log.send_serial_data('freq 200\n')
-                    #self.sam4log.send_serial_data('freq 333\n')
-                    time.sleep(0.2)                            
-                    if(self.sam4log.query_sam4logger() == True):
-                        self.deviceinfo.update(self.sam4log.device_info)
-                        self.print_serial_data = False
-                        time.sleep(0.1)            
-                        self.sam4log.send_serial_data('start\n')
-
-
-                if(True):            
-                    time.sleep(.5)
-                    self.sam4log.add_raw_data_stream()
-                    time.sleep(0.2)
-                    self.sam4log.start_converting_raw_data()        
 
 
     def clicked_send_bu(self):
@@ -1189,8 +1199,9 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
 
     def poll_serial_bytes(self):
-        self.bytesreadlcd.display(self.sam4log.bytes_read)
-        self.bytesspeed.setText(str(self.sam4log.bytes_read_avg))
+        #self.bytesreadlcd.display(self.sam4log.bytes_read)
+        #self.bytesspeed.setText(str(self.sam4log.bytes_read_avg))
+        pass        
 
 
     def poll_deque(self):
