@@ -391,8 +391,158 @@ def _start_pymqds_plotxy_test(graphs):
 #
 class sam4logDevice():
     def __init__(self):
+        """
+        A device class for the turbulent ocean data logger (TODL)
+        Each device needs the following functions
+        
+        setup (mandatory)
+        info (obligatory)
+        show (obligatory)
+        close (mandatory)
+        
+        """
         self.ready = False
+        self.all_widgets = []
         print('Hallo init!')
+        # Create a sam4log object
+        self.status = 0 # The status
+        # 0 initialised without a logger open
+        # 1 logger at a serial port open
+        self.sam4log = pymqds_sam4log.sam4logDataStream(logging_level='DEBUG')
+        # Add a deque for raw serial data
+        self.sam4log.deques_raw_serial.append(collections.deque(maxlen=5000))
+        self.rawdata_deque = self.sam4log.deques_raw_serial[-1]
+        # If the configuration changed call the _update function
+        self.sam4log.init_notification_functions.append(self._update_status_information)
+
+        self.deviceinfo = sam4logInfo()
+        # A flag if only one channel is used
+        self.ONECHFLAG = False
+
+        # Command stuff
+        self.send_le = QtWidgets.QLineEdit()
+        send_bu = QtWidgets.QPushButton('send')
+        send_bu.clicked.connect(self.clicked_send_bu)
+
+        # Show the raw data of the logger
+        self._show_data_widget = QtWidgets.QWidget()
+        self._show_data_layout = QtWidgets.QGridLayout(self._show_data_widget)
+        self.show_textdata = QtWidgets.QPlainTextEdit()
+        self.show_textdata.setReadOnly(True)
+        self.show_textdata.setMaximumBlockCount(10000)
+        self.check_show_textdata = QtWidgets.QCheckBox('Show data')
+        self.check_show_textdata.setChecked(True)
+        
+        self._show_data_bu = QtWidgets.QPushButton('Show data')
+        self._show_data_bu.clicked.connect(self._clicked_show_data_bu)
+        self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
+        self._show_data_close = QtWidgets.QPushButton('Close')
+        self._show_data_close.clicked.connect(self._clicked_show_data_bu)
+        # Textdataformat of the show_textdata widget 0 str, 1 hex
+        self._textdataformat = 0 
+        self.combo_format = QtWidgets.QComboBox()
+        self.combo_format.addItem('utf-8')
+        self.combo_format.addItem('hex')        
+        self.combo_format.activated.connect(self._combo_format)
+        self.show_comdata = QtWidgets.QPlainTextEdit()
+        self.show_comdata.setReadOnly(True)
+
+        # Command widgets
+        self._show_data_layout.addWidget(self._show_data_close)
+        self._show_data_layout.addWidget(QtWidgets.QLabel('Command'),1,0) # Command
+        self._show_data_layout.addWidget(self.send_le,1,1,1,2) # Command
+        self._show_data_layout.addWidget(send_bu,1,3) # Command
+        self._show_data_layout.addWidget(QtWidgets.QLabel('Format'),2,0) # Command        
+        self._show_data_layout.addWidget(self.combo_format,2,1)
+        self._show_data_layout.addWidget(self.show_textdata,3,0,1,4)
+        #self._show_data_layout.addWidget(self.show_comdata,1,1)
+        
+        
+        
+        #
+        # An information, saving, loading and plotting widget
+        #
+        self._infosaveloadplot_widget = QtWidgets.QWidget()
+        info_layout = QtWidgets.QGridLayout(self._infosaveloadplot_widget)
+        self._recording_status = ['Record','Stop recording']        
+        self._info_record_bu = QtWidgets.QPushButton(self._recording_status[0])
+        self._info_record_info = QtWidgets.QLabel('Status: Not recording')
+        self._info_plot_bu = QtWidgets.QPushButton('Plot')
+        self._info_plot_bu.setEnabled(FLAG_PLOTXY)
+        self._info_plot_bu.clicked.connect(self._plot_clicked)
+        self._info_record_bu.clicked.connect(self._record_clicked)
+        # Plot test
+        self._info_plot_test_bu = QtWidgets.QPushButton('Plot test')
+        self._info_plot_test_bu.clicked.connect(self._plot_test_clicked)
+        self._info_plot_IMU_bu = QtWidgets.QPushButton('Plot IMU')
+        self._info_plot_IMU_bu.clicked.connect(self._plot_test_clicked)                
+        
+        info_layout.addWidget(self._info_record_bu,0,2)
+        info_layout.addWidget(self._info_record_info,1,2)
+        info_layout.addWidget(self._info_plot_bu,0,1)
+        info_layout.addWidget(self._info_plot_IMU_bu,1,0)        
+        info_layout.addWidget(self._info_plot_test_bu,1,1)
+        info_layout.addWidget(self._show_data_bu,0,0)        
+        
+        # 
+        # Add a qtable for realtime data showing of voltage/packets number/counter
+        # http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
+        # 
+        self._ad_table = QtWidgets.QTableWidget()
+        # http://stackoverflow.com/questions/14143506/resizing-table-columns-when-window-is-maximized
+        self._ad_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        #self._ad_table.setMinimumSize(300, 300)
+        #self._ad_table.setMaximumSize(300, 300)
+        self._ad_table_setup()
+
+        #
+        # Add a table for the IMU
+        # PH: This is a hack TODO, make this clean
+        #
+        self._IMU_table = QtWidgets.QTableWidget()
+        self._IMU_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._IMU_table_setup()
+        
+        #
+        # Add a table for the Pyro
+        # PH: This is a hack TODO, make this clean
+        #
+        self._O2_table = QtWidgets.QTableWidget()
+        self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._O2_table_setup()
+
+        # Widget to collect all information
+        self.disp_widget = QtWidgets.QWidget()
+        self.disp_widget_layout = QtWidgets.QGridLayout(self.disp_widget)
+
+        self.all_widgets.append(self.disp_widget)
+
+        self.lcdtimer = QtCore.QTimer()
+        self.lcdtimer.setInterval(100)
+        self.lcdtimer.timeout.connect(self.poll_serial_bytes)
+        self.lcdtimer.start()
+
+        # For showing the raw data
+        self.dequetimer = QtCore.QTimer()
+        self.dequetimer.setInterval(100)
+        self.dequetimer.timeout.connect(self.poll_deque)
+        self.dequetimer.start()
+
+        # Updating the Voltage table
+        self.intraqueuetimer = QtCore.QTimer()
+        self.intraqueuetimer.setInterval(50)
+        self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
+        self.intraqueuetimer.start()        
+
+
+        self.disp_widget_layout.addWidget(self.deviceinfo,1,0,1,3)
+        #layout.addWidget(self._ad_choose_bu,3,1)        
+        self.disp_widget_layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
+        self.disp_widget_layout.addWidget(self._ad_table,4,0,2,3)
+        self.disp_widget_layout.addWidget(self._IMU_table,4,3,2,2)
+        self.disp_widget_layout.addWidget(self._O2_table,4,5,2,2)
+        self.disp_widget.show()        
+        
 
     def setup(self):
         """
@@ -418,6 +568,9 @@ class sam4logDevice():
             self.combo_baud.addItem(str(b))
 
         self.combo_baud.setCurrentIndex(len(baud)-1)
+        
+        self.setup_close_bu = QtWidgets.QPushButton('Close')
+        self.setup_close_bu.clicked.connect(w.close)
         self.serial_open_bu = QtWidgets.QPushButton('Query')
         self.serial_open_bu.clicked.connect(self.clicked_open_bu)
 
@@ -439,7 +592,7 @@ class sam4logDevice():
         
         # File source
         self.button_open_file      = QtWidgets.QPushButton('Open file')
-        #self.button_open_file.clicked.connect(self.open_file)
+        self.button_open_file.clicked.connect(self.open_file)
         self.label_file_read_dt    = QtWidgets.QLabel('Read in intervals of [s]')
         self.spin_file_read_dt     = QtWidgets.QDoubleSpinBox()
         self.spin_file_read_dt.setValue(0.05)
@@ -456,7 +609,8 @@ class sam4logDevice():
         self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
         self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
         #self.button_open_socket.clicked.connect(self.clicked_open_socket)
-        
+
+        # This function shows or hides the widgets needed for the choosen source
         self.combo_source.currentIndexChanged.connect(self.get_source)
         # Do the layout of the source
         self.test_ports() # Looking for serial ports        
@@ -468,11 +622,12 @@ class sam4logDevice():
         Changes the source of the logger
         """
         # The source data layout (serial, files)
-        widgets_serial = [ self.combo_source,self.serial_test_bu,self.combo_serial,
-                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd, self.bytesspeedlabel,self.bytesspeed]
-        widgets_file   = [ self.combo_source,self.button_open_file, self.label_nbytes,
+        widgets_serial = [ self.setup_close_bu, self.combo_source,self.serial_test_bu,self.combo_serial,
+                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd, self.bytesspeedlabel,self.bytesspeed ]
+        widgets_file   = [ self.setup_close_bu, self.combo_source,self.button_open_file, self.label_nbytes,
                            self.spin_file_read_nbytes, self.label_file_read_dt, self.spin_file_read_dt]
-        widgets_ip     = [ self.combo_source,self.text_ip, self.button_open_socket, self.bytesspeedlabel,self.bytesspeed ]        
+        widgets_ip     = [ self.setup_close_bu, self.combo_source,self.text_ip, self.button_open_socket,
+                           self.bytesspeedlabel,self.bytesspeed ]        
 
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
@@ -684,266 +839,33 @@ class sam4logDevice():
         
         print('Firmware' + self.sam4log.device_info['firmware'])
         self._settings_widget = sam4logConfig(self.sam4log)    
-        self._settings_widget.show()                    
-        
+        self._settings_widget.show()
 
-
-#
-#
-# The main window
-#
-#
-class sam4logMainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
-        QtWidgets.QMainWindow.__init__(self)
-        
-        mainMenu = self.menuBar()
-        self.setWindowTitle("sam4log")
-        #self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
-        extractAction = QtWidgets.QAction("&Quit", self)
-        extractAction.setShortcut("Ctrl+Q")
-        extractAction.setStatusTip('Closing the program')
-        extractAction.triggered.connect(self.close_application)
-
-        fileMenu = mainMenu.addMenu('&File')
-        fileMenu.addAction(extractAction)
-        
-        self.statusBar()
-
-        self.mainwidget = QtWidgets.QWidget()
-        self.layout = QtWidgets.QGridLayout(self.mainwidget)
-
-        # Main tasks for the main layout
-        self.tasks = []
-        self.tasks.append({'name':'Devices','widget':QtWidgets.QPushButton('Devices')})
-        self.tasks[-1]['widget'].clicked.connect(self.setup_devices)
-        
-        self.tasks.append({'name':'Info','widget':QtWidgets.QPushButton('Info')})
-        self.tasks.append({'name':'Show','widget':QtWidgets.QPushButton('Show data')})
-        self.tasks.append({'name':'Plot','widget':QtWidgets.QPushButton('Plot data')})
-
-        self.all_widgets = []
-        self.devices = []
-
-        #print(self.tasks.keys())
-        #print('fsdfds')
-        #print('fsdfds')
-        #print('fsdfds')
-        #print('fsdfds')        
-
-        # Widget to collect all information
-        self.disp_widget = QtWidgets.QWidget()
-        self.disp_widget_layout = QtWidgets.QGridLayout(self.disp_widget)
-
-        self.all_widgets.append(self.disp_widget)
-
-        self.deviceinfo = sam4logInfo()
-        # A flag if only one channel is used
-        self.ONECHFLAG = False
-
-
-
-        # Command stuff
-        self.send_le = QtWidgets.QLineEdit(self)
-        send_bu = QtWidgets.QPushButton('send')
-        send_bu.clicked.connect(self.clicked_send_bu)
-
-        # Show the raw data of the logger
-        self._show_data_widget = QtWidgets.QWidget()
-        self._show_data_layout = QtWidgets.QGridLayout(self._show_data_widget)
-        self.show_textdata = QtWidgets.QPlainTextEdit()
-        self.show_textdata.setReadOnly(True)
-        self.show_textdata.setMaximumBlockCount(10000)
-        self.check_show_textdata = QtWidgets.QCheckBox('Show data')
-        self.check_show_textdata.setChecked(True)
-        
-        self._show_data_bu = QtWidgets.QPushButton('Show data')
-        self._show_data_bu.clicked.connect(self._clicked_show_data_bu)
-        self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
-        self._show_data_close = QtWidgets.QPushButton('Close')
-        self._show_data_close.clicked.connect(self._clicked_show_data_bu)
-        # Textdataformat of the show_textdata widget 0 str, 1 hex
-        self._textdataformat = 0 
-        self.combo_format = QtWidgets.QComboBox()
-        self.combo_format.addItem('utf-8')
-        self.combo_format.addItem('hex')        
-        self.combo_format.activated.connect(self._combo_format)
-        self.show_comdata = QtWidgets.QPlainTextEdit()
-        self.show_comdata.setReadOnly(True)
-
-        # Command widgets
-        self._show_data_layout.addWidget(self._show_data_close)
-        self._show_data_layout.addWidget(QtWidgets.QLabel('Command'),1,0) # Command
-        self._show_data_layout.addWidget(self.send_le,1,1,1,2) # Command
-        self._show_data_layout.addWidget(send_bu,1,3) # Command
-        self._show_data_layout.addWidget(QtWidgets.QLabel('Format'),2,0) # Command        
-        self._show_data_layout.addWidget(self.combo_format,2,1)
-        self._show_data_layout.addWidget(self.show_textdata,3,0,1,4)
-        #self._show_data_layout.addWidget(self.show_comdata,1,1)
-        
-        
-        
-        #
-        # An information, saving, loading and plotting widget
-        #
-        self._infosaveloadplot_widget = QtWidgets.QWidget()
-        info_layout = QtWidgets.QGridLayout(self._infosaveloadplot_widget)
-        self._recording_status = ['Record','Stop recording']        
-        self._info_record_bu = QtWidgets.QPushButton(self._recording_status[0])
-        self._info_record_info = QtWidgets.QLabel('Status: Not recording')
-        self._info_plot_bu = QtWidgets.QPushButton('Plot')
-        self._info_plot_bu.setEnabled(FLAG_PLOTXY)
-        self._info_plot_bu.clicked.connect(self._plot_clicked)
-        self._info_record_bu.clicked.connect(self._record_clicked)
-        # Plot test
-        self._info_plot_test_bu = QtWidgets.QPushButton('Plot test')
-        self._info_plot_test_bu.clicked.connect(self._plot_test_clicked)
-        self._info_plot_IMU_bu = QtWidgets.QPushButton('Plot IMU')
-        self._info_plot_IMU_bu.clicked.connect(self._plot_test_clicked)                
-        
-        info_layout.addWidget(self._info_record_bu,0,2)
-        info_layout.addWidget(self._info_record_info,1,2)
-        info_layout.addWidget(self._info_plot_bu,0,1)
-        info_layout.addWidget(self._info_plot_IMU_bu,1,0)        
-        info_layout.addWidget(self._info_plot_test_bu,1,1)
-        info_layout.addWidget(self._show_data_bu,0,0)        
-        
-        # 
-        # Add a qtable for realtime data showing of voltage/packets number/counter
-        # http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
-        # 
-        self._ad_table = QtWidgets.QTableWidget()
-        # http://stackoverflow.com/questions/14143506/resizing-table-columns-when-window-is-maximized
-        self._ad_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
-        #self._ad_table.setMinimumSize(300, 300)
-        #self._ad_table.setMaximumSize(300, 300)
-        self._ad_table_setup()
-
-        #
-        # Add a table for the IMU
-        # PH: This is a hack TODO, make this clean
-        #
-        self._IMU_table = QtWidgets.QTableWidget()
-        self._IMU_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
-        self._IMU_table_setup()
-        
-        #
-        # Add a table for the Pyro
-        # PH: This is a hack TODO, make this clean
-        #
-        self._O2_table = QtWidgets.QTableWidget()
-        self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
-        self._O2_table_setup()        
-        
-
-
-        # The main layout
-        # Add all tasks
-        for i,task in enumerate(self.tasks):
-            self.layout.addWidget(task['widget'],i,3)
-            
-        if(False):
-            self.layout.addLayout(self.layout_source,0,0,1,3)
-            self.layout.addWidget(self._s4l_settings_bu,1,3)
-            self.layout.addWidget(self.deviceinfo,1,0,1,3)
-            #layout.addWidget(self._ad_choose_bu,3,1)        
-            self.layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
-            self.layout.addWidget(self._ad_table,4,0,2,3)
-            self.layout.addWidget(self._IMU_table,4,3,2,2)
-            self.layout.addWidget(self._O2_table,4,5,2,2)
-        else:
-            self.disp_widget_layout.addWidget(self.deviceinfo,1,0,1,3)
-            #layout.addWidget(self._ad_choose_bu,3,1)        
-            self.disp_widget_layout.addWidget(self._infosaveloadplot_widget,6,0,1,5)
-            self.disp_widget_layout.addWidget(self._ad_table,4,0,2,3)
-            self.disp_widget_layout.addWidget(self._IMU_table,4,3,2,2)
-            self.disp_widget_layout.addWidget(self._O2_table,4,5,2,2)
-            self.disp_widget.show()
-            
-        
-        self.setCentralWidget(self.mainwidget)
-        
-        self.show()
-
-        # Start real init
-        self.status = 0 # The status
-        # 0 initialised without a logger open
-        # 1 logger at a serial port open
-        self.sam4log = pymqds_sam4log.sam4logDataStream(logging_level='DEBUG')
-        self.sam4log.deques_raw_serial.append(collections.deque(maxlen=5000))
-        self.rawdata_deque = self.sam4log.deques_raw_serial[-1]
-
-
-        # If the configuration changed call the _update function
-        self.sam4log.init_notification_functions.append(self._update_status_information)
-
-
-        self.lcdtimer = QtCore.QTimer(self)
-        self.lcdtimer.setInterval(100)
-        self.lcdtimer.timeout.connect(self.poll_serial_bytes)
-        self.lcdtimer.start()
-
-        # For showing the raw data
-        self.dequetimer = QtCore.QTimer(self)
-        self.dequetimer.setInterval(100)
-        self.dequetimer.timeout.connect(self.poll_deque)
-        self.dequetimer.start()
-
-        # Updating the Voltage table
-        self.intraqueuetimer = QtCore.QTimer(self)
-        self.intraqueuetimer.setInterval(50)
-        self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
-        self.intraqueuetimer.start()
-
-    def setup_devices(self):
+    def open_file(self):
         """
-        Bais adding and removing functions for the device setup
+        Opens a datafile
         """
-        self.device_setup_widget        = QtWidgets.QWidget()
-        w = self.device_setup_widget
-        self.all_widgets.append(w)        
-        self.device_setup_widget_layout = QtWidgets.QGridLayout(self.device_setup_widget)
-        cl = QtWidgets.QPushButton('Close')
-        cl.clicked.connect(self.device_setup_widget.close)
+        logger.debug('Open file')
+        fname = QtWidgets.QFileDialog.getOpenFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
+        print(fname)
+        if(len(fname[0]) > 0):
+            if(isinstance(fname, str)):
+                fname = [fname]
+            filename = ntpath.basename(fname[0])
+            path = ntpath.dirname(fname[0])
+            logger.debug('Open file:' + str(fname[0]))
+            ret = self.sam4log.load_file(fname[0],num_bytes = self.spin_file_read_nbytes.value(),dt=self.spin_file_read_dt.value())
+            if(ret):
+                self.deviceinfo.update(self.sam4log.device_info)
+                self.sam4log.add_raw_data_stream()
+                self.sam4log.start_converting_raw_data()
 
-        dev_add = QtWidgets.QPushButton('Add')
-        dev_add.clicked.connect(self.add_devices)
 
-        self.combo_dev_add     = QtWidgets.QComboBox(w)
-
-        for d in config['devices']:
-            devname = list(d)[0]
-            self.combo_dev_add.addItem(devname)
-        
-
-        self.device_setup_widget_layout.addWidget(self.combo_dev_add,0,0)
-        self.device_setup_widget_layout.addWidget(dev_add,0,1)
-        self.device_setup_widget_layout.addWidget(cl,1,0)
-        self.device_setup_widget.show()
-
-        
-    def add_devices(self):
+    def _update_status_information(self):
         """
-        Adds a device using a device object with the appropriate functions
         """
-        dev = str( self.combo_dev_add.currentText() )
-        print('Hallo add: ' + dev)
-        for d in config['devices']: # Search for the config entry
-            devname = list(d)[0]
-            if(devname == dev):
-                print('Found device ... with object name ' + str(d[devname]['object']))
-                
-                obj = str(d[devname]['object'])
-                #tmp = getattr(globals(),'sam4logDevice')
-                deviceobj = globals()[obj]() # Call the object of the device
-                deviceobj.setup()
-                self.devices.append(deviceobj)
-                
-        #type
-        #SubClass = type('SubClass', (BaseClass,), {'set_x': set_x})
-        
-
-
+        logger.debug('Update_status_information')
+        self.deviceinfo.update(self.sam4log.device_info)
 
     def _ad_table_setup(self):
         self._ad_table.setColumnCount(5)
@@ -1083,71 +1005,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                                0, QtWidgets.QTableWidgetItem( ' umol' ))                
 
         self._O2_table.setHorizontalHeaderLabels(['Name','O2 0'])
-
-
-
-    def _update_status_information(self):
-        """
-        """
-        logger.debug('Update_status_information')
-        self.deviceinfo.update(self.sam4log.device_info)
-
-
-    def close_application(self):
-        logger.debug('Goodbye!')
-
-        for w in self.all_widgets:
-            w.close()
-        # Closing potentially open widgets
-        try:
-            self._show_data_widget_opened.close()
-        except:
-            pass
-
-        try:
-            self._ad_widget.close()
-        except:
-            pass
-
-        try:
-            self._IMU_widget.close()
-        except:
-            pass        
-
-        try:
-            self._settings_widget.close()
-        except:
-            pass
-
-        try:
-            self._plotxyprocess.stop()
-        except:
-            pass            
-            
-        self.close()
-
-
-    def open_file(self):
-        """
-        Opens a datafile
-        """
-        logger.debug('Open file')
-        fname = QtWidgets.QFileDialog.getOpenFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
-        print(fname)
-        if(len(fname[0]) > 0):
-            if(isinstance(fname, str)):
-                fname = [fname]
-            filename = ntpath.basename(fname[0])
-            path = ntpath.dirname(fname[0])
-            logger.debug('Open file:' + str(fname[0]))
-            ret = self.sam4log.load_file(fname[0],num_bytes = self.spin_file_read_nbytes.value(),dt=self.spin_file_read_dt.value())
-            if(ret):
-                self.deviceinfo.update(self.sam4log.device_info)
-                self.sam4log.add_raw_data_stream()
-                self.sam4log.start_converting_raw_data()
-            
-
-
 
 
     def clicked_send_bu(self):
@@ -1349,7 +1206,6 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         print(self._textdataformat)
 
-
     def _plot_clicked(self):
         """
         
@@ -1491,6 +1347,194 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 print('Stop record')            
                 ret = self.loggerDS.stop_poll_data_thread()
                 self._info_record_bu.setText(self._recording_status[0])
+
+    def close(self):
+        """
+        Cleanup of the device
+        """
+        for w in self.all_widgets:
+            w.close()
+
+
+                
+#
+#
+# The main window
+#
+#
+class sam4logMainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        QtWidgets.QMainWindow.__init__(self)
+        self.all_widgets = []
+        self.devices = []        
+        
+        mainMenu = self.menuBar()
+        self.setWindowTitle("sam4log")
+        #self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
+        extractAction = QtWidgets.QAction("&Quit", self)
+        extractAction.setShortcut("Ctrl+Q")
+        extractAction.setStatusTip('Closing the program')
+        extractAction.triggered.connect(self.close_application)
+
+        fileMenu = mainMenu.addMenu('&File')
+        fileMenu.addAction(extractAction)
+        
+        self.statusBar()
+
+        self.mainwidget = QtWidgets.QWidget()
+        self.layout = QtWidgets.QGridLayout(self.mainwidget)
+
+        # Create the device setup widget
+        self.setup_devices()
+        # Create the info setup widget        
+        self.info_devices()        
+
+        # Main tasks for the main layout
+        self.tasks = []
+        self.tasks.append({'name':'Devices','widget':self.device_setup_widget})
+        self.tasks.append({'name':'Info','widget':self.device_info_widget})
+        self.tasks.append({'name':'Show','widget':QtWidgets.QPushButton('Show data')})
+        self.tasks.append({'name':'Plot','widget':QtWidgets.QPushButton('Plot data')})
+        self.tasks.append({'name':'Quit','widget':QtWidgets.QPushButton('Quit')})
+        self.tasks[-1]['widget'].clicked.connect(self.close_application)
+
+        # The main layout
+        # Add all tasks
+        for i,task in enumerate(self.tasks):
+            self.layout.addWidget(task['widget'],i,3)
+            
+        
+        self.setCentralWidget(self.mainwidget)
+        
+        self.show()
+
+    def setup_devices(self):
+        """
+        Adding and removing functions for the device setup
+        """
+        self.device_setup_widget        = QtWidgets.QWidget()
+        w = self.device_setup_widget
+        self.all_widgets.append(w)        
+        self.device_setup_widget_layout = QtWidgets.QGridLayout(self.device_setup_widget)
+        #cl = QtWidgets.QPushButton('Close')
+        #cl.clicked.connect(self.device_setup_widget.close)
+
+        dev_add = QtWidgets.QPushButton('Add')
+        dev_add.clicked.connect(self.add_devices)
+        dev_rem = QtWidgets.QPushButton('Remove')
+        dev_rem.setEnabled(False)
+        dev_rem.clicked.connect(self.rem_devices)        
+
+        self.combo_dev_add     = QtWidgets.QComboBox(w)
+        self.combo_dev_rem     = QtWidgets.QComboBox(w)        
+
+        for d in config['devices']:
+            devname = list(d)[0]
+            self.combo_dev_add.addItem(devname)
+
+        b = QtWidgets.QPushButton('Devices')
+        b.setEnabled(False)
+        self.device_setup_widget_layout.addWidget(b,0,0,1,2)
+        self.device_setup_widget_layout.addWidget(self.combo_dev_add,1,0)
+        self.device_setup_widget_layout.addWidget(dev_add,1,1)
+        self.device_setup_widget_layout.addWidget(self.combo_dev_rem,2,0)
+        self.device_setup_widget_layout.addWidget(dev_rem,2,1)        
+        #self.device_setup_widget_layout.addWidget(cl,1,0)
+        self.device_setup_widget.show()
+
+        
+    def add_devices(self):
+        """
+        Adds a device using a device object with the appropriate functions
+        """
+        dev = str( self.combo_dev_add.currentText() )
+        print('Hallo add: ' + dev)
+        for d in config['devices']: # Search for the config entry
+            devname = list(d)[0]
+            if(devname == dev):
+                print('Found device ... with object name ' + str(d[devname]['object']))
+                
+                obj = str(d[devname]['object'])
+                #tmp = getattr(globals(),'sam4logDevice')
+                deviceobj = globals()[obj]() # Call the object of the device
+                deviceobj.setup()
+                self.devices.append(deviceobj)
+                
+        #type
+        #SubClass = type('SubClass', (BaseClass,), {'set_x': set_x})
+
+    def rem_devices(self):
+        """
+        Dummy function for removing devices
+        """
+        pass
+        
+
+    def info_devices(self):
+        """
+        Create a QWidget with for choosing an information widget for any device
+        """
+        self.device_info_widget        = QtWidgets.QWidget()
+        w = self.device_setup_widget
+        self.all_widgets.append(w)        
+        self.device_info_widget_layout = QtWidgets.QGridLayout(self.device_info_widget)
+
+        dev_info = QtWidgets.QPushButton('Open Info')
+        dev_info.clicked.connect(self.info_devices)
+        dev_info.setEnabled(False)
+
+        self.combo_dev_info     = QtWidgets.QComboBox(w)
+
+        for d in config['devices']:
+            devname = list(d)[0]
+            self.combo_dev_add.addItem(devname)
+
+        b = QtWidgets.QPushButton('Info')
+        b.setEnabled(False)
+        self.device_info_widget_layout.addWidget(b,0,0,1,2)
+        self.device_info_widget_layout.addWidget(self.combo_dev_info,1,0)
+        self.device_info_widget_layout.addWidget(dev_info,1,1)
+        self.device_info_widget.show()
+        
+
+    def close_application(self):
+        logger.debug('Goodbye!')
+
+        for w in self.devices:
+            w.close()        
+
+        for w in self.all_widgets:
+            w.close()
+        # Closing potentially open widgets
+        try:
+            self._show_data_widget_opened.close()
+        except:
+            pass
+
+        try:
+            self._ad_widget.close()
+        except:
+            pass
+
+        try:
+            self._IMU_widget.close()
+        except:
+            pass        
+
+        try:
+            self._settings_widget.close()
+        except:
+            pass
+
+        try:
+            self._plotxyprocess.stop()
+        except:
+            pass            
+            
+        self.close()
+
+
+
             
 
 
