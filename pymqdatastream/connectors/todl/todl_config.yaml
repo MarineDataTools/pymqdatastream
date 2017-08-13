@@ -1,8 +1,8 @@
 #
-# Sam4log config file
+# Turbulent Ocean Data Logger (TODL) configuration file
 #
 devices:
-  - sam4log:
+  - todl:
       source:
         name: serial
         device: /dev/ttyUSB0
@@ -18,7 +18,7 @@ devices:
               address: 192.168.178.1:18000
           - pymqdatastream:
               address: 192.168.178.1:18000
-      object: sam4logDevice # The device object to be used for handling
+      object: todlDevice # The device object to be used for handling
   - gps:
       source:
         name: serial

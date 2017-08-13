@@ -25,7 +25,7 @@ import yaml
 
 # Get a standard configuration
 from pkg_resources import Requirement, resource_filename
-filename = resource_filename(Requirement.parse('pymqdatastream'),'pymqdatastream/connectors/sam4log/sam4log_config.yaml')
+filename = resource_filename(Requirement.parse('pymqdatastream'),'pymqdatastream/connectors/todl/todl_config.yaml')
 filename_version = resource_filename(Requirement.parse('pymqdatastream'),'pymqdatastream/VERSION')
 
 
@@ -42,7 +42,7 @@ with open(filename) as config_file:
     
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
-logger = logging.getLogger('pymqds_gui_sam4log')
+logger = logging.getLogger('pymqds_gui_todl')
 logger.setLevel(logging.DEBUG)
 
 
@@ -56,7 +56,7 @@ except Exception as e:
     logger.warning('Could not import pymqds_plotxy, this is not fatal, but there will be no real time plotting (original error: ' + str(e) + ' )')
     FLAG_PLOTXY=False
     
-import pymqdatastream.connectors.sam4log.pymqds_sam4log as pymqds_sam4log
+import pymqdatastream.connectors.todl.pymqds_todl as pymqds_todl
 from pymqdatastream.utils.utils_serial import serial_ports, test_serial_lock_file, serial_lock_file
 
 
@@ -67,9 +67,9 @@ counter_test = 0
 baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
 
 
-class sam4logInfo(QtWidgets.QWidget):
+class todlInfo(QtWidgets.QWidget):
     """
-    Widget display status informations of a sam4log device
+    Widget display status informations of a todl device
     """
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
@@ -116,23 +116,23 @@ class sam4logInfo(QtWidgets.QWidget):
 
 
 
-class sam4logConfig(QtWidgets.QWidget):
+class todlConfig(QtWidgets.QWidget):
     """
-    Configuration widget for the sam4log
+    Configuration widget for the todl
     """
     # Conversion speeds of the device
 
-    def __init__(self,sam4log=None):
+    def __init__(self,todl=None):
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QGridLayout()
 
         # Conversion speed
         self._convspeed_combo = QtWidgets.QComboBox(self)
         # v0.4 speeds
-        self.speeds        = pymqds_sam4log.s4lv0_4_speeds
-        self.speeds_hz_adc = pymqds_sam4log.s4lv0_4_speeds_hz_adc
-        self.speeds_td     = pymqds_sam4log.s4lv0_4_speeds_td
-        self.speeds_hz     = pymqds_sam4log.s4lv0_4_speeds_hz
+        self.speeds        = pymqds_todl.s4lv0_4_speeds
+        self.speeds_hz_adc = pymqds_todl.s4lv0_4_speeds_hz_adc
+        self.speeds_td     = pymqds_todl.s4lv0_4_speeds_td
+        self.speeds_hz     = pymqds_todl.s4lv0_4_speeds_hz
         for i,speed in enumerate(self.speeds):
             speed_hz = 'f: ' + str(self.speeds_hz[i]) + \
                        ' Hz (f ADC:' + str(self.speeds_hz_adc[i]) + ' Hz)'
@@ -190,7 +190,7 @@ class sam4logConfig(QtWidgets.QWidget):
         ad_seq_layoutV.addWidget(_ad_seq_check_tmp)
 
 
-        self.deviceinfo = sam4logInfo()
+        self.deviceinfo = todlInfo()
 
 
         # The main layout
@@ -212,9 +212,9 @@ class sam4logConfig(QtWidgets.QWidget):
 
         print('updating')
         # TODO do something if there is nothing
-        self.sam4log = sam4log
+        self.todl = todl
         self._update_status()
-        self.deviceinfo.update(self.sam4log.device_info)
+        self.deviceinfo.update(self.todl.device_info)
 
 
     def _update_status(self):
@@ -222,7 +222,7 @@ class sam4logConfig(QtWidgets.QWidget):
         Updates all the information buttons
         """
         
-        status = self.sam4log.device_info
+        status = self.todl.device_info
         # Channels
         #self.combo_baud.setCurrentIndex(len(baud)-1)
         for i,ch in enumerate(status['channel_seq']):
@@ -269,15 +269,15 @@ class sam4logConfig(QtWidgets.QWidget):
                 break
 
         print('Chs List:',chs)
-        print('init sam4logger')
-        self.sam4log.init_sam4logger(adcs = adcs,channels=chs,speed=speed_num,data_format=3)
+        print('init todlger')
+        self.todl.init_todlger(adcs = adcs,channels=chs,speed=speed_num,data_format=3)
         self._update_status()
-        self.deviceinfo.update(self.sam4log.device_info)        
+        self.deviceinfo.update(self.todl.device_info)        
 
     def _query(self):
-        self.sam4log.query_sam4logger()
+        self.todl.query_todlger()
         self._update_status()
-        self.deviceinfo.update(self.sam4log.device_info)
+        self.deviceinfo.update(self.todl.device_info)
 
     def _close(self):
         self.close()
@@ -389,33 +389,34 @@ def _start_pymqds_plotxy_test(graphs):
 #
 #
 #
-class sam4logDevice():
+class todlDevice():
     def __init__(self):
         """
         A device class for the turbulent ocean data logger (TODL)
         Each device needs the following functions
         
-        setup (mandatory)
-        info (obligatory)
-        show (obligatory)
-        close (mandatory)
+        setup     (mandatory)
+        info      (obligatory)
+        show_data (obligatory)
+        plot_data (obligatory)
+        close     (mandatory)
         
         """
         self.ready = False
         self.all_widgets = []
         print('Hallo init!')
-        # Create a sam4log object
+        # Create a todl object
         self.status = 0 # The status
         # 0 initialised without a logger open
         # 1 logger at a serial port open
-        self.sam4log = pymqds_sam4log.sam4logDataStream(logging_level='DEBUG')
+        self.todl = pymqds_todl.todlDataStream(logging_level='DEBUG')
         # Add a deque for raw serial data
-        self.sam4log.deques_raw_serial.append(collections.deque(maxlen=5000))
-        self.rawdata_deque = self.sam4log.deques_raw_serial[-1]
+        self.todl.deques_raw_serial.append(collections.deque(maxlen=5000))
+        self.rawdata_deque = self.todl.deques_raw_serial[-1]
         # If the configuration changed call the _update function
-        self.sam4log.init_notification_functions.append(self._update_status_information)
+        self.todl.init_notification_functions.append(self._update_status_information)
 
-        self.deviceinfo = sam4logInfo()
+        self.deviceinfo = todlInfo()
         # A flag if only one channel is used
         self.ONECHFLAG = False
 
@@ -541,7 +542,7 @@ class sam4logDevice():
         self.disp_widget_layout.addWidget(self._ad_table,4,0,2,3)
         self.disp_widget_layout.addWidget(self._IMU_table,4,3,2,2)
         self.disp_widget_layout.addWidget(self._O2_table,4,5,2,2)
-        self.disp_widget.show()        
+
         
 
     def setup(self):
@@ -554,13 +555,18 @@ class sam4logDevice():
         
         self.setup_widget = QtWidgets.QWidget()
         w = self.setup_widget
-        w.setWindowTitle('sam4log setup')
+        w.setWindowTitle('todl setup')
         self.combo_source = QtWidgets.QComboBox(w)
         for s in sources:
             self.combo_source.addItem(str(s))        
-            
-        
-        self.layout_source = QtWidgets.QHBoxLayout(w)
+
+        # The layout of the setup widget with two rows
+        self.layout_source_v = QtWidgets.QVBoxLayout(w)
+        self.layout_source = QtWidgets.QHBoxLayout()
+        self.layout_source_row2 = QtWidgets.QHBoxLayout()                
+        self.layout_source_v.addLayout(self.layout_source)
+        self.layout_source_v.addLayout(self.layout_source_row2)        
+
         # Serial interface stuff
         self.combo_serial = QtWidgets.QComboBox(w)
         self.combo_baud   = QtWidgets.QComboBox(w)
@@ -593,6 +599,7 @@ class sam4logDevice():
         # File source
         self.button_open_file      = QtWidgets.QPushButton('Open file')
         self.button_open_file.clicked.connect(self.open_file)
+        self.button_startstopread_file = QtWidgets.QPushButton('Start Read')
         self.label_file_read_dt    = QtWidgets.QLabel('Read in intervals of [s]')
         self.spin_file_read_dt     = QtWidgets.QDoubleSpinBox()
         self.spin_file_read_dt.setValue(0.05)
@@ -619,19 +626,24 @@ class sam4logDevice():
 
     def get_source(self):
         """
-        Changes the source of the logger
+        Changes the source (serial, file or ip. TODO pymqdatastream) of the logger
         """
         # The source data layout (serial, files)
-        widgets_serial = [ self.setup_close_bu, self.combo_source,self.serial_test_bu,self.combo_serial,
-                           self.combo_baud  ,self.serial_open_bu,self.bytesreadlcd, self.bytesspeedlabel,self.bytesspeed ]
-        widgets_file   = [ self.setup_close_bu, self.combo_source,self.button_open_file, self.label_nbytes,
-                           self.spin_file_read_nbytes, self.label_file_read_dt, self.spin_file_read_dt]
+        widgets_serial = [ self.setup_close_bu, self.combo_source, self.serial_test_bu, self.combo_serial,
+                           self.combo_baud, self.serial_open_bu, self.bytesreadlcd, self.bytesspeedlabel,
+                           self.bytesspeed]
+        widgets_file   = [ self.setup_close_bu,
+                           self.combo_source,self.button_open_file,
+                           self.button_startstopread_file,self.label_nbytes,
+                           self.spin_file_read_nbytes,
+                           self.label_file_read_dt,
+                           self.spin_file_read_dt]
         widgets_ip     = [ self.setup_close_bu, self.combo_source,self.text_ip, self.button_open_socket,
-                           self.bytesspeedlabel,self.bytesspeed ]        
+                           self.bytesspeedlabel, self.bytesspeed]        
 
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
-
+        self.layout_source_row2.addWidget(self.deviceinfo)
         if(data_source == 'serial'):
             whide = widgets_file + widgets_ip
             for w in whide:
@@ -706,19 +718,19 @@ class sam4logDevice():
                 ser = str(self.combo_serial.currentText())
                 b = int(self.combo_baud.currentText())
                 print('Opening port' + ser + ' with baudrate ' + str(b))
-                self.sam4log.add_serial_device(ser,baud=b)
-                if(self.sam4log.status == 0): # Succesfull opened
-                    if(self.sam4log.query_sam4logger() == True):
-                        self.deviceinfo.update(self.sam4log.device_info)
+                self.todl.add_serial_device(ser,baud=b)
+                if(self.todl.status == 0): # Succesfull opened
+                    if(self.todl.query_todlger() == True):
+                        self.deviceinfo.update(self.todl.device_info)
                         # Enable a settings button or if version 0.45 add a frequency combo
-                        vers = float(self.sam4log.device_info['firmware'])
+                        vers = float(self.todl.device_info['firmware'])
                         # The high speed 0.45 version 
                         if(vers == 0.45):
                             logger.debug('Opening Version 0.45 device setup')
                             self._s4l_settings_bu.close()
                             self._s4l_freq_combo = QtWidgets.QComboBox(self)
                             #self._s4l_freq_combo.setEnabled(True)                            
-                            self._speeds_hz     = pymqds_sam4log.s4lv0_45_speeds_hz
+                            self._speeds_hz     = pymqds_todl.s4lv0_45_speeds_hz
                             for i,speed in enumerate(self._speeds_hz):
                                 self._s4l_freq_combo.addItem(str(speed))
 
@@ -733,7 +745,7 @@ class sam4logDevice():
                             self._s4l_settings_bu.close()
                             self._s4l_freq_combo = QtWidgets.QComboBox(self)
                             #self._s4l_freq_combo.setEnabled(True)                            
-                            self._speeds_hz     = pymqds_sam4log.s4lv0_46_speeds_hz
+                            self._speeds_hz     = pymqds_todl.s4lv0_46_speeds_hz
                             for i,speed in enumerate(self._speeds_hz):
                                 self._s4l_freq_combo.addItem(str(speed))
 
@@ -759,19 +771,19 @@ class sam4logDevice():
                 self._s4l_settings_bu.setEnabled(False)
                 self._s4l_freq_combo.setEnabled(False)                                            
                 #print('Opening port' + ser + ' with baudrate ' + str(b))
-                #self.sam4log.add_serial_device(ser,baud=b)
-                self.sam4log.add_raw_data_stream()
+                #self.todl.add_serial_device(ser,baud=b)
+                self.todl.add_raw_data_stream()
                 time.sleep(0.2)
-                self.sam4log.query_sam4logger()
-                #self.sam4log.init_sam4logger(adcs = [0,2,4])
+                self.todl.query_todlger()
+                #self.todl.init_todlger(adcs = [0,2,4])
                 time.sleep(0.2)                
-                self.sam4log.start_converting_raw_data()
+                self.todl.start_converting_raw_data()
                 self.combo_serial.setEnabled(False)
                 self.combo_baud.setEnabled(False)                
                 self.status = 1
             else:
-                self.sam4log.stop_serial_data()
-                self.sam4log.stop_converting_raw_data()
+                self.todl.stop_serial_data()
+                self.todl.stop_converting_raw_data()
                 self.serial_open_bu.setText('Query')
                 self.combo_serial.setEnabled(True)
                 self.combo_baud.setEnabled(True)                                
@@ -797,13 +809,13 @@ class sam4logDevice():
 
         print(addr,port)
         if(self.button_open_socket.text() == self._button_sockets_choices[0]):
-            self.sam4log.add_socket(addr,port)
-            if(self.sam4log.status == 0): # Succesfull opened            
+            self.todl.add_socket(addr,port)
+            if(self.todl.status == 0): # Succesfull opened            
                 time.sleep(0.5)
                 if(True):                    
                     print('Query socket/device')
-                    if(self.sam4log.query_sam4logger() == True):
-                        self.deviceinfo.update(self.sam4log.device_info)
+                    if(self.todl.query_todlger() == True):
+                        self.deviceinfo.update(self.todl.device_info)
                         self.button_open_socket.setEnabled(False)
                         self.text_ip.setEnabled(False)
                     else:
@@ -811,34 +823,34 @@ class sam4logDevice():
                         return
 
                 if(True):
-                    #self.sam4log.
-                    self.sam4log.send_serial_data('stop\n')
+                    #self.todl.
+                    self.todl.send_serial_data('stop\n')
                     time.sleep(0.1)                                                
-                    self.sam4log.send_serial_data('stop\n')
+                    self.todl.send_serial_data('stop\n')
                     time.sleep(0.2)                            
-                    self.sam4log.send_serial_data('freq 200\n')
-                    #self.sam4log.send_serial_data('freq 333\n')
+                    self.todl.send_serial_data('freq 200\n')
+                    #self.todl.send_serial_data('freq 333\n')
                     time.sleep(0.2)                            
-                    if(self.sam4log.query_sam4logger() == True):
-                        self.deviceinfo.update(self.sam4log.device_info)
+                    if(self.todl.query_todlger() == True):
+                        self.deviceinfo.update(self.todl.device_info)
                         self.print_serial_data = False
                         time.sleep(0.1)            
-                        self.sam4log.send_serial_data('start\n')
+                        self.todl.send_serial_data('start\n')
 
 
                 if(True):            
                     time.sleep(.5)
-                    self.sam4log.add_raw_data_stream()
+                    self.todl.add_raw_data_stream()
                     time.sleep(0.2)
-                    self.sam4log.start_converting_raw_data()
+                    self.todl.start_converting_raw_data()
 
     def _clicked_settings_bu(self):
         """
         """
         logger.debug('Settings')
         
-        print('Firmware' + self.sam4log.device_info['firmware'])
-        self._settings_widget = sam4logConfig(self.sam4log)    
+        print('Firmware' + self.todl.device_info['firmware'])
+        self._settings_widget = todlConfig(self.todl)    
         self._settings_widget.show()
 
     def open_file(self):
@@ -846,7 +858,7 @@ class sam4logDevice():
         Opens a datafile
         """
         logger.debug('Open file')
-        fname = QtWidgets.QFileDialog.getOpenFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
+        fname = QtWidgets.QFileDialog.getOpenFileName(self.setup_widget, 'Select file','', "Turbulent Ocean Data Logger [todl] (*.todl);; CSV (*.csv);; All files (*)");
         print(fname)
         if(len(fname[0]) > 0):
             if(isinstance(fname, str)):
@@ -854,18 +866,26 @@ class sam4logDevice():
             filename = ntpath.basename(fname[0])
             path = ntpath.dirname(fname[0])
             logger.debug('Open file:' + str(fname[0]))
-            ret = self.sam4log.load_file(fname[0],num_bytes = self.spin_file_read_nbytes.value(),dt=self.spin_file_read_dt.value())
+            ret = self.todl.load_file(fname[0],num_bytes = self.spin_file_read_nbytes.value(),dt=self.spin_file_read_dt.value(),start_read=False)
             if(ret):
-                self.deviceinfo.update(self.sam4log.device_info)
-                self.sam4log.add_raw_data_stream()
-                self.sam4log.start_converting_raw_data()
+                self.deviceinfo.update(self.todl.device_info)
+                self.todl.add_raw_data_stream()
+                self.todl.start_converting_raw_data()
+
+
+    def show_data(self):
+        """
+        Function to show the data
+        """
+        print('Ja!')
+        self.disp_widget.show()
 
 
     def _update_status_information(self):
         """
         """
         logger.debug('Update_status_information')
-        self.deviceinfo.update(self.sam4log.device_info)
+        self.deviceinfo.update(self.todl.device_info)
 
     def _ad_table_setup(self):
         self._ad_table.setColumnCount(5)
@@ -1010,54 +1030,54 @@ class sam4logDevice():
     def clicked_send_bu(self):
         data = self.send_le.text()
         print('Sending ' + str(data))
-        self.sam4log.send_serial_data(str(data) + '\n')
+        self.todl.send_serial_data(str(data) + '\n')
         time.sleep(0.2)
         # Update the command history
         self.show_comdata.clear()
-        for com in self.sam4log.commands:
+        for com in self.todl.commands:
             self.show_comdata.appendPlainText(str(com))
 
     def _freq_set_v045(self):
         logger.debug('_freq_set_v045')
         speed_str = self._s4l_freq_combo.currentText()
-        #self.sam4log.stop_converting_raw_data()
+        #self.todl.stop_converting_raw_data()
         self.print_serial_data = True                
-        self.sam4log.send_serial_data('stop\n')
-        self.sam4log.send_serial_data('stop\n')
-        self.sam4log.send_serial_data('freq ' + str(speed_str) + '\n')
-        self.sam4log.send_serial_data('format 4\n')
+        self.todl.send_serial_data('stop\n')
+        self.todl.send_serial_data('stop\n')
+        self.todl.send_serial_data('freq ' + str(speed_str) + '\n')
+        self.todl.send_serial_data('format 4\n')
         time.sleep(0.1)        
-        if(self.sam4log.query_sam4logger() == True):
-            self.deviceinfo.update(self.sam4log.device_info)
+        if(self.todl.query_todlger() == True):
+            self.deviceinfo.update(self.todl.device_info)
             self.print_serial_data = False
             time.sleep(0.1)            
-            self.sam4log.send_serial_data('start\n')
-            #self.sam4log.start_converting_raw_data()                    
+            self.todl.send_serial_data('start\n')
+            #self.todl.start_converting_raw_data()                    
         else:
             logger.warning('Bad, frequency changed did not work out. ')
 
     def _freq_set(self):
         logger.debug('_freq_set')
         speed_str = self._s4l_freq_combo.currentText()
-        #self.sam4log.stop_converting_raw_data()
+        #self.todl.stop_converting_raw_data()
         self.print_serial_data = True                
-        self.sam4log.send_serial_data('stop\n')
-        self.sam4log.send_serial_data('stop\n')
-        self.sam4log.send_serial_data('freq ' + str(speed_str) + '\n')
+        self.todl.send_serial_data('stop\n')
+        self.todl.send_serial_data('stop\n')
+        self.todl.send_serial_data('freq ' + str(speed_str) + '\n')
         time.sleep(0.1)        
-        if(self.sam4log.query_sam4logger() == True):
-            self.deviceinfo.update(self.sam4log.device_info)
+        if(self.todl.query_todlger() == True):
+            self.deviceinfo.update(self.todl.device_info)
             self.print_serial_data = False
             time.sleep(0.1)            
-            self.sam4log.send_serial_data('start\n')
-            #self.sam4log.start_converting_raw_data()                    
+            self.todl.send_serial_data('start\n')
+            #self.todl.start_converting_raw_data()                    
         else:
             logger.warning('Bad, frequency changed did not work out. ')                        
 
 
     def poll_serial_bytes(self):
-        #self.bytesreadlcd.display(self.sam4log.bytes_read)
-        #self.bytesspeed.setText(str(self.sam4log.bytes_read_avg))
+        #self.bytesreadlcd.display(self.todl.bytes_read)
+        #self.bytesspeed.setText(str(self.todl.bytes_read_avg))
         pass        
 
 
@@ -1117,8 +1137,8 @@ class sam4logDevice():
         showO = True
         show_channels = [True,True,True,True] # Show each channel once during the
         # Get all data        
-        while(len(self.sam4log.intraqueue) > 0):
-            data = self.sam4log.intraqueue.pop()
+        while(len(self.todl.intraqueue) > 0):
+            data = self.todl.intraqueue.pop()
 
 
         if(True):
@@ -1142,7 +1162,7 @@ class sam4logDevice():
                         item = QtWidgets.QTableWidgetItem(str(ct))
                         self._ad_table.setItem(1, ch + 1, item)
                         # Update all LTC data of that channel
-                        for n,i in enumerate(self.sam4log.flag_adcs):
+                        for n,i in enumerate(self.todl.flag_adcs):
                             item = QtWidgets.QTableWidgetItem(str(V[n]))
                             self._ad_table.setItem(i+2, ch+1, item )
 
@@ -1191,7 +1211,7 @@ class sam4logDevice():
         t = self._info_record_bu.text()
         if(t == self._recording_status[1]):
             self._info_record_info.setText('Status: Logging to file  '
-                        + self.filename_log  + ' ( ' + str(self.sam4log.logfile_bytes_wrote)
+                        + self.filename_log  + ' ( ' + str(self.todl.logfile_bytes_wrote)
                                            + ' bytes written)')
             
 
@@ -1218,10 +1238,10 @@ class sam4logDevice():
         # this does not work with python 2.7 
         multiprocessing.set_start_method('spawn',force=True)
         addresses = []
-        for stream in self.sam4log.Streams:
+        for stream in self.todl.Streams:
             print(stream.get_family())
-            if(stream.get_family() == "sam4log adc"):
-                addresses.append(self.sam4log.get_stream_address(stream))
+            if(stream.get_family() == "todl adc"):
+                addresses.append(self.todl.get_stream_address(stream))
                 
         self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,))
         self._plotxyprocess.start()
@@ -1252,10 +1272,10 @@ class sam4logDevice():
         dstreams_O2 = []
         
         iIMU = 0
-        for stream in self.sam4log.Streams:
+        for stream in self.todl.Streams:
             print(stream.get_family())
-            if(stream.get_family() == "sam4log adc"):
-                addresses.append(self.sam4log.get_stream_address(stream))
+            if(stream.get_family() == "todl adc"):
+                addresses.append(self.todl.get_stream_address(stream))
                 dstream = {}
                 dstream['address'] = addresses[-1]
                 dstream['ind_x'] = 1
@@ -1263,8 +1283,8 @@ class sam4logDevice():
                 dstream['nth_point'] = 1
                 dstreams.append(dstream)
 
-            if(stream.get_family() == "sam4log IMU"):
-                addresses.append(self.sam4log.get_stream_address(stream))
+            if(stream.get_family() == "todl IMU"):
+                addresses.append(self.todl.get_stream_address(stream))
                 for i in range(3):
                     dstream = {}                
                     dstream['address'] = addresses[-1]
@@ -1274,8 +1294,8 @@ class sam4logDevice():
                     dstream['nth_point'] = 1
                     dstreams_IMU.append(dstream)
                     
-            if(stream.get_family() == "sam4log O2"):
-                addresses.append(self.sam4log.get_stream_address(stream))
+            if(stream.get_family() == "todl O2"):
+                addresses.append(self.todl.get_stream_address(stream))
                 dstream = {}                
                 dstream['address'] = addresses[-1]
                 dstream['ind_x'] = 1
@@ -1320,14 +1340,14 @@ class sam4logDevice():
                 self.filename_log = filename
                 self._info_record_info.setText('Status: logfile: ' + self.filename_log)
                 # Starting the logging:
-                self.sam4log.log_serial_data(filename_full)
+                self.todl.log_serial_data(filename_full)
                 self._info_record_bu.setText(self._recording_status[1])
         if(t == self._recording_status[1]):
             print('Stop record')            
-            ret = self.sam4log.stop_log_serial_data()
+            ret = self.todl.stop_log_serial_data()
             self._info_record_bu.setText(self._recording_status[0])
             self._info_record_info.setText('Status: Stopped logging to file  '
-                        + self.filename_log  + ' ( ' + str(self.sam4log.logfile_bytes_wrote)
+                        + self.filename_log  + ' ( ' + str(self.todl.logfile_bytes_wrote)
                                            + ' bytes written)')            
             
         # The more complex slogger object, disable for the moment
@@ -1337,9 +1357,9 @@ class sam4logDevice():
                 fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "UBJSON (*.ubjson);; All files (*)");
                 if(len(fname[0]) > 0):
                     self._info_record_info.setText('Status: logfile: ' + fname[0])
-                    self.loggerDS = pymqdatastream.slogger.LoggerDataStream(logging_level = logging.DEBUG, filename = fname[0], name = 'sam4log logger')
-                    logstream = self.loggerDS.log_stream(self.sam4log.raw_stream)
-                    logstream = self.loggerDS.log_stream(self.sam4log.conv_stream)
+                    self.loggerDS = pymqdatastream.slogger.LoggerDataStream(logging_level = logging.DEBUG, filename = fname[0], name = 'todl logger')
+                    logstream = self.loggerDS.log_stream(self.todl.raw_stream)
+                    logstream = self.loggerDS.log_stream(self.todl.conv_stream)
                     print('Start write thread')
                     self.loggerDS.start_write_data_thread()
                     self._info_record_bu.setText(self._recording_status[1])
@@ -1362,14 +1382,14 @@ class sam4logDevice():
 # The main window
 #
 #
-class sam4logMainWindow(QtWidgets.QMainWindow):
+class todlMainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
         self.all_widgets = []
         self.devices = []        
         
         mainMenu = self.menuBar()
-        self.setWindowTitle("sam4log")
+        self.setWindowTitle("Turbulent Ocean Data Logger")
         #self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
         extractAction = QtWidgets.QAction("&Quit", self)
         extractAction.setShortcut("Ctrl+Q")
@@ -1386,14 +1406,16 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         # Create the device setup widget
         self.setup_devices()
-        # Create the info setup widget        
-        self.info_devices()        
+        # Create the info widget        
+        self.info_devices()
+        # Create the show widget                
+        self.show_devices()
 
         # Main tasks for the main layout
         self.tasks = []
         self.tasks.append({'name':'Devices','widget':self.device_setup_widget})
         self.tasks.append({'name':'Info','widget':self.device_info_widget})
-        self.tasks.append({'name':'Show','widget':QtWidgets.QPushButton('Show data')})
+        self.tasks.append({'name':'Show','widget':self.device_show_widget})        
         self.tasks.append({'name':'Plot','widget':QtWidgets.QPushButton('Plot data')})
         self.tasks.append({'name':'Quit','widget':QtWidgets.QPushButton('Quit')})
         self.tasks[-1]['widget'].clicked.connect(self.close_application)
@@ -1455,7 +1477,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
                 print('Found device ... with object name ' + str(d[devname]['object']))
                 
                 obj = str(d[devname]['object'])
-                #tmp = getattr(globals(),'sam4logDevice')
+                #tmp = getattr(globals(),'todlDevice')
                 deviceobj = globals()[obj]() # Call the object of the device
                 deviceobj.setup()
                 self.devices.append(deviceobj)
@@ -1472,7 +1494,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
     def info_devices(self):
         """
-        Create a QWidget with for choosing an information widget for any device
+        Create a QWidget with for calling the info function of the device
         """
         self.device_info_widget        = QtWidgets.QWidget()
         w = self.device_setup_widget
@@ -1487,7 +1509,7 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
 
         for d in config['devices']:
             devname = list(d)[0]
-            self.combo_dev_add.addItem(devname)
+            self.combo_dev_info.addItem(devname)
 
         b = QtWidgets.QPushButton('Info')
         b.setEnabled(False)
@@ -1495,6 +1517,34 @@ class sam4logMainWindow(QtWidgets.QMainWindow):
         self.device_info_widget_layout.addWidget(self.combo_dev_info,1,0)
         self.device_info_widget_layout.addWidget(dev_info,1,1)
         self.device_info_widget.show()
+
+
+    def show_devices(self):
+        """
+        Create a QWidget with for calling the show_data function of the device. 
+        The device widget usually creates a widget
+        """
+        self.device_show_widget        = QtWidgets.QWidget()
+        w = self.device_setup_widget
+        self.all_widgets.append(w)        
+        self.device_show_widget_layout = QtWidgets.QGridLayout(self.device_show_widget)
+
+        dev_show = QtWidgets.QPushButton('Open Show')
+        dev_show.clicked.connect(self.show_devices)
+        dev_show.setEnabled(False)
+
+        self.combo_dev_show     = QtWidgets.QComboBox(w)
+
+        for d in config['devices']:
+            devname = list(d)[0]
+            self.combo_dev_show.addItem(devname)
+
+        b = QtWidgets.QPushButton('Show')
+        b.setEnabled(False)
+        self.device_show_widget_layout.addWidget(b,0,0,1,2)
+        self.device_show_widget_layout.addWidget(self.combo_dev_show,1,0)
+        self.device_show_widget_layout.addWidget(dev_show,1,1)
+        self.device_show_widget.show()        
         
 
     def close_application(self):
@@ -1545,7 +1595,7 @@ def main():
     app = QtWidgets.QApplication(sys.argv)
     screen_resolution = app.desktop().screenGeometry()
     width, height = screen_resolution.width(), screen_resolution.height()
-    window = sam4logMainWindow()
+    window = todlMainWindow()
     # Resize the window
     #window.resize(width-100,2*height/3)
     window.show()

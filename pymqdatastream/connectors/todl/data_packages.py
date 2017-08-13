@@ -1,9 +1,9 @@
 from cobs import cobs
 import numpy as np
 import logging
-import pymqdatastream.connectors.sam4log.ltc2442 as ltc2442
+import pymqdatastream.connectors.todl.ltc2442 as ltc2442
 
-logger = logging.getLogger('sam4log_data_packages')
+logger = logging.getLogger('todl_data_packages')
 logger.setLevel(logging.DEBUG)
 
 def decode_format31(data_str,device_info):

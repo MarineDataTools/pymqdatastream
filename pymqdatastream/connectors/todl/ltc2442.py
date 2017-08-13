@@ -123,7 +123,7 @@ def interprete_ltc2442_command(command,channel_naming = 0):
 
     Args:
        command: a list of bytes 
-       channel_naming: The way the channels are named (0: standard; 1: SAM4LOG naming)
+       channel_naming: The way the channels are named (0: standard; 1: TODL naming)
                        TODO: Explain what the difference is
 
     Returns:
@@ -188,7 +188,7 @@ def interprete_ltc2442_command_test(command,channel_naming = 0):
 
     Args:
        command: a list of bytes 
-       channel_naming: The way the channels are named (0: standard; 1: SAM4LOG naming)
+       channel_naming: The way the channels are named (0: standard; 1: TODL naming)
                        TODO: Explain what the difference is
 
     Returns:

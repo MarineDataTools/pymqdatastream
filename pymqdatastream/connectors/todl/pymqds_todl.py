@@ -2,9 +2,9 @@
 import sys
 import os
 import pymqdatastream
-import pymqdatastream.connectors.sam4log.netstring as netstring
-import pymqdatastream.connectors.sam4log.ltc2442 as ltc2442
-import pymqdatastream.connectors.sam4log.data_packages as data_packages
+import pymqdatastream.connectors.todl.netstring as netstring
+import pymqdatastream.connectors.todl.ltc2442 as ltc2442
+import pymqdatastream.connectors.todl.data_packages as data_packages
 from pymqdatastream.utils.utils_serial import serial_ports, test_serial_lock_file, serial_lock_file
 import logging
 try:
@@ -22,11 +22,11 @@ from cobs import cobs
 import numpy as np
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
-logger = logging.getLogger('pymqds_sam4log')
+logger = logging.getLogger('pymqds_todl')
 logger.setLevel(logging.DEBUG)
 
 
-# SAM4LOG speeds for version 0.4
+# TODL speeds for version 0.4
 s4lv0_4_speeds        = [30   ,12 ,10 ,8  ,6  ,4   ,2   ]
 s4lv0_4_speeds_hz_adc = [6.875,110,220,439,879,1760,3520]
 s4lv0_4_speeds_td     = [2000 ,100,25 ,50 ,20 ,16  ,16  ]
@@ -42,15 +42,15 @@ s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]
 s4lv0_46_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 250, 333, 400, 500, 625, 1000, 1250, 2000]
 
 
-file_header_end = b'>>><<<\n>>><<<\n>>><<<\n'
-file_header_end_dos = b'>>><<<\r\n>>><<<\r\n>>><<<\r\n'
-
-
+file_header_valid = b'\n>>>'
+file_header_start_todl = b'>>> -- HELLO! This is the Turbulent Ocean Data Logger -- <<<'
+file_header_start_sam4log = b'>>> -- HELLO! This is SAM4LOG -- <<<' # Before 13.08.2017 the TODL project name was SAM4LOG
+file_header_valid_dos = b'\r\n>>>'
 
 def parse_device_info(data_str):
     """
 
-    Parses a device info string and returns an dictionary with sam4log device configuration
+    Parses a device info string and returns an dictionary with todl device configuration
     Args:
     data_str: String with the device information
     Returns: device_info
@@ -60,7 +60,8 @@ def parse_device_info(data_str):
     logger.debug(funcname)
     device_info = {}
     boardversion = '??'
-    firmwareversion = '??'        
+    firmwareversion = '??'
+    print(data_str)
     for line in data_str.split('\n'):
         if( ' board version:' in line ):
             # Expecting a string like this:
@@ -134,12 +135,17 @@ def parse_device_info(data_str):
     return device_info
 
 
-def find_sam4log_header(data_file):
-    funcname = __name__ + '.find_sam4log_header()'
+def find_todl_header(data_file):
+    """
+    Reading the first part of the file and searching for a known pattern
+    """
+    funcname = __name__ + '.find_todl_header()'
+    VALID_HEADER = False
     # Reading the first part of the file and looking for known patterns
     maxbytes = 10000 # should be larger as len(file_header_len)
     bytes_read = 0
     data = b''
+    header = b'' # The header information data
     while True:
         bytes_read += 1
         if(bytes_read >= maxbytes):
@@ -148,23 +154,36 @@ def find_sam4log_header(data_file):
 
         b = data_file.read(1)
         data += b
-        if(len(data) > len(file_header_end)):
-            if(data[-len(file_header_end):] == file_header_end):
-                logger.debug(funcname + ': Found a valid data file')
+        if(VALID_HEADER):
+            header += b            
+            # Check if we have a \n, if yes check the next three bytes for >>>
+            if(b == b'\n'):
+                d = data_file.read(3)
+                data += d
+                if(d != b'>>>'):
+                    logger.debug(funcname + ': Stop of header')
+                    break
+                else:
+                    header += d
+
+        if(len(data) > len(file_header_start_sam4log)):
+            if( data[-len(file_header_start_sam4log):] == file_header_start_sam4log ):
+                logger.debug(funcname + ': Found a valid start header')
+                header += data[-len(file_header_start_sam4log):]
                 VALID_HEADER=True
-                break
-
-        if(len(data) > len(file_header_end_dos)):
-            if(data[-len(file_header_end_dos):] == file_header_end_dos):
-                logger.debug(funcname + ': Found a valid data file (DOS)')
+        if(len(data) > len(file_header_start_todl)):                
+            if (data[-len(file_header_start_todl):] == file_header_start_todl):
+                logger.debug(funcname + ': Found a valid start header')
+                header += data[-len(file_header_start_todl):]
                 VALID_HEADER=True
-                break
-
-    return [VALID_HEADER,data]
 
 
+    print('header',header)
+    return [VALID_HEADER,header]
 
-class sam4logDataStream(pymqdatastream.DataStream):
+
+
+class todlDataStream(pymqdatastream.DataStream):
     """
 
     
@@ -173,10 +192,10 @@ class sam4logDataStream(pymqdatastream.DataStream):
     def __init__(self, **kwargs):
         """
         """
-        super(sam4logDataStream, self).__init__(**kwargs)
+        super(todlDataStream, self).__init__(**kwargs)
         uuid = self.uuid
-        uuid.replace('DataStream','sam4logDataStream')
-        self.name = 'sam4log'
+        uuid.replace('DataStream','todlDataStream')
+        self.name = 'todl'
         self.uuid = uuid
         self.status = -1 # -1 init, 0 opened serial port, 1 converting
         self.init_notification_functions = [] # A list of functions to be called after the logger has been initialized/reinitialized
@@ -193,7 +212,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         self.bytes_read_avg = 0 # Average bytes received per time interval of 10 seconds
         self.bytes_read_avg_dt = 2 # Average bytes received per time interval of 10 seconds
         self.serial = None # The device to be connected to
-        # Two initial queues, the first is for internal use (init logger, query_sam4log), the second is for the raw stream
+        # Two initial queues, the first is for internal use (init logger, query_todl), the second is for the raw stream
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen),collections.deque(maxlen=self.dequelen)]
         self.intraqueue = collections.deque(maxlen=self.dequelen) # Queue for for internal processing, e.g. printing of processed data
         # Two queues to start/stop the raw_data conversion threads
@@ -223,7 +242,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         funcname = self.__class__.__name__ + '.load_file()'
         self.bytes_read = 0
         self.data_file = open(filename,'rb')
-        [VALID_HEADER,data] = find_sam4log_header(self.data_file)
+        [VALID_HEADER,data] = find_todl_header(self.data_file)
 
 
         if(VALID_HEADER):
@@ -519,7 +538,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
     def add_raw_data_stream(self):
         """
         
-        Adds a stream containing the raw data read from sam4log. 
+        Adds a stream containing the raw data read from todl. 
 
         Args: None
             
@@ -534,7 +553,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         rawvar = pymqdatastream.StreamVariable(name = 'serial binary',unit = '',datatype = 'b')
         variables = ['serial binary',]
         name = 'serial binary'
-        famstr = 'sam4log raw'
+        famstr = 'todl raw'
         stream = self.add_pub_stream(socket = self.sockets[-1], name=name, variables=[rawvar], family = famstr)
         self.raw_stream = stream
         self.raw_stream_thread = threading.Thread(target=self.push_raw_stream_data,args = (self.Streams[-1],))
@@ -639,7 +658,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.convert_raw_data = self.convert_raw_data_format4
 
 
-    def init_sam4logger(self,adcs,data_format=3,channels=[0],speed=30):
+    def init_todllogger(self,adcs,data_format=3,channels=[0],speed=30):
         """
     
         Function to set specific settings on the logger
@@ -648,7 +667,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
             format: Output format of the logger
         
         """
-        funcname = self.__class__.__name__ + '.init_sam4logger()'
+        funcname = self.__class__.__name__ + '.init_todllogger()'
 
         self.logger.debug(funcname)
         if(self.status >= 0):
@@ -691,7 +710,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
             self.print_serial_data = False            
             # Update the device_info struct etc.
-            self.query_sam4logger()
+            self.query_todllogger()
             self.send_serial_data('start\n')
             for fun in self.init_notification_functions:
                 fun()
@@ -699,19 +718,19 @@ class sam4logDataStream(pymqdatastream.DataStream):
             self.logger.debug(funcname + ': No serial port opened')
 
             
-    def query_sam4logger(self):
+    def query_todllogger(self):
         """
         
         Queries the logger and sets the important parameters to the values read
         TODO: Do something if query fails
 
         Returns:
-            bool: True if we found a sam4logger, False otherwise
+            bool: True if we found a todllogger, False otherwise
 
         
         """
         dt = 0.2 # Additional wait between commands
-        funcname = self.__class__.__name__ + '.query_sam4logger()'
+        funcname = self.__class__.__name__ + '.query_todllogger()'
         self.logger.debug(funcname)        
         self.print_serial_data = True
         self.send_serial_data('stop\n')
@@ -723,9 +742,9 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
 
         #
-        # Send stop and info to check if we got some data which is a sam4log
+        # Send stop and info to check if we got some data which is a todl
         #
-        FLAG_IS_SAM4LOG = False
+        FLAG_IS_TODL = False
         self.send_serial_data('stop\n')
         time.sleep(0.1+dt)
 
@@ -743,7 +762,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
         return_str = data_str
         # Parse the received data for a valid reply
         if( ('>>>stop' in data_str) or ('><<stop' in data_str) ):
-            FLAG_IS_SAM4LOG=True
+            FLAG_IS_TODL=True
             boardversion = '??'
             firmwareversion = '??'
             self.logger.debug(funcname + ': Found a valid stop reply')
@@ -769,8 +788,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     print('Firmware version:',firmwareversion)
                 
             
-        if(FLAG_IS_SAM4LOG==False):
-            self.logger.warning(funcname + ': Device does not seem to be a sam4log')
+        if(FLAG_IS_TODL==False):
+            self.logger.warning(funcname + ': Device does not seem to be a todl')
             return False
         else:
             self.device_info = {}
@@ -843,8 +862,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                     datavar = pymqdatastream.StreamVariable('ad ' + str(ad) + ' ch ' + str(ch),'V','float')
                     variables.append(datavar)
 
-                name = 'sam4log ad ch' + str(ch)
-                famstr = 'sam4log adc'
+                name = 'todl ad ch' + str(ch)
+                famstr = 'todl adc'
                 self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables, family = famstr))
                 self.channel_streams[ch] = self.conv_streams[-1]
 
@@ -867,8 +886,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
             variables_IMU.append(datavarx_GYR)
             variables_IMU.append(datavary_GYR)
             variables_IMU.append(datavarz_GYR)
-            name = 'sam4log IMU'
-            famstr = 'sam4log IMU'
+            name = 'todl IMU'
+            famstr = 'todl IMU'
             self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables_IMU, family = famstr))
             #self.channel_streams[ch] = self.conv_streams[-1]
             self.aux_streams[0] = self.conv_streams[-1]
@@ -879,8 +898,8 @@ class sam4logDataStream(pymqdatastream.DataStream):
                 datavar_O2_dphi = pymqdatastream.StreamVariable(field['name'],field['unit'],field['datatype'])
                 variables_O2.append(datavar_O2_dphi)
                 
-            name = 'sam4log O2 (PyroScience)'
-            famstr = 'sam4log O2'            
+            name = 'todl O2 (PyroScience)'
+            famstr = 'todl O2'            
             self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables_O2, family = famstr))
             self.aux_streams[1] = self.conv_streams[-1]            
             # TODO, make this clean!
@@ -1537,7 +1556,7 @@ class sam4logDataStream(pymqdatastream.DataStream):
 
 
 def main():    
-    s = sam4logDataStream(logging_level='DEBUG')
+    s = todlDataStream(logging_level='DEBUG')
     s.add_serial_device('/dev/ttyUSB0')
 
     s.add_raw_data_stream()
@@ -1545,8 +1564,8 @@ def main():
 
     # Send a format 2 command
     time.sleep(0.5)
-    s.init_sam4logger(flag_adcs = [0],data_format=2)
-    s.query_sam4logger()
+    s.init_todllogger(flag_adcs = [0],data_format=2)
+    s.query_todllogger()
     time.sleep(0.5)
     #s.print_serial_data = True    
     s.start_converting_raw_data()

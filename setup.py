@@ -31,10 +31,10 @@ if sys.version_info >= (3,4):
           'pymqds_qtshowdata=pymqdatastream.connectors.qt.pymqds_qtshowdata:main',\
           'pymqds_qtoverview=pymqdatastream.connectors.qt.pymqds_qtoverview:main',\
           'pymqds_plotxy=pymqdatastream.connectors.pyqtgraph.pymqds_plotxy:main',\
-          'pymqds_sam4log=pymqdatastream.connectors.sam4log.pymqds_sam4log:main',\
-          'pymqds_gui_sam4log=pymqdatastream.connectors.sam4log.pymqds_gui_sam4log:main',\
+          'todl=pymqdatastream.connectors.todl.pymqds_todl:main',\
+          'todl_gui=pymqdatastream.connectors.todl.pymqds_gui_todl:main',\
           'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
-          package_data = {'microrider':['data/*.DAT'],'':['VERSION'],'sam4log_gui':['connectors/sam4log/sam4log_config.yaml']},
+          package_data = {'microrider':['data/*.DAT'],'':['VERSION'],'todl_gui':['connectors/todl/todl_config.yaml']},
           zip_safe=False)
 
 else:
