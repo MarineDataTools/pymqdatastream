@@ -198,6 +198,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self.name = 'todl'
         self.uuid = uuid
         self.status = -1 # -1 init, 0 opened serial port, 1 converting
+        self.file_status = -1 # -1 not opened, 0 = open, 1 = reading
         self.init_notification_functions = [] # A list of functions to be called after the logger has been initialized/reinitialized
         funcname = self.__class__.__name__ + '.__init__()'
         self.logger.debug(funcname)
@@ -251,6 +252,7 @@ class todlDataStream(pymqdatastream.DataStream):
             self.channel_streams = [None] * (max(self.device_info['channel_seq']) + 1)
             self.init_data_format_functions()
             self.flag_adcs = self.device_info['adcs']
+            self.file_status = 0 # File open
         else:
             return False
 
@@ -261,16 +263,28 @@ class todlDataStream(pymqdatastream.DataStream):
         return True
         
     def start_read_file(self,dt=0.01,num_bytes=200):
-        funcname = self.__class__.__name__ + '.start_read_file()'        
-        self.file_thread = threading.Thread(target=self.read_file_data,kwargs={'dt':dt,'num_bytes':num_bytes})
-        self.file_thread.daemon = True
-        self.file_thread.start()            
-        self.logger.debug(funcname + ': Starting thread done')
+        funcname = self.__class__.__name__ + '.start_read_file()'
+        if(self.file_status == 0):
+            self.file_thread = threading.Thread(target=self.read_file_data,kwargs={'dt':dt,'num_bytes':num_bytes})
+            self.file_thread.daemon = True
+            self.file_thread.start()            
+            self.logger.debug(funcname + ': Starting thread done')
+            self.file_status = 1 # Reading
+        else:
+            self.logger.warning(funcname + ': Either file not open or file is already reading')
 
 
     def stop_read_file(self):
         funcname = self.__class__.__name__ + '.stop_read_file()'        
         self.serial_thread_queue.put('stop')
+        self.file_status = 0 # Open
+        
+
+    def close_file(self):
+        funcname = self.__class__.__name__ + '.close_file()'
+        self.stop_read_file()
+        self.file_status = -1 # Open
+        
         
     def read_file_data(self, dt = 0.01, num_bytes = 200):
         """
@@ -623,6 +637,7 @@ class todlDataStream(pymqdatastream.DataStream):
         if((data_format == 3) or (data_format == 'csv')):
             self.device_info['format'] = 3
             self.init_data_format_functions()
+            
 
         # CSV style
         if((data_format == 31) or (data_format == 'csv31')):

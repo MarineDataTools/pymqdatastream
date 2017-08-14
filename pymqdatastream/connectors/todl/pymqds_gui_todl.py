@@ -599,7 +599,8 @@ class todlDevice():
         # File source
         self.button_open_file      = QtWidgets.QPushButton('Open file')
         self.button_open_file.clicked.connect(self.open_file)
-        self.button_startstopread_file = QtWidgets.QPushButton('Start Read')
+        self.button_startstopread_file = QtWidgets.QPushButton('Start read')
+        self.button_startstopread_file.clicked.connect(self.startstopreadfile)
         self.label_file_read_dt    = QtWidgets.QLabel('Read in intervals of [s]')
         self.spin_file_read_dt     = QtWidgets.QDoubleSpinBox()
         self.spin_file_read_dt.setValue(0.05)
@@ -866,11 +867,28 @@ class todlDevice():
             filename = ntpath.basename(fname[0])
             path = ntpath.dirname(fname[0])
             logger.debug('Open file:' + str(fname[0]))
-            ret = self.todl.load_file(fname[0],num_bytes = self.spin_file_read_nbytes.value(),dt=self.spin_file_read_dt.value(),start_read=False)
+            ret = self.todl.load_file(fname[0],start_read=False)
             if(ret):
                 self.deviceinfo.update(self.todl.device_info)
                 self.todl.add_raw_data_stream()
                 self.todl.start_converting_raw_data()
+
+
+    def startstopreadfile(self):
+        """
+        Starts or stops reading the data file
+        """
+        logger.debug('Starting reading the datafile')
+        t = self.button_startstopread_file.text()
+        if('Start' in t):
+            print('Start reading')
+            num_bytes = self.spin_file_read_nbytes.value()
+            dt=self.spin_file_read_dt.value()
+            self.todl.start_read_file(num_bytes = num_bytes, dt=dt)
+            self.button_startstopread_file.setText('Stop reading')
+        elif('Stop' in t):
+            self.todl.stop_read_file()
+            self.button_startstopread_file.setText('Start read')            
 
 
     def show_data(self):
