@@ -2,6 +2,30 @@
 
 #
 #
+
+"""Module for a Qt-Based GUI of the Turbulent Ocean Data Logger. The
+heart are device objects with several mandatory function such that the
+main object of this module can open/close and call information
+functions
+
+A device needs the following informations:
+
+ __init__(self,      device_changed_function=None)
+
+The device changed function is used to interconnect the device to each other
+
+
+- setup     (mandatory)
+- info      (obligatory)
+- show_data (obligatory)
+- plot_data (obligatory)
+- close     (mandatory)
+
+.. moduleauthor:: Peter Holtermann <peter.holtermann@io-warnemuende.de>
+
+"""
+
+
 try:
     from PyQt5 import QtCore, QtGui, QtWidgets
 except:
@@ -22,6 +46,9 @@ import time
 import multiprocessing
 import binascii
 import yaml
+import datetime
+# Import GPS/NMEA functionality
+import pymqdatastream.connectors.nmea.pymqds_nmea0183_gui as pymqds_nmea0183_gui
 
 # Get a standard configuration
 from pkg_resources import Requirement, resource_filename
@@ -269,13 +296,14 @@ class todlConfig(QtWidgets.QWidget):
                 break
 
         print('Chs List:',chs)
-        print('init todlger')
-        self.todl.init_todlger(adcs = adcs,channels=chs,speed=speed_num,data_format=3)
+        print('init todllogger')
+        self.todl.init_todllogger(adcs = adcs,channels=chs,speed=speed_num,data_format=3)
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)        
 
     def _query(self):
-        self.todl.query_todlger()
+        self.todl.query_todllogger()
+        
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)
 
@@ -385,21 +413,54 @@ def _start_pymqds_plotxy_test(graphs):
     logger.debug("_start_pymqds_plotxy(): done")
 
 
+
 #
 #
+# GPS Device
+#
+#
+class gpsDevice():
+    """A device to interact with the connectors.nmea.pymqds_nmea0183logger
+    object using the pymqds_nmea0183_gui.nmea0183SetupWidget widget
+    for configuration
+
+    """
+    def __init__(self, device_changed_function=None):
+        print('GPS Device')
+        self.device_changed_function = device_changed_function
+        
+    def setup(self):
+        print('GPS Setup')
+        self.w = pymqds_nmea0183_gui.nmea0183SetupWidget()
+        # Copy the nmea0183logger
+        self.nmea0183logger = self.w.nmea0183logger
+        self.nmea0183logger.signal_functions.append(self.device_changed)
+        self.w.show()
+
+    def close(self):
+        """
+        Cleanup of the device
+        """
+        self.w.close()
+
+    def device_changed(self,fname):
+        """
+        A function called by the nmea0183logger to notice a change
+        """
+        print('Something changed here:',fname)
+        # Call the update function
+        if(not(self.device_changed_function == None)):
+            self.device_changed_function()
+
+#
+#
+# TODL Device
 #
 #
 class todlDevice():
-    def __init__(self):
+    def __init__(self, device_changed_function=None):
         """
         A device class for the turbulent ocean data logger (TODL)
-        Each device needs the following functions
-        
-        setup     (mandatory)
-        info      (obligatory)
-        show_data (obligatory)
-        plot_data (obligatory)
-        close     (mandatory)
         
         """
         self.ready = False
@@ -578,7 +639,7 @@ class todlDevice():
         self.setup_close_bu = QtWidgets.QPushButton('Close')
         self.setup_close_bu.clicked.connect(w.close)
         self.serial_open_bu = QtWidgets.QPushButton('Query')
-        self.serial_open_bu.clicked.connect(self.clicked_open_bu)
+        self.serial_open_bu.clicked.connect(self.clicked_serial_open_bu)
 
         self.serial_test_bu = QtWidgets.QPushButton('Test ports')
         self.serial_test_bu.clicked.connect(self.test_ports)        
@@ -709,8 +770,8 @@ class todlDevice():
         for port in ports_good:
             self.combo_serial.addItem(str(port))
 
-    def clicked_open_bu(self):
-        """
+    def clicked_serial_open_bu(self):
+        """Function to open a serial device
         """
         t = self.serial_open_bu.text()
         print('Click ' + str(t))
@@ -721,7 +782,7 @@ class todlDevice():
                 print('Opening port' + ser + ' with baudrate ' + str(b))
                 self.todl.add_serial_device(ser,baud=b)
                 if(self.todl.status == 0): # Succesfull opened
-                    if(self.todl.query_todlger() == True):
+                    if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
                         # Enable a settings button or if version 0.45 add a frequency combo
                         vers = float(self.todl.device_info['firmware'])
@@ -741,20 +802,21 @@ class todlDevice():
                             self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set_v045)
                             # TODO Have to resize the widget to have nicer data
                         # The general purpose 
-                        elif(vers >= 0.46):
+                        elif(vers >= 0.70):
                             logger.debug('Opening Version 0.46 device setup')
                             self._s4l_settings_bu.close()
-                            self._s4l_freq_combo = QtWidgets.QComboBox(self)
-                            #self._s4l_freq_combo.setEnabled(True)                            
-                            self._speeds_hz     = pymqds_todl.s4lv0_46_speeds_hz
-                            for i,speed in enumerate(self._speeds_hz):
-                                self._s4l_freq_combo.addItem(str(speed))
+                            if(False):
+                                self._s4l_freq_combo = QtWidgets.QComboBox()
+                                #self._s4l_freq_combo.setEnabled(True)                            
+                                self._speeds_hz     = pymqds_todl.s4lv0_46_speeds_hz
+                                for i,speed in enumerate(self._speeds_hz):
+                                    self._s4l_freq_combo.addItem(str(speed))
 
-                            self.layout.addWidget(self._s4l_freq_combo,1,3)
-                            self._ad_table.clear()                                                        
-                            self._ad_table_setup()
-                            self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set)
-                            # TODO Have to resize the widget to have nicer data                            
+                                self.layout.addWidget(self._s4l_freq_combo,1,3)
+                                self._ad_table.clear()                                                        
+                                self._ad_table_setup()
+                                self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set)
+                                # TODO Have to resize the widget to have nicer data                            
                         else:
                             self._s4l_settings_bu.setEnabled(True)
                             self._ad_table.clear()                            
@@ -775,8 +837,8 @@ class todlDevice():
                 #self.todl.add_serial_device(ser,baud=b)
                 self.todl.add_raw_data_stream()
                 time.sleep(0.2)
-                self.todl.query_todlger()
-                #self.todl.init_todlger(adcs = [0,2,4])
+                self.todl.query_todllogger()
+                #self.todl.init_todllogger(adcs = [0,2,4])
                 time.sleep(0.2)                
                 self.todl.start_converting_raw_data()
                 self.combo_serial.setEnabled(False)
@@ -815,7 +877,7 @@ class todlDevice():
                 time.sleep(0.5)
                 if(True):                    
                     print('Query socket/device')
-                    if(self.todl.query_todlger() == True):
+                    if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
                         self.button_open_socket.setEnabled(False)
                         self.text_ip.setEnabled(False)
@@ -832,7 +894,7 @@ class todlDevice():
                     self.todl.send_serial_data('freq 200\n')
                     #self.todl.send_serial_data('freq 333\n')
                     time.sleep(0.2)                            
-                    if(self.todl.query_todlger() == True):
+                    if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
                         self.print_serial_data = False
                         time.sleep(0.1)            
@@ -1065,7 +1127,7 @@ class todlDevice():
         self.todl.send_serial_data('freq ' + str(speed_str) + '\n')
         self.todl.send_serial_data('format 4\n')
         time.sleep(0.1)        
-        if(self.todl.query_todlger() == True):
+        if(self.todl.query_todllogger() == True):
             self.deviceinfo.update(self.todl.device_info)
             self.print_serial_data = False
             time.sleep(0.1)            
@@ -1083,7 +1145,7 @@ class todlDevice():
         self.todl.send_serial_data('stop\n')
         self.todl.send_serial_data('freq ' + str(speed_str) + '\n')
         time.sleep(0.1)        
-        if(self.todl.query_todlger() == True):
+        if(self.todl.query_todllogger() == True):
             self.deviceinfo.update(self.todl.device_info)
             self.print_serial_data = False
             time.sleep(0.1)            
@@ -1139,13 +1201,9 @@ class todlDevice():
                 self._show_data_bu.setText('Show data')                
 
 
-
-            
     def _poll_intraqueue(self):
-        """
-
-        Polling the intraque , and updates and displays the data in self._ad_table
-
+        """Polling the intraque , and updates and displays the data in
+        self._ad_table
         """
         global counter_test
         counter_test += 1
@@ -1385,7 +1443,17 @@ class todlDevice():
                 print('Stop record')            
                 ret = self.loggerDS.stop_poll_data_thread()
                 self._info_record_bu.setText(self._recording_status[0])
+                
+                
+    def add_nmea0183logger(self,nmea0183logger):
+        """Adds a nmea0183logger to the device. This is basically used to set the
+        time with the GPS-time instead of the PC-time
 
+        """
+        logger.debug('add_nmea0183logger()')
+        self.nmea0183logger = nmea0183logger
+        
+        
     def close(self):
         """
         Cleanup of the device
@@ -1394,13 +1462,86 @@ class todlDevice():
             w.close()
 
 
-                
+
+#
+#
+# Time widget
+#
+#
+class timeWidget(QtWidgets.QWidget):
+    """A time widget showing system time as well as additional clocks as e.g. GPS Time
+
+    """
+    def __init__(self):
+        
+        QtWidgets.QWidget.__init__(self)
+        self.nmea0183logger = None
+        self.time_widget_layout = QtWidgets.QGridLayout(self)
+        self.lab_time_system = QtWidgets.QLabel('Systemtime (UTC): ')
+        self.lab_showtime_system = QtWidgets.QLabel('')
+        local_str = datetime.datetime.now(datetime.timezone.utc).strftime('%Z')        
+        self.lab_time_system_local = QtWidgets.QLabel('Systemtime (local)')
+        self.lab_showtime_system_local = QtWidgets.QLabel('')                
+        dev_rem = QtWidgets.QPushButton('Remove')
+
+        self.time_widget_layout.addWidget(self.lab_time_system,0,0)
+        self.time_widget_layout.addWidget(self.lab_showtime_system,1,0)
+        self.time_widget_layout.addWidget(self.lab_time_system_local,2,0)
+        self.time_widget_layout.addWidget(self.lab_showtime_system_local,3,0)
+        self.ind_gps = 4
+
+        # Create a timer to update the time
+        self.time_timer = QtCore.QTimer(self)
+        self.time_timer.setInterval(50)
+        self.time_timer.timeout.connect(self.update_time)
+        self.time_timer.start()
+
+        
+    def update_time(self):
+        time_str = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')
+        time_str = time_str[:-5]
+        self.lab_showtime_system.setText(time_str)        
+        time_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        time_str = time_str[:-5]
+        self.lab_showtime_system_local.setText(time_str)
+        if(self.nmea0183logger != None):
+            for i,s in enumerate(self.nmea0183logger.serial):
+                if('datetime' in s['parsed_data'].keys()):
+                    lab2 = self.lab_nmea0183logger[i*2+1] # Get the right label
+                    time_str = s['parsed_data']['datetime'].strftime('%Y-%m-%d %H:%M:%S')
+                    lab2.setText(time_str)
+
+                    
+    def add_nmea0183logger(self,nmea0183logger):
+        """Add a nmea0183logger to the widget, to show as well GPS time
+
+        """
+        print('add nmea0183logger')
+        self.lab_nmea0183logger = []
+        for s in nmea0183logger.serial:
+            print(s)
+            lab1 = QtWidgets.QLabel(s['device_name'])
+            lab2 = QtWidgets.QLabel('XXX')
+            self.lab_nmea0183logger.append(lab1)
+            self.lab_nmea0183logger.append(lab2)            
+            self.time_widget_layout.addWidget(lab1,self.ind_gps,0)
+            self.time_widget_layout.addWidget(lab2,self.ind_gps+1,0)            
+            self.ind_gps +=2
+            #QtWidgets.QLabel('Systemtime (UTC): ')
+
+        # Do this in the end otherwise the QTimer could call the update function already
+        self.nmea0183logger = nmea0183logger            
+        
+
 #
 #
 # The main window
 #
 #
 class todlMainWindow(QtWidgets.QMainWindow):
+    """The main interface of the TODL-GUI. Here the user can add and setup
+    devices as GPS and TODL.
+    """
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
         self.all_widgets = []
@@ -1421,7 +1562,8 @@ class todlMainWindow(QtWidgets.QMainWindow):
 
         self.mainwidget = QtWidgets.QWidget()
         self.layout = QtWidgets.QGridLayout(self.mainwidget)
-
+        # Create the time widget
+        self.setup_time()
         # Create the device setup widget
         self.setup_devices()
         # Create the info widget        
@@ -1431,6 +1573,7 @@ class todlMainWindow(QtWidgets.QMainWindow):
 
         # Main tasks for the main layout
         self.tasks = []
+        self.tasks.append({'name':'Time','widget':self.time_widget})        
         self.tasks.append({'name':'Devices','widget':self.device_setup_widget})
         self.tasks.append({'name':'Info','widget':self.device_info_widget})
         self.tasks.append({'name':'Show','widget':self.device_show_widget})        
@@ -1447,6 +1590,18 @@ class todlMainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.mainwidget)
         
         self.show()
+
+
+    def setup_time(self):
+        """
+        Create a time and date widget
+        """
+        self.time_widget        = timeWidget()
+        w = self.time_widget
+        self.all_widgets.append(w)
+        
+
+
 
     def setup_devices(self):
         """
@@ -1485,7 +1640,10 @@ class todlMainWindow(QtWidgets.QMainWindow):
         
     def add_devices(self):
         """
-        Adds a device using a device object with the appropriate functions
+
+        Looks in the configuration for devices and initializing that
+        device object with the appropriate functions
+
         """
         dev = str( self.combo_dev_add.currentText() )
         print('Hallo add: ' + dev)
@@ -1493,15 +1651,42 @@ class todlMainWindow(QtWidgets.QMainWindow):
             devname = list(d)[0]
             if(devname == dev):
                 print('Found device ... with object name ' + str(d[devname]['object']))
-                
                 obj = str(d[devname]['object'])
                 #tmp = getattr(globals(),'todlDevice')
-                deviceobj = globals()[obj]() # Call the object of the device
+                # Call the object
+                # of the device and give the device_changed function
+                deviceobj = globals()[obj](self.device_changed) 
                 deviceobj.setup()
                 self.devices.append(deviceobj)
                 
         #type
         #SubClass = type('SubClass', (BaseClass,), {'set_x': set_x})
+
+
+    def device_changed(self,fname=None):
+        """
+
+        This function is given as a callback to the devices to notify if
+        something changed
+
+        """
+        print('Device changed function')
+        print('Our devices are',self.devices)
+        # Connect GPS with 
+        for d in self.devices:
+            if(type(d) is gpsDevice):
+                logger.debug('Found a GPS device')
+                # Found a GPS device, loop through all devices again
+                # and search for todlDevice
+                # Add to the time widget
+                self.time_widget.add_nmea0183logger(d.nmea0183logger)
+                for d2 in self.devices:
+                    if(type(d) is todlDevice):
+                        logger.debug('Found a todl, adding the GPS')
+                        d2.add_nmea0183logger(d)
+
+            else:
+                print(d)
 
     def rem_devices(self):
         """

@@ -13,13 +13,22 @@ Logger
    :special-members: __init__
 
 		  
-sam4log
-=======
+Turbulent Ocean Data Logger (TODL)
+==================================
 
-sam4log
+todl
 -------
 
-.. automodule:: pymqdatastream.connectors.sam4log.pymqds_sam4log
+.. automodule:: pymqdatastream.connectors.todl.pymqds_todl
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :special-members: __init__
+	     
+todl_gui
+-------
+
+.. automodule:: pymqdatastream.connectors.todl.pymqds_gui_todl
    :members:
    :undoc-members:
    :show-inheritance:
@@ -28,7 +37,7 @@ sam4log
 LTC2442_packet
 +++++++++++
 		     
-.. automodule:: pymqdatastream.connectors.sam4log.ltc2442
+.. automodule:: pymqdatastream.connectors.todl.ltc2442
    :members:
    :undoc-members:
    :show-inheritance:

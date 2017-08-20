@@ -184,10 +184,8 @@ def find_todl_header(data_file):
 
 
 class todlDataStream(pymqdatastream.DataStream):
-    """
+    """The Turbulent Ocean Data Logger (TODL) object.
 
-    
-    
     """
     def __init__(self, **kwargs):
         """
@@ -236,8 +234,8 @@ class todlDataStream(pymqdatastream.DataStream):
 
 
     def load_file(self,filename,dt=0.01,num_bytes=200,start_read=True):
-        """
-        loads a file and reads it chunk by chunk
+        """Loads a file and reads it chunk by chunk
+
         """
         VALID_HEADER=False        
         funcname = self.__class__.__name__ + '.load_file()'
@@ -261,7 +259,8 @@ class todlDataStream(pymqdatastream.DataStream):
             self.start_read_file(dt,num_bytes)
 
         return True
-        
+
+    
     def start_read_file(self,dt=0.01,num_bytes=200):
         funcname = self.__class__.__name__ + '.start_read_file()'
         if(self.file_status == 0):
@@ -373,7 +372,6 @@ class todlDataStream(pymqdatastream.DataStream):
             self.logger.debug(funcname + ': Could not open device at: ' + str(port))            
             
 
-            
     #def read_serial_data(self, dt = 0.003):
     def read_serial_data(self, dt = 0.01):
         """
@@ -590,10 +588,8 @@ class todlDataStream(pymqdatastream.DataStream):
         
         
     def push_raw_stream_data(self,stream,dt = 0.1):
-        """
-        
-        Pushes the raw serial data into the raw datastream
-        
+        """Pushes the raw serial data into the raw datastream
+
         """
         
         funcname = self.__class__.__name__ + '.push_raw_stream_data()'
@@ -618,8 +614,8 @@ class todlDataStream(pymqdatastream.DataStream):
 
             
     def init_data_format(self,data_format):
-        """
-        Sets the data format of the input data
+        """Sets the data format of the input data
+
         """
         funcname = self.__class__.__name__ + '.init_data_format()'
         self.logger.debug(funcname)
@@ -646,9 +642,10 @@ class todlDataStream(pymqdatastream.DataStream):
 
         
     def init_data_format_functions(self):
-        """
-        
-        
+        """The TODL output can have different data formats (human readable csv
+        format or cobs encoded binary format).  This function chooses the
+        appropriate decoding fucntion
+
         """
         funcname = self.__class__.__name__ + '.init_data_format_functions()'
         self.logger.debug(funcname)                

@@ -27,6 +27,7 @@ if sys.version_info >= (3,4):
           entry_points={ 'console_scripts': ['NMEA0183grabber=pymqdatastream.connectors.nmea.NMEA0183grabber:main',\
           'pymqds_query=pymqdatastream:query',\
           'pymqds_scan=pymqdatastream.connectors.basic.pymqds_scan:main',\
+          'pymqds_gps=pymqdatastream.connectors.nmea.pymqds_nmea0183_gui:main',\
           'pymqds_rand=pymqdatastream.connectors.test.pymqds_rand:main',\
           'pymqds_qtshowdata=pymqdatastream.connectors.qt.pymqds_qtshowdata:main',\
           'pymqds_qtoverview=pymqdatastream.connectors.qt.pymqds_qtoverview:main',\
