@@ -425,7 +425,7 @@ class serialWidget(QWidget):
                     logger.debug(funcname + ": Found serial device for port:" + port + ' at index:' + str(ind))
                     self.ports_open.remove(port)
                     self.parent_gui._rem_device(port=port)                    
-                    self.nmea0183logger.rem_device(ind)
+                    self.nmea0183logger.rem_serial_device(ind)
                     self._serial_device_changed()
                     
                     

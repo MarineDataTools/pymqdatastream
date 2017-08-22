@@ -434,23 +434,26 @@ class gpsDevice():
         self.w = pymqds_nmea0183_gui.nmea0183SetupWidget()
         # Copy the nmea0183logger
         self.nmea0183logger = self.w.nmea0183logger
+        # Connect the device changed function
         self.nmea0183logger.signal_functions.append(self.device_changed)
         self.w.show()
 
+        
     def close(self):
         """
         Cleanup of the device
         """
         self.w.close()
 
+        
     def device_changed(self,fname):
-        """
-        A function called by the nmea0183logger to notice a change
+        """A function called by the nmea0183logger to notice a change
+
         """
         print('Something changed here:',fname)
         # Call the update function
         if(not(self.device_changed_function == None)):
-            self.device_changed_function()
+            self.device_changed_function(fname)
 
 #
 #
@@ -1461,6 +1464,9 @@ class todlDevice():
         for w in self.all_widgets:
             w.close()
 
+        self.disp_widget.close()
+        self.setup_widget.close() # Closing the TODL setup widget
+
 
 
 #
@@ -1516,7 +1522,7 @@ class timeWidget(QtWidgets.QWidget):
         """Add a nmea0183logger to the widget, to show as well GPS time
 
         """
-        print('add nmea0183logger')
+        print('add nmea0183logger()')
         self.lab_nmea0183logger = []
         for s in nmea0183logger.serial:
             print(s)
@@ -1530,9 +1536,21 @@ class timeWidget(QtWidgets.QWidget):
             #QtWidgets.QLabel('Systemtime (UTC): ')
 
         # Do this in the end otherwise the QTimer could call the update function already
-        self.nmea0183logger = nmea0183logger            
+        self.nmea0183logger = nmea0183logger
         
 
+    def rem_nmea0183logger(self):
+        """Removes the nmealogger from the time Widget
+
+        """
+        print('rem nmea0183logger()')
+        self.nmea0183logger = None
+        for w in self.lab_nmea0183logger:
+            self.time_widget_layout.removeWidget(w)
+            w.deleteLater()
+
+        self.lab_nmea0183logger = []
+        self.ind_gps = 4
 #
 #
 # The main window
@@ -1672,6 +1690,7 @@ class todlMainWindow(QtWidgets.QMainWindow):
         """
         print('Device changed function')
         print('Our devices are',self.devices)
+
         # Connect GPS with 
         for d in self.devices:
             if(type(d) is gpsDevice):
@@ -1679,15 +1698,23 @@ class todlMainWindow(QtWidgets.QMainWindow):
                 # Found a GPS device, loop through all devices again
                 # and search for todlDevice
                 # Add to the time widget
-                self.time_widget.add_nmea0183logger(d.nmea0183logger)
+                if 'add_serial_device()' in fname:
+                    self.time_widget.add_nmea0183logger(d.nmea0183logger)
+                # Check if a NMEA0183 GPS serial device has been removed
+                elif 'rem_serial_device()' in fname:
+                    self.time_widget.rem_nmea0183logger()
+                    self.time_widget.add_nmea0183logger(d.nmea0183logger)
+
                 for d2 in self.devices:
                     if(type(d) is todlDevice):
                         logger.debug('Found a todl, adding the GPS')
                         d2.add_nmea0183logger(d)
-
+                        
             else:
-                print(d)
+                pass
+                #print('Device',d)
 
+                
     def rem_devices(self):
         """
         Dummy function for removing devices

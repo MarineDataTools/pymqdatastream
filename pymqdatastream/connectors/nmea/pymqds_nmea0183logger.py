@@ -74,10 +74,11 @@ def sort_parsed_data_in_dict(data,data_dict):
     
 
 class nmea0183logger(object):
-    """
-
-    A flexibel class for interfacing and distributing several
-    different NMEA streams like serial, tcp or datastreams
+    """A flexibel class for interfacing and distributing several
+    different NMEA streams like serial, tcp or datastreams The main
+    part of the object is the serial list. This list contains
+    dictionaries with open devices, may them be serial, tcp or
+    datastream objects.
 
     """
     def __init__(self,loglevel=logging.INFO,print_raw_data=False):
@@ -135,19 +136,6 @@ class nmea0183logger(object):
             return False
 
 
-    def rem_serial_device(self,ind):
-        """
-
-        Removes a serial item
-
-        """
-        funcname = 'rem_serial_device()'
-        # Call the signal functions
-        for s in self.signal_functions:
-            s(funcname)        
-        pass
-
-        
     def read_nmea_sentences_serial(self, serial_dict):
         """
         The polling thread
@@ -222,7 +210,8 @@ class nmea0183logger(object):
                 break
             except queue.Empty:
                 pass
-                    
+
+        
         return True
 
 
@@ -662,7 +651,7 @@ class nmea0183logger(object):
             socket = pub_socket,
             name   = name,variables = variables)
 
-        print('Hallo',serial)        
+        #print('Hallo',serial)        
         serial['streams'].append(sendstream)
 
 
@@ -680,14 +669,14 @@ class nmea0183logger(object):
             self.add_stream(s)
 
 
-    def rem_device(self,ind):
+    def rem_serial_device(self,ind):
         """
 
         Removes a serial device
 
         """
 
-        funcname = 'rem_device()'
+        funcname = 'rem_serial_device()'
         self.logger.debug(funcname)        
         serialdevice = self.serial[ind]
         if(self.pymqdatastream != None):
@@ -695,18 +684,21 @@ class nmea0183logger(object):
             for s in serialdevice['streams']:
                 self.pymqdatastream.rem_stream(s)        
         serialdevice['thread_queue'].put('stop')
-        if(serialdevice['device'] == serial.Serial):
+        time.sleep(0.2) # Wait for the thread to read the 'stop' signal
+
+        if(type(serialdevice['device']) == serial.Serial):
             self.logger.debug(funcname + ': Stopping a serial device')
             serialdevice['device'].close()
+            # Remove the entry from the serial devices list
+            self.serial.pop(ind)            
+            # Call the signal functions
+            for s in self.signal_functions:
+                s(funcname)
         else:
             self.logger.debug(funcname + ': Unknown device type')
 
-        print(self.serial)    
-        self.serial.pop(ind)
-        print(self.serial)            
-        
-            
 
+        
         
             
 def main():
