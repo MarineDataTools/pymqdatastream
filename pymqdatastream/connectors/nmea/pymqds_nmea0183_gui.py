@@ -186,6 +186,7 @@ class nmea0183Widget(QFrame):
     """
     A widget for a single NMEA device in a nmea0183logger
     """
+    # Signal, have to explain briefly what it does
     update_ident_widgets = pyqtSignal()    
     def __init__(self, ind_device=0, parent_gui = None, dequelen = 100000):
         # Do the rest
@@ -196,13 +197,14 @@ class nmea0183Widget(QFrame):
         # Do the rest
         self.dequelen = dequelen
         QWidget.__init__(self)
+        self.parent_gui = parent_gui
         self.nmea0183logger = parent_gui.nmea0183logger
         self.serial = self.nmea0183logger.serial[ind_device]
         self.data_deque = collections.deque(maxlen=self.dequelen) # Get the data from nmealogger
         self.identifiers = []
         self.num_identifiers = []        
         self.serial['data_queues'].append(self.data_deque)
-        self._info_str = self.serial['port']
+        self._info_str = str(self.serial['device_name'])
         self._qlabel_info     = QLabel(self._info_str)
         self._qlabel_bin      = QLabel('')
         self._qlabel_sentence = QLabel('')
@@ -215,14 +217,22 @@ class nmea0183Widget(QFrame):
         self._flag_show_raw_data = False
         self._button_raw_data = QPushButton('Raw data')
         self._button_raw_data.clicked.connect(self._show_raw_data)
+        self._button_close = QPushButton('Close')
+        self._button_close.serial = self.serial # Add serial to the
+                                                # close button, this
+                                                # allows other widgets
+                                                # to identify the
+                                                # device to be closed
+        self._button_close.clicked.connect(self.close_device)
         self.layout = QGridLayout(self)
         self.layout_idents = QVBoxLayout(self)
-        self.layout_plot_idents = QVBoxLayout(self)        
-        self.layout.addWidget(self._qlabel_info,0,0)
-        self.layout.addWidget(self._qlabel_bin,1,0)
-        self.layout.addWidget(self._qlabel_sentence,2,0)
-        self.layout.addLayout(self.layout_idents,3,0)
-        self.layout.addLayout(self.layout_plot_idents,4,0)
+        self.layout_plot_idents = QVBoxLayout(self)
+        self.layout.addWidget(self._button_close,0,0)        
+        self.layout.addWidget(self._qlabel_info,1,0)
+        self.layout.addWidget(self._qlabel_bin,2,0)
+        self.layout.addWidget(self._qlabel_sentence,3,0)
+        self.layout.addLayout(self.layout_idents,4,0)
+        self.layout.addLayout(self.layout_plot_idents,5,0)
         self.layout_plot_idents.addWidget(self._button_raw_data)
         
         
@@ -234,6 +244,7 @@ class nmea0183Widget(QFrame):
         """
         funcname = self.__class__.__name__ + '._new_data()'
         # We do it with signals to make it thread-safe
+        # Check if we have a new identifier in the received data
         self.update_ident_widgets.emit()
         #print('Hallo new data!')
 
@@ -308,7 +319,7 @@ class nmea0183Widget(QFrame):
             print(ide)
             if(sender_txt == ide[2]):
                 w = ide[1]
-                self.plot_widgets.append(w(port=self.serial['port']))
+                self.plot_widgets.append(w(port=self.serial['device_name']))
                 self.plot_widgets[-1].show()
 
                 
@@ -336,6 +347,18 @@ class nmea0183Widget(QFrame):
             pass
         for w in self.plot_widgets:
             w.close()
+
+
+    def close_device(self):
+        """
+        Closes the device
+        """
+        self.nmea0183logger.rem_serial_device(number = self.serial['number'])
+        self.serial = None
+        self.parent_gui._rem_device(device = self)
+        
+        
+        
 
 
 class serialWidget(QWidget):
@@ -404,30 +427,15 @@ class serialWidget(QWidget):
             logger.debug(funcname + ": Opening Serial port" + port)
             ret = self.nmea0183logger.add_serial_device(port)
             if(ret):
-                #self._combo_serial_devices.removeItem(ind)
-                # Create a new device widget
-                ind_serial = len(self.nmea0183logger.serial) - 1
-                dV = nmea0183Widget(ind_device = ind_serial,parent_gui = self.parent_gui)
-                dV.setStyleSheet(device_style)
-                # The signal seems to be connected here, otherwise it does not work ...
-                dV.update_ident_widgets.connect(dV._update_identifier_widgets)
-                self.parent_gui._add_device(dV)
-                self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)
-                self.ports_open.append(port)
+                self.parent_gui._add_device(self.nmea0183logger.serial[-1])
+                # This is somewhat spaghetti, but lets leave it for
+                # the moment, connect the close button of the dV
+                # widget in the parent gui with the remove device
+                # widget here
+                self.parent_gui.device_widgets[-1]._button_close.clicked.connect(self.close_device)
+                self.ports_open.append(port)                
                 self._serial_device_changed()
-
                 
-        elif(self.sender().text() == 'Close'):
-            logger.debug(funcname + ": Closing Serial port" + port)
-            # Device
-            for ind,s in enumerate(self.nmea0183logger.serial):
-                if(s['port'] == port):
-                    logger.debug(funcname + ": Found serial device for port:" + port + ' at index:' + str(ind))
-                    self.ports_open.remove(port)
-                    self.parent_gui._rem_device(port=port)                    
-                    self.nmea0183logger.rem_serial_device(ind)
-                    self._serial_device_changed()
-                    
                     
         else:
             logger.debug(funcname + ": We should never have come here!")
@@ -437,7 +445,29 @@ class serialWidget(QWidget):
         for s in self.emit_signals:
             s()
 
-            
+
+    def close_device(self):
+        """Function that is connected to a button with a serial device
+        attached to it that a sender = self.sender() and sender.serial
+        is the device to be closed
+
+        """
+        funcname = "close_device"
+        sender = self.sender()
+        serial = sender.serial
+        port = serial['port']
+        logger.debug(funcname + ": Closing Serial port" + port)
+        self.ports_open.remove(port)
+        self._serial_device_changed()
+        # This does not work anymore, because the serial has been
+        # already removed by the nmeaWidget from the nmea0183logger
+        ## Device
+        #for ind,s in enumerate(self.nmea0183logger.serial):
+        #    if(s['port'] == port):
+        #        logger.debug(funcname + ": Found serial device for port:" + port + ' at index:' + str(ind))
+
+                    
+
     def _serial_device_changed(self):
         funcname = "_serial_device_changed()"
         logger.debug(funcname)
@@ -445,11 +475,75 @@ class serialWidget(QWidget):
         ind = self._combo_serial_devices.currentIndex()
         for p in self.ports_open:
             if(p == port):
-                self._button_serial_openclose.setText('Close')
+                #self._button_serial_openclose.setText('Close')
+                self._button_serial_openclose.setEnabled(False)
                 return
 
-        self._button_serial_openclose.setText('Open')
+        self._button_serial_openclose.setEnabled(True)
 
+
+
+class tcpWidget(QWidget):
+    """A widget for a TCP connection of a GPS device
+
+    """
+    def __init__(self,parent_gui):
+        funcname = self.__class__.__name__ + '.___init__()'
+        #self.__version__    = pynmeatools.__version__
+        self.parent_gui     = parent_gui
+        self.nmea0183logger = parent_gui.nmea0183logger
+        self.emit_signals   = []
+        self.ports_open     = []
+        # Do the rest
+        QWidget.__init__(self)
+        
+        layout = QGridLayout(self)
+
+        # IP source
+        self.text_ip = QLineEdit()
+        # Hack, this should be removed later
+        self.text_ip.setText('192.168.178.34:9001')
+        self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
+        self.button_open_socket = QPushButton('Open')
+        self.button_open_socket.clicked.connect(self.clicked_open_socket)
+        
+        layout.addWidget(self.text_ip,0,0)
+        layout.addWidget(self.button_open_socket,0,1)
+        
+        
+    def clicked_open_socket(self):
+        """
+        Opens a TCP socket to get data
+        """
+        funcname = "clicked_open_socket()"
+        logger.debug(funcname)        
+        addrraw = str(self.text_ip.text())
+        print(addrraw)
+        try:
+            addr = addrraw.split(':')[0]
+            port = int(addrraw.split(':')[1])
+        except:
+            print('Enter proper address')
+            return
+
+        print(addr,port)
+        logger.debug(funcname + 'Address:port: ' + str(addr) + ':' + str(port))                
+        # Opening the socket
+        ret = self.nmea0183logger.add_tcp_stream(addr,port)
+        if(ret):
+            self.parent_gui._add_device(self.nmea0183logger.serial[-1])
+                    
+        else:
+            logger.debug(funcname + ": We should never have come here!")        
+            
+        
+        # Call all the functions in self.emit_signals
+        for s in self.emit_signals:
+            s()
+
+
+
+            
 
 class QtPlainTextLoggingHandler(logging.Handler):
     """
@@ -489,6 +583,9 @@ class nmea0183SetupWidget(QWidget):
         mainwidget = self
         mainlayout = QGridLayout(mainwidget)
         self._serial_widget = serialWidget(self)
+        self._widget_tcp = tcpWidget(self)
+        self._close = QPushButton('Close')
+        self._close.clicked.connect(self.close)
         
         # Logging widget
         self._button_log = QPushButton('Show log')
@@ -516,14 +613,17 @@ class nmea0183SetupWidget(QWidget):
         self._layout_devices.addStretch(1)
         
         # Layout
+        mainlayout.addWidget(self._close,3,0)
         mainlayout.addWidget(QLabel('Serial device'),0,0)        
         mainlayout.addWidget(self._serial_widget,0,1)
         mainlayout.addWidget(self._button_log,0,2)
         mainlayout.addWidget(self._combo_loglevel,0,3)
-        mainlayout.addWidget(QLabel('Datastream'),1,0)
-        mainlayout.addWidget(self._widget_pymqds,1,1)
+        mainlayout.addWidget(QLabel('TCP'),1,0)
+        mainlayout.addWidget(self._widget_tcp,1,1)        
+        mainlayout.addWidget(QLabel('Datastream'),2,0)
+        mainlayout.addWidget(self._widget_pymqds,2,1)
 
-        mainlayout.addWidget(self._widget_devices,2,0,2,3)
+        mainlayout.addWidget(self._widget_devices,3,0,2,3)
 
     def _add_device(self,device):
         """
@@ -531,11 +631,19 @@ class nmea0183SetupWidget(QWidget):
         Adds a new nmea0183Widget
         
         """
-                
-        device.setMaximumWidth(300)
+        #self._combo_serial_devices.removeItem(ind)
+        # Create a new device widget
+        ind_serial = len(self.nmea0183logger.serial) - 1
+        dV = nmea0183Widget(ind_device = ind_serial, parent_gui = self)
+        dV.setStyleSheet(device_style)
+        # The signal seems to have to be connected here, otherwise it
+        # does not work ...
+        dV.update_ident_widgets.connect(dV._update_identifier_widgets)
+        self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)
+        dV.setMaximumWidth(300)
         ind = len(self.device_widgets)
-        self.device_widgets.append(device)
-        self._layout_devices.insertWidget(ind,device)
+        self.device_widgets.append(dV)
+        self._layout_devices.insertWidget(ind,dV)
 
 
     def _rem_device(self,port=None,device=None):

@@ -92,6 +92,7 @@ class nmea0183logger(object):
         self.logger.debug(funcname)                    
         self.dequelen         = 10000
         self.serial           = []
+        self.serial_number    = 0 # An increasing number used to identify a device
         self.datafiles        = []        
         self.deques           = []
         self.signal_functions = [] # Functions that are called at different actions
@@ -107,6 +108,8 @@ class nmea0183logger(object):
         try:
             self.logger.debug(funcname + ': Opening: ' + port)            
             serial_dict = {}
+            serial_dict['number']         = self.serial_number
+            self.serial_number += 1
             serial_dict['sentences_read'] = 0
             serial_dict['bytes_read']     = 0
             serial_dict['device_name']    = port            
@@ -217,6 +220,8 @@ class nmea0183logger(object):
 
     def add_tcp_stream(self,address,port):
         """
+        Returns:
+        bool: True if successful, False otherwise
         """
         funcname = 'add_tcp_stream()'
         # Create a TCP/IP socket
@@ -227,7 +232,10 @@ class nmea0183logger(object):
             sock.connect((address, port))
             sock.setblocking(0) # Nonblocking
             serial_dict = {}
+            serial_dict['number']         = self.serial_number
+            self.serial_number += 1            
             serial_dict['sentences_read'] = 0
+            serial_dict['bytes_read'] = 0            
             serial_dict['device']         = sock
             serial_dict['address']        = address
             serial_dict['port']           = port
@@ -246,9 +254,13 @@ class nmea0183logger(object):
             self.serial.append(serial_dict)
             # Call the signal functions
             for s in self.signal_functions:
-                s(funcname)                    
+                s(funcname)
+
+
+            return True
         except Exception as e:
             self.logger.debug(funcname + ': Exception: ' + str(e))
+            return False
 
 
     def read_nmea_sentences_tcp(self, serial_dict):
@@ -269,11 +281,12 @@ class nmea0183logger(object):
             time.sleep(0.05)
             try:
                 data,address = serial_dict['device'].recvfrom(10000)
-                print('data',data)
+                #print('data',data)
             except socket.error:
                 pass
             else:
-                print("recv:", data,"times",len(data), 'address',address)
+                #print("recv:", data,"times",len(data), 'address',address)
+                serial_dict['bytes_read'] += len(data)
                 raw_data += raw_data + data.decode('utf-8')
 
                 for i,value in enumerate(raw_data):
@@ -316,6 +329,11 @@ class nmea0183logger(object):
                         # Send into pymqdatastream streams
                         for stream in serial_dict['streams']:
                             stream.pub_data([[ti,nmea_sentence]])
+
+
+                        # Parse the data
+                        parsed_data = parse(nmea_sentence)
+                        sort_parsed_data_in_dict(parsed_data,serial_dict['parsed_data'])                            
 
                         # Call signal functions for new data
                         for s in serial_dict['data_signals']:
@@ -371,6 +389,8 @@ class nmea0183logger(object):
             else:
                 self.logger.warning(funcname + ': Dont know what to do with stream:' + str(stream))
             serial_dict = {}
+            serial_dict['number']         = self.serial_number
+            self.serial_number += 1            
             serial_dict['sentences_read'] = 0
             serial_dict['bytes_read']     = 0
             serial_dict['device_name']    = recvstream.name
@@ -669,16 +689,24 @@ class nmea0183logger(object):
             self.add_stream(s)
 
 
-    def rem_serial_device(self,ind):
+    def rem_serial_device(self,index = None, number = None):
         """
 
-        Removes a serial device
+        Removes a serial device, either by an index or the number field 
 
         """
 
         funcname = 'rem_serial_device()'
-        self.logger.debug(funcname)        
-        serialdevice = self.serial[ind]
+        self.logger.debug(funcname)                
+        if(number != None):
+            for i,s in enumerate(self.serial):
+                if(s['number'] == number):
+                    serialdevice = s
+                    ind = i
+                    break
+        else:
+            serialdevice = self.serial[ind]
+            
         if(self.pymqdatastream != None):
             self.logger.debug(funcname + ': Removing datastreams')
             for s in serialdevice['streams']:
@@ -694,6 +722,15 @@ class nmea0183logger(object):
             # Call the signal functions
             for s in self.signal_functions:
                 s(funcname)
+
+        elif(type(serialdevice['device']) == socket.socket):
+            self.logger.debug(funcname + ': Stopping a TCP socket-device')
+            serialdevice['device'].close()
+            # Remove the entry from the serial devices list
+            self.serial.pop(ind)            
+            # Call the signal functions
+            for s in self.signal_functions:
+                s(funcname)                
         else:
             self.logger.debug(funcname + ': Unknown device type')
 

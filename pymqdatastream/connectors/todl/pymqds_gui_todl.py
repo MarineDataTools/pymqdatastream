@@ -703,8 +703,10 @@ class todlDevice():
                            self.spin_file_read_nbytes,
                            self.label_file_read_dt,
                            self.spin_file_read_dt]
-        widgets_ip     = [ self.setup_close_bu, self.combo_source,self.text_ip, self.button_open_socket,
-                           self.bytesspeedlabel, self.bytesspeed]        
+        widgets_ip = [ self.setup_close_bu,
+                       self.combo_source,self.text_ip,
+                       self.button_open_socket,
+                       self.bytesspeedlabel, self.bytesspeed]        
 
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
@@ -1482,6 +1484,7 @@ class timeWidget(QtWidgets.QWidget):
         
         QtWidgets.QWidget.__init__(self)
         self.nmea0183logger = None
+        self.lab_nmea0183logger = [] # Time labels for the nmealogger        
         self.time_widget_layout = QtWidgets.QGridLayout(self)
         self.lab_time_system = QtWidgets.QLabel('Systemtime (UTC): ')
         self.lab_showtime_system = QtWidgets.QLabel('')
@@ -1523,7 +1526,6 @@ class timeWidget(QtWidgets.QWidget):
 
         """
         print('add nmea0183logger()')
-        self.lab_nmea0183logger = []
         for s in nmea0183logger.serial:
             print(s)
             lab1 = QtWidgets.QLabel(s['device_name'])
@@ -1682,10 +1684,11 @@ class todlMainWindow(QtWidgets.QMainWindow):
 
 
     def device_changed(self,fname=None):
-        """
-
-        This function is given as a callback to the devices to notify if
-        something changed
+        """This function is given as a callback to the devices to notify if
+        something changed. This is an important key function of the
+        object as it is interconnecting the individual device. TODO:
+        Think about a smart way to connect the devices. At the moment
+        it is hardcoded.
 
         """
         print('Device changed function')
@@ -1699,6 +1702,10 @@ class todlMainWindow(QtWidgets.QMainWindow):
                 # and search for todlDevice
                 # Add to the time widget
                 if 'add_serial_device()' in fname:
+                    self.time_widget.rem_nmea0183logger()                    
+                    self.time_widget.add_nmea0183logger(d.nmea0183logger)
+                elif 'add_tcp_stream()'  in fname:
+                    self.time_widget.rem_nmea0183logger()                    
                     self.time_widget.add_nmea0183logger(d.nmea0183logger)
                 # Check if a NMEA0183 GPS serial device has been removed
                 elif 'rem_serial_device()' in fname:
