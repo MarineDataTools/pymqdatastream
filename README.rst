@@ -18,6 +18,10 @@ purpose.
 Install
 -------
 
+An `installation <pymqdatastream/doc/installation.rst>`_ guide for
+Linux (Debian), Raspbian, Windows will be written soon.
+
+
 Developer
 _________
 
