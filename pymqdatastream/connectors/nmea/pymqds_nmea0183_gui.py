@@ -91,8 +91,8 @@ def serial_ports():
 
 
 class positionWidget(QWidget):
-    """
-    A widget for NMEA position datasets (GGA, GGL)
+    """A widget for NMEA position datasets (GGA, GGL)
+
     """
     def __init__(self,port='XXX'):
         funcname = self.__class__.__name__ + '.___init__()'
@@ -584,8 +584,14 @@ class nmea0183SetupWidget(QWidget):
         mainlayout = QGridLayout(mainwidget)
         self._serial_widget = serialWidget(self)
         self._widget_tcp = tcpWidget(self)
-        self._close = QPushButton('Close')
-        self._close.clicked.connect(self.close)
+        self._button_close = QPushButton('Close')
+        self._button_close.clicked.connect(self.close)
+
+        # pymqdatastream publishing functionality
+        self._line_publish_address = QLineEdit()
+        self._line_publish_address.setText('127.0.0.1')
+        self._button_publish = QPushButton('Publish Devices')
+        self._button_publish.clicked.connect(self._publish)
         
         # Logging widget
         self._button_log = QPushButton('Show log')
@@ -613,17 +619,19 @@ class nmea0183SetupWidget(QWidget):
         self._layout_devices.addStretch(1)
         
         # Layout
-        mainlayout.addWidget(self._close,3,0)
-        mainlayout.addWidget(QLabel('Serial device'),0,0)        
-        mainlayout.addWidget(self._serial_widget,0,1)
-        mainlayout.addWidget(self._button_log,0,2)
-        mainlayout.addWidget(self._combo_loglevel,0,3)
-        mainlayout.addWidget(QLabel('TCP'),1,0)
-        mainlayout.addWidget(self._widget_tcp,1,1)        
-        mainlayout.addWidget(QLabel('Datastream'),2,0)
-        mainlayout.addWidget(self._widget_pymqds,2,1)
-
-        mainlayout.addWidget(self._widget_devices,3,0,2,3)
+        mainlayout.addWidget(self._button_close,0,0)
+        mainlayout.addWidget(self._line_publish_address,0,1)
+        mainlayout.addWidget(self._button_publish,0,2)                
+        mainlayout.addWidget(QLabel('Serial device'),1,0)        
+        mainlayout.addWidget(self._serial_widget,1,1)
+        mainlayout.addWidget(self._button_log,1,2)
+        mainlayout.addWidget(self._combo_loglevel,1,3)
+        mainlayout.addWidget(QLabel('TCP'),2,0)
+        mainlayout.addWidget(self._widget_tcp,2,1)        
+        mainlayout.addWidget(QLabel('Datastream'),3,0)
+        mainlayout.addWidget(self._widget_pymqds,3,1)
+        mainlayout.addWidget(self._widget_devices,4,0,2,3)
+        
 
     def _add_device(self,device):
         """
@@ -718,6 +726,7 @@ class nmea0183SetupWidget(QWidget):
         self._add_device(dV)
         self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)
 
+        
     def _rem_pymqdsStream(self,stream):
         """
         Removes the infrastructure for a pymqds Stream
@@ -729,8 +738,31 @@ class nmea0183SetupWidget(QWidget):
                 logger.debug(funcname + ': Found a matching stream to remove')
                 self._rem_device(device=dV)
                 return
-            
 
+
+    def _publish(self):
+        """Publishes the serial devices as pymqdatastreams with the address
+        given in _text_publish_address
+
+        """
+        funcname = '_publish()'        
+        logger.debug(funcname)
+        addr = str(self._line_publish_address.text())
+        # Check if address is valid, found here
+        #https://stackoverflow.com/questions/3462784/check-if-a-string-matches-an-ip-address-pattern-in-python
+        try:
+            socket.inet_aton(addr)
+            logger.debug(funcname + ': Valid address:' + addr)            
+            # legal
+        except socket.error:
+            logger.info('Not a valid address: ' + addr)
+            return
+            # Not legal
+
+        self.nmea0183logger.create_pymqdatastream_publish(address=addr)
+        self.nmea0183logger.publish_devices()
+
+        
     def _quit(self):
         funcname = '_quit()'        
         logger.debug(funcname)

@@ -20,6 +20,7 @@ import json
 import re
 from cobs import cobs
 import numpy as np
+import datetime
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_todl')
@@ -1354,7 +1355,12 @@ class todlDataStream(pymqdatastream.DataStream):
                                 #for n,i in enumerate(range(0,len(ad_data))):
                                 for n,i in enumerate(self.device_info['adcs']):
                                     n = int(n)
-                                    V = float(ad_data[n])
+                                    # Test if we have data at all
+                                    if(len(ad_data[n]) > 0):
+                                        V = float(ad_data[n])
+                                    else:
+                                        V = -9.0
+                                        
                                     data_packet['V'][i] = V
                                     data_list.append(V)
 
@@ -1386,6 +1392,14 @@ class todlDataStream(pymqdatastream.DataStream):
                                 data_packet['acc'] = [accx,accy,accz]
                                 data_packet['gyro'] = [gyrox,gyroy,gyroz]
                                 data_packets.append(data_packet)
+
+                            # Status
+                            # Stat;2000.01.14 07:07:33;Fr:31;1965398;6440195;St:1;Sh:1;Lg:0;SD:0;
+                            elif('Stat' in packet_type):
+                                data_packet = {'type':'Stat'}
+                                #data_packet['date'] = datetime.datetime.strftime('')
+                                
+                            # Pyroscience packet
                             elif('U3' in packet_type):
                                 # Packet of the form
                                 #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383

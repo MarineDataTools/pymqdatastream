@@ -90,13 +90,17 @@ class nmea0183logger(object):
         self.logger.setLevel(loglevel)
         self.loglevel = loglevel
         self.logger.debug(funcname)                    
-        self.dequelen         = 10000
-        self.serial           = []
-        self.serial_number    = 0 # An increasing number used to identify a device
-        self.datafiles        = []        
-        self.deques           = []
-        self.signal_functions = [] # Functions that are called at different actions
-        self.pymqdatastream   = None
+        self.dequelen          = 10000
+        self.serial            = []
+        self.serial_number     = 0 # An increasing number used to identify a device
+        self.datafiles         = []        
+        self.deques            = []
+        self.signal_functions  = [] # Functions that are called at different actions
+        self.pymqdatastream    = None
+        self.pymqdatastream_pub= None # pymqdatastream for publishing
+                                      # the data, TODO this could be a
+                                      # list with several datastream
+                                      # having different addresses
         self.name             = 'nmea0183logger' # This is mainly used as a datastream identifier
         self.print_raw_data = print_raw_data
 
@@ -124,7 +128,7 @@ class nmea0183logger(object):
             serial_dict['thread'].daemon = True
             serial_dict['thread'].start()
             self.serial.append(serial_dict)
-            if(self.pymqdatastream != None):
+            if(self.pymqdatastream_pub != None):
                 self.add_stream(serial_dict)
                 
 
@@ -248,7 +252,7 @@ class nmea0183logger(object):
             serial_dict['thread']         = threading.Thread(target=self.read_nmea_sentences_tcp,args = (serial_dict,))
             serial_dict['thread'].daemon  = True
             serial_dict['thread'].start()
-            if(self.pymqdatastream != None):
+            if(self.pymqdatastream_pub != None):
                 self.add_stream(serial_dict)
                 
             self.serial.append(serial_dict)
@@ -354,8 +358,8 @@ class nmea0183logger(object):
 
 
     def add_datastream(self,address=None):
-        """
-        Adds a nmea0183 logger datastream
+        """Adds a nmea0183 a remote logger datastream
+
         """
         funcname = 'add_datastream()'
         self.logger.debug(funcname)
@@ -632,7 +636,7 @@ class nmea0183logger(object):
                 pass
             
             
-    def create_pymqdatastream(self,address=None):
+    def create_pymqdatastream(self, address=None):
         """Creates pymqdatastream to stream the read data and to comminucate
         with a remote logger object
         Input:
@@ -641,9 +645,32 @@ class nmea0183logger(object):
         funcname = 'create_pymqdatastream()'
         # Import pymqdatastream here
         self.logger.debug(funcname + ': Creating DataStream')
-        self.loglevel = logging.DEBUG
-        datastream = pymqdatastream.DataStream(address=address, name=self.name,logging_level=self.loglevel)
-        self.pymqdatastream = datastream
+        #self.loglevel = logging.DEBUG
+        if(self.pymqdatastream is None):
+            datastream = pymqdatastream.DataStream(address=address, name=self.name,logging_level=self.loglevel)
+            self.pymqdatastream = datastream
+        else:
+            self.logger.debug(funcname + ': DataStream is already existing, doing nothing ...')
+
+
+    def create_pymqdatastream_publish(self, address=None):
+        """Creates pymqdatastream to stream the publish the data, this is
+        separated from the read pymqdatastream, as it allows to
+        publish with several addresses
+
+        Input: address: The address of
+        the datastream, default; pymqdatastream will take care
+
+        """
+        funcname = 'create_pymqdatastream()'
+        # Import pymqdatastream here
+        self.logger.debug(funcname + ': Creating DataStream')
+        #self.loglevel = logging.DEBUG
+        if(self.pymqdatastream_pub is None):
+            datastream = pymqdatastream.DataStream(address=address, name=self.name,logging_level=self.loglevel)
+            self.pymqdatastream_pub = datastream
+        else:
+            self.logger.debug(funcname + ': DataStream is already existing, doing nothing ...')            
             
             
     def add_stream(self,serial):
@@ -654,7 +681,7 @@ class nmea0183logger(object):
         """
         funcname = 'add_stream()'
         self.logger.debug(funcname)
-        datastream = self.pymqdatastream
+        datastream = self.pymqdatastream_pub
         # Create variables
         timevar = pymqdatastream.StreamVariable(name = 'unix time',\
                                                 unit = 'seconds',\
@@ -675,11 +702,9 @@ class nmea0183logger(object):
         serial['streams'].append(sendstream)
 
 
-
-        
     def publish_devices(self):
         """
-        Publishes all devices
+        Publishes all devices as pymqdatastreams
         """
         funcname = 'publish_devices()'
         self.logger.debug(funcname)
@@ -687,15 +712,12 @@ class nmea0183logger(object):
             self.logger.debug(funcname + ': Adding stream for' + str(s))
             print('Stream:',s)
             self.add_stream(s)
-
-
+            
+            
     def rem_serial_device(self,index = None, number = None):
-        """
-
-        Removes a serial device, either by an index or the number field 
+        """Removes a serial device, either by an index or the number field
 
         """
-
         funcname = 'rem_serial_device()'
         self.logger.debug(funcname)                
         if(number != None):
