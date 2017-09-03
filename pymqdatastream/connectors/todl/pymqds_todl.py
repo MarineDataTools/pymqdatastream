@@ -1337,6 +1337,7 @@ class todlDataStream(pymqdatastream.DataStream):
                             data_split = line.split(';')
                             packet_type = data_split[0]
                             if(packet_type == 'L'):
+                                #packet_time_old = packet_time
                                 packet_time = int(data_split[1])/self.device_info['counterfreq']
                                 packet_num = int(data_split[2])
                                 channel = int(data_split[3])
@@ -1397,8 +1398,24 @@ class todlDataStream(pymqdatastream.DataStream):
                             # Stat;2000.01.14 07:07:33;Fr:31;1965398;6440195;St:1;Sh:1;Lg:0;SD:0;
                             elif('Stat' in packet_type):
                                 data_packet = {'type':'Stat'}
-                                #data_packet['date'] = datetime.datetime.strftime('')
-                                
+                                tstr = data_split[1]
+                                data_packet['date']   = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
+                                data_packet['date_str']   = tstr
+                                data_packet['format'] = int(data_split[2].split(':')[1])
+                                data_packet['t']      = float(data_split[3])/self.device_info['counterfreq']
+                                data_packet['t32']    = int(data_split[4])
+                                data_packet['start']  = int(data_split[5].split(':')[1])
+                                data_packet['show']   = int(data_split[6].split(':')[1])
+                                data_packet['log']    = int(data_split[7].split(':')[1])
+                                data_packet['sd']     = int(data_split[8].split(':')[1])
+                                if(len(data_split[9]) > 1):
+                                    data_packet['filename'] = data_split[9]
+                                else:
+                                    data_packet['filename'] = None
+
+                                print('Status!',data_packet)
+                                data_packets.append(data_packet)
+                                    
                             # Pyroscience packet
                             elif('U3' in packet_type):
                                 # Packet of the form

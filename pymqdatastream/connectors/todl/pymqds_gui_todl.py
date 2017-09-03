@@ -105,14 +105,32 @@ class todlInfo(QtWidgets.QWidget):
         self.adcs = QtWidgets.QLabel('ADCS: ?')       
         self.ch_seq = QtWidgets.QLabel('Channels: ?')
         self.data_format = QtWidgets.QLabel('Format: ?')
-        self.freq = QtWidgets.QLabel('Conv. freq: ?')             
-        layout = QtWidgets.QHBoxLayout()
-        layout.addWidget(self.b_version)
-        layout.addWidget(self.f_version)
-        layout.addWidget(self.adcs)
-        layout.addWidget(self.ch_seq)
-        layout.addWidget(self.data_format)
-        layout.addWidget(self.freq)        
+        self.freq = QtWidgets.QLabel('Conv. freq: ?')
+        # Status packet labels
+        self.status_date  = QtWidgets.QLabel('Date: ?')
+        self.status_t     = QtWidgets.QLabel('t: ?')
+        self.status_t32   = QtWidgets.QLabel('t32: ?')
+        self.status_start = QtWidgets.QLabel('start: ?')
+        self.status_show  = QtWidgets.QLabel('show: ?')
+        self.status_log   = QtWidgets.QLabel('log: ?')
+        self.status_sd    = QtWidgets.QLabel('sd: ?')
+        self.status_fname = QtWidgets.QLabel('fname: ?')                        
+        
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.b_version,0,0)
+        layout.addWidget(self.f_version,0,1)
+        layout.addWidget(self.adcs,0,2)
+        layout.addWidget(self.ch_seq,0,3)
+        layout.addWidget(self.data_format,0,4)
+        layout.addWidget(self.freq,0,5)
+        layout.addWidget(self.status_date,1,0)
+        layout.addWidget(self.status_t,1,1)
+        layout.addWidget(self.status_t32,1,2)
+        layout.addWidget(self.status_start,1,3)
+        layout.addWidget(self.status_show,1,4)
+        layout.addWidget(self.status_log,1,5)
+        layout.addWidget(self.status_sd,1,6)
+        layout.addWidget(self.status_fname,1,7)                
         self.setLayout(layout)        
 
     def update(self,status):
@@ -138,7 +156,24 @@ class todlInfo(QtWidgets.QWidget):
         self.ch_seq.setText(chstr)
         self.adcs.setText(adcstr)
         self.data_format.setText(formatstr)
-        self.freq.setText(freqstr)        
+        self.freq.setText(freqstr)
+
+    def update_status_packet(self,status_packet):
+        """Updates the widget with the data from a status packet
+
+        """
+        
+        self.status_date.setText(status_packet['date_str'])
+        self.status_t.setText(str(status_packet['t']))        
+        self.status_t32.setText(str(status_packet['t32']))
+        self.status_start.setText(str(status_packet['start']))
+        self.status_show.setText(str(status_packet['show']))
+        self.status_log.setText(str(status_packet['log']))
+        self.status_sd.setText(str(status_packet['sd']))
+        if(status_packet['filename'] is not None):
+            self.status_fname.setText(status_packet['filename'])
+
+
 
 
 
@@ -480,7 +515,7 @@ class todlDevice():
         # If the configuration changed call the _update function
         self.todl.init_notification_functions.append(self._update_status_information)
 
-        self.deviceinfo = todlInfo()
+        self.deviceinfo = todlInfo() # Deviceinfo widget
         # A flag if only one channel is used
         self.ONECHFLAG = False
 
@@ -837,7 +872,7 @@ class todlDevice():
                 #b = int(self.combo_baud.currentText())
                 self.serial_open_bu.setText('Close')
                 self._s4l_settings_bu.setEnabled(False)
-                self._s4l_freq_combo.setEnabled(False)                                            
+                #self._s4l_freq_combo.setEnabled(False)                                            
                 #print('Opening port' + ser + ' with baudrate ' + str(b))
                 #self.todl.add_serial_device(ser,baud=b)
                 self.todl.add_raw_data_stream()
@@ -1167,6 +1202,8 @@ class todlDevice():
 
 
     def poll_deque(self):
+        """ Reading the rawdata
+        """
         while(len(self.rawdata_deque) > 0):
             data = self.rawdata_deque.pop()
             if(self.check_show_textdata.isChecked()):            
@@ -1220,7 +1257,10 @@ class todlDevice():
         # Get all data        
         while(len(self.todl.intraqueue) > 0):
             data = self.todl.intraqueue.pop()
-
+            if(data['type'] == 'Stat'):
+                print('Status packet!!!')
+                self.deviceinfo.update_status_packet(data)
+                
 
         if(True):
             if(len(data)>0):
