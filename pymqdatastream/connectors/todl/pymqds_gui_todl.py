@@ -114,7 +114,8 @@ class todlInfo(QtWidgets.QWidget):
         self.status_show  = QtWidgets.QLabel('show: ?')
         self.status_log   = QtWidgets.QLabel('log: ?')
         self.status_sd    = QtWidgets.QLabel('sd: ?')
-        self.status_fname = QtWidgets.QLabel('fname: ?')                        
+        self.status_fname = QtWidgets.QLabel('fname: ?')
+
         
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.b_version,0,0)
@@ -130,7 +131,8 @@ class todlInfo(QtWidgets.QWidget):
         layout.addWidget(self.status_show,1,4)
         layout.addWidget(self.status_log,1,5)
         layout.addWidget(self.status_sd,1,6)
-        layout.addWidget(self.status_fname,1,7)                
+        layout.addWidget(self.status_fname,1,7)
+
         self.setLayout(layout)        
 
     def update(self,status):
@@ -163,18 +165,17 @@ class todlInfo(QtWidgets.QWidget):
 
         """
         
-        self.status_date.setText(status_packet['date_str'])
-        self.status_t.setText(str(status_packet['t']))        
-        self.status_t32.setText(str(status_packet['t32']))
-        self.status_start.setText(str(status_packet['start']))
-        self.status_show.setText(str(status_packet['show']))
-        self.status_log.setText(str(status_packet['log']))
-        self.status_sd.setText(str(status_packet['sd']))
+        self.status_date.setText('Date:' + status_packet['date_str'])
+        self.status_t.setText('t: ' + str(status_packet['t']))        
+        self.status_t32.setText('t32: ' + str(status_packet['t32']))
+        self.status_start.setText('Start: ' + str(status_packet['start']))
+        self.status_show.setText('Show: ' + str(status_packet['show']))
+        self.status_log.setText('Log: ' + str(status_packet['log']))
+        self.status_sd.setText('SD: ' + str(status_packet['sd']))
         if(status_packet['filename'] is not None):
-            self.status_fname.setText(status_packet['filename'])
+            self.status_fname.setText('Filename: ' + status_packet['filename'])
 
-
-
+    
 
 
 
@@ -184,9 +185,14 @@ class todlConfig(QtWidgets.QWidget):
     """
     # Conversion speeds of the device
 
-    def __init__(self,todl=None):
+    def __init__(self,todl=None, deviceinfowidget = None):
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QGridLayout()
+
+
+        self.set_time     = QtWidgets.QPushButton('Set time')
+        self.set_time.clicked.connect(self.clicked_set_time)
+        self.timeWidget   = timeWidget()        
 
         # Conversion speed
         self._convspeed_combo = QtWidgets.QComboBox(self)
@@ -252,22 +258,23 @@ class todlConfig(QtWidgets.QWidget):
         ad_seq_layoutV.addWidget(_ad_seq_check_tmp)
 
 
-        self.deviceinfo = todlInfo()
+        self.deviceinfo = deviceinfowidget
 
 
         # The main layout
-        layout.addWidget(QtWidgets.QLabel('Set speed'),0,0)
-        layout.addWidget(self._convspeed_combo,0,1)
-        layout.addWidget(QtWidgets.QLabel('Set data format'),0,2)
-        layout.addWidget(self._dataformat_combo,0,3)
-        layout.addWidget(QtWidgets.QLabel('Choose LTC2442 ADCS '),1,0)
-        layout.addWidget(self._ad_widget_check,2,0,1,4)
-        layout.addWidget(QtWidgets.QLabel('Define channel sequence'),3,0)
-        layout.addWidget(self._ad_seq_check,4,0,1,4)
-        layout.addWidget(self.deviceinfo,5,0,1,4)
-        layout.addWidget(self._query_bu,6,0)
-        layout.addWidget(self._ad_apply_bu,6,1)        
-        layout.addWidget(self._ad_close_bu,6,2)
+        layout.addWidget(self.timeWidget,0,0,5,1)
+        layout.addWidget(self.set_time,6,0)        
+        layout.addWidget(QtWidgets.QLabel('Set speed'),0,0+1)
+        layout.addWidget(self._convspeed_combo,0,1+1)
+        layout.addWidget(QtWidgets.QLabel('Set data format'),0,2+1)
+        layout.addWidget(self._dataformat_combo,0,3+1)
+        layout.addWidget(QtWidgets.QLabel('Choose LTC2442 ADCS '),1,0+1)
+        layout.addWidget(self._ad_widget_check,2,0+1,1,4)
+        layout.addWidget(QtWidgets.QLabel('Define channel sequence'),3,0+1)
+        layout.addWidget(self._ad_seq_check,4,0+1,1,4)
+        layout.addWidget(self._query_bu,6,0+1)
+        layout.addWidget(self._ad_apply_bu,6,1+1)        
+        layout.addWidget(self._ad_close_bu,6,2+1)
 
 
         self.setLayout(layout)
@@ -276,33 +283,37 @@ class todlConfig(QtWidgets.QWidget):
         # TODO do something if there is nothing
         self.todl = todl
         self._update_status()
-        self.deviceinfo.update(self.todl.device_info)
+        if(self.deviceinfo is not None):
+            print('updateting device info')
+            self.deviceinfo.update(self.todl.device_info)
 
 
     def _update_status(self):
-        """
-        Updates all the information buttons
+        """Updates all the information buttons
+
         """
         
         status = self.todl.device_info
-        # Channels
-        #self.combo_baud.setCurrentIndex(len(baud)-1)
-        for i,ch in enumerate(status['channel_seq']):
-            self._seq_combo[i].setCurrentIndex(ch)
+        if(self.todl.status >= 0): # Opened serial port or converting
+            print('status',status)
+            # Channels
+            #self.combo_baud.setCurrentIndex(len(baud)-1)
+            for i,ch in enumerate(status['channel_seq']):
+                self._seq_combo[i].setCurrentIndex(ch)
 
-        # Fill the rest with None
-        for i in range(i+1,8):
-            self._seq_combo[i].setCurrentIndex(4)
+            # Fill the rest with None
+            for i in range(i+1,8):
+                self._seq_combo[i].setCurrentIndex(4)
 
 
-        #
-        # ADCS
-        #
-        for i,ad_check in enumerate(self._ad_check):            
-            ad_check.setChecked(False)
-            
-        for i,adc in enumerate(status['adcs']):            
-            self._ad_check[adc].setChecked(True)
+            #
+            # ADCS
+            #
+            for i,ad_check in enumerate(self._ad_check):            
+                ad_check.setChecked(False)
+
+            for i,adc in enumerate(status['adcs']):            
+                self._ad_check[adc].setChecked(True)
 
             
     def _setup_device(self):
@@ -341,6 +352,10 @@ class todlConfig(QtWidgets.QWidget):
         
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)
+
+    def clicked_set_time(self):
+        self.todl.set_time(datetime.datetime.now(datetime.timezone.utc))
+        pass        
 
     def _close(self):
         self.close()
@@ -515,7 +530,8 @@ class todlDevice():
         # If the configuration changed call the _update function
         self.todl.init_notification_functions.append(self._update_status_information)
 
-        self.deviceinfo = todlInfo() # Deviceinfo widget
+        self.deviceinfo = todlInfo()            # Deviceinfo widget
+        self.todlConfig = todlConfig(self.todl) # TODL Config widget
         # A flag if only one channel is used
         self.ONECHFLAG = False
 
@@ -662,7 +678,7 @@ class todlDevice():
         # The layout of the setup widget with two rows
         self.layout_source_v = QtWidgets.QVBoxLayout(w)
         self.layout_source = QtWidgets.QHBoxLayout()
-        self.layout_source_row2 = QtWidgets.QHBoxLayout()                
+        self.layout_source_row2 = QtWidgets.QGridLayout()                
         self.layout_source_v.addLayout(self.layout_source)
         self.layout_source_v.addLayout(self.layout_source_row2)        
 
@@ -722,6 +738,9 @@ class todlDevice():
         # Do the layout of the source
         self.test_ports() # Looking for serial ports        
         self.get_source()
+
+
+        
         w.show()
 
     def get_source(self):
@@ -745,7 +764,8 @@ class todlDevice():
 
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
-        self.layout_source_row2.addWidget(self.deviceinfo)
+        self.layout_source_row2.addWidget(self.deviceinfo,0,0)
+        self.layout_source_row2.addWidget(self.todlConfig,1,0)        
         if(data_source == 'serial'):
             whide = widgets_file + widgets_ip
             for w in whide:
@@ -1537,6 +1557,7 @@ class timeWidget(QtWidgets.QWidget):
         self.time_widget_layout.addWidget(self.lab_showtime_system,1,0)
         self.time_widget_layout.addWidget(self.lab_time_system_local,2,0)
         self.time_widget_layout.addWidget(self.lab_showtime_system_local,3,0)
+        #self.time_widget_layout.setAlignment(QtCore.Qt.AlignLeft)
         self.ind_gps = 4
 
         # Create a timer to update the time

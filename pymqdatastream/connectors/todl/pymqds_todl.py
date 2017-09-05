@@ -730,6 +730,21 @@ class todlDataStream(pymqdatastream.DataStream):
         else:
             self.logger.debug(funcname + ': No serial port opened')
 
+
+    def set_time(self,timeset):
+        """ Sets the time of the TODL
+        """
+        funcname = self.__class__.__name__ + '.set_time()'
+        timeset = timeset + datetime.timedelta(milliseconds=1000) # Add 0.1 seconds because of the stop command
+        tstr = timeset.strftime('%Y-%m-%d %H:%M:%S')
+        print('setting time to:' + tstr)
+        cmd = 'set time ' + tstr
+        self.send_serial_data('stop\n')
+        time.sleep(0.1)                
+        self.send_serial_data(cmd)
+        self.send_serial_data('start\n')
+        time.sleep(0.1)                        
+
             
     def query_todllogger(self):
         """
