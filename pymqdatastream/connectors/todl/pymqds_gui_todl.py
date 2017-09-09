@@ -15,7 +15,7 @@ A device needs the following informations:
 The device changed function is used to interconnect the device to each other
 
 
-- setup     (mandatory)
+- setup(name)     (mandatory)
 - info      (obligatory)
 - show_data (obligatory)
 - plot_data (obligatory)
@@ -115,6 +115,10 @@ class todlInfo(QtWidgets.QWidget):
         self.status_log   = QtWidgets.QLabel('log: ?')
         self.status_sd    = QtWidgets.QLabel('sd: ?')
         self.status_fname = QtWidgets.QLabel('fname: ?')
+        # Bytes read and bytes speed info
+        self.bytesread    = QtWidgets.QLabel('Bytes read: ')
+        # Widget to show the average transfer rate
+        self.bytesspeed   = QtWidgets.QLabel('Bit/s:')                        
 
         
         layout = QtWidgets.QGridLayout()
@@ -132,6 +136,8 @@ class todlInfo(QtWidgets.QWidget):
         layout.addWidget(self.status_log,1,5)
         layout.addWidget(self.status_sd,1,6)
         layout.addWidget(self.status_fname,1,7)
+        layout.addWidget(self.bytesread,2,0)
+        layout.addWidget(self.bytesspeed,2,1)
 
         self.setLayout(layout)        
 
@@ -151,7 +157,7 @@ class todlInfo(QtWidgets.QWidget):
             adcstr += str(adc)
             
 
-        freqstr = "Conv. freq: " + str(status['freq']) + ' [Hz]'
+        freqstr = "Conv. freq: " + str(status['freq_str']) + ' [Hz]'
         
         self.b_version.setText(boardstr)
         self.f_version.setText(firmstr)
@@ -175,6 +181,14 @@ class todlInfo(QtWidgets.QWidget):
         if(status_packet['filename'] is not None):
             self.status_fname.setText('Filename: ' + status_packet['filename'])
 
+
+    def update_bytes(self,bytes_read,bytes_read_avg):
+        """
+        """
+        self.bytesread.setText('Bytes read: ' + str(bytes_read))
+        # Widget to show the average transfer rate
+        self.bytesspeed.setText('Bit/s: ' + str(bytes_read_avg))
+
     
 
 
@@ -196,19 +210,21 @@ class todlConfig(QtWidgets.QWidget):
 
         # Conversion speed
         self._convspeed_combo = QtWidgets.QComboBox(self)
-        # v0.4 speeds
-        self.speeds        = pymqds_todl.s4lv0_4_speeds
-        self.speeds_hz_adc = pymqds_todl.s4lv0_4_speeds_hz_adc
-        self.speeds_td     = pymqds_todl.s4lv0_4_speeds_td
-        self.speeds_hz     = pymqds_todl.s4lv0_4_speeds_hz
-        for i,speed in enumerate(self.speeds):
-            speed_hz = 'f: ' + str(self.speeds_hz[i]) + \
-                       ' Hz (f ADC:' + str(self.speeds_hz_adc[i]) + ' Hz)'
+        # v0.75 speeds
+        #self.speeds        = pymqds_todl.s4lv0_4_speeds
+        #self.speeds_hz_adc = pymqds_todl.s4lv0_4_speeds_hz_adc
+        #self.speeds_td     = pymqds_todl.s4lv0_4_speeds_td
+        self.speeds_hz     = pymqds_todl.s4lv0_75_speeds_hz
+        for i,speed in enumerate(self.speeds_hz):
+            speed_hz = 'f: ' + str(self.speeds_hz[i]) + ' Hz'
+            #speed_hz = 'f: ' + str(self.speeds_hz[i]) + \
+            #           ' Hz (f ADC:' + str(self.speeds_hz_adc[i]) + ' Hz)'
             self._convspeed_combo.addItem(str(speed_hz))        
 
         # Data format
-        self.formats =     [2              , 3   , 4                            ]
-        self.formats_str = ['binary (cobs)','csv', 'binary (cobs, reduced size)']
+        self.formats =     [2              , 31   , 4                            ]
+        self.formats_str = ['binary (cobs)','csv' , 'binary (cobs, reduced size)']
+        
         self._dataformat_combo = QtWidgets.QComboBox(self)
         for i,dformat in enumerate(self.formats):
             format_str = str(dformat) + ' ' + self.formats_str[i]
@@ -284,8 +300,9 @@ class todlConfig(QtWidgets.QWidget):
         self.todl = todl
         self._update_status()
         if(self.deviceinfo is not None):
-            print('updateting device info')
-            self.deviceinfo.update(self.todl.device_info)
+            if(self.todl.status >= 0): # Opened serial port or converting
+                print('updateting device info')
+                self.deviceinfo.update(self.todl.device_info)
 
 
     def _update_status(self):
@@ -317,11 +334,11 @@ class todlConfig(QtWidgets.QWidget):
 
             
     def _setup_device(self):
-        speed_str = self._convspeed_combo.currentText()
+        freq_str = self._convspeed_combo.currentText()
         ind = self._convspeed_combo.currentIndex()
-        speed_num = self.speeds[ind]
-        logger.debug('_setup_device(): Setting speed to ' + str(speed_str)\
-                     + ' num:' + str(speed_num))
+        freq_num = self.speeds_hz[ind]
+        logger.debug('_setup_device(): Setting speed to ' + str(freq_str)\
+                     + ' num:' + str(freq_num))
 
         data_format = 3
         print('Data format',data_format)        
@@ -343,7 +360,7 @@ class todlConfig(QtWidgets.QWidget):
 
         print('Chs List:',chs)
         print('init todllogger')
-        self.todl.init_todllogger(adcs = adcs,channels=chs,speed=speed_num,data_format=3)
+        self.todl.init_todllogger(adcs = adcs,channels=chs,freq=freq_num,data_format=31)
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)        
 
@@ -359,7 +376,6 @@ class todlConfig(QtWidgets.QWidget):
 
     def _close(self):
         self.close()
-
 
 
 def _start_pymqds_plotxy(addresses):
@@ -479,7 +495,8 @@ class gpsDevice():
         print('GPS Device')
         self.device_changed_function = device_changed_function
         
-    def setup(self):
+    def setup(self,name=None):
+        self.name = name
         print('GPS Setup')
         self.w = pymqds_nmea0183_gui.nmea0183SetupWidget()
         # Copy the nmea0183logger
@@ -516,6 +533,7 @@ class todlDevice():
         A device class for the turbulent ocean data logger (TODL)
         
         """
+        self.device_changed_function = device_changed_function
         self.ready = False
         self.all_widgets = []
         print('Hallo init!')
@@ -531,7 +549,7 @@ class todlDevice():
         self.todl.init_notification_functions.append(self._update_status_information)
 
         self.deviceinfo = todlInfo()            # Deviceinfo widget
-        self.todlConfig = todlConfig(self.todl) # TODL Config widget
+        self.todlConfig = todlConfig(todl = self.todl,deviceinfowidget = self.deviceinfo) # TODL Config widget
         # A flag if only one channel is used
         self.ONECHFLAG = False
 
@@ -633,6 +651,7 @@ class todlDevice():
 
         self.all_widgets.append(self.disp_widget)
 
+        # Timer to update the bytes read information of the deviceinfowidget
         self.lcdtimer = QtCore.QTimer()
         self.lcdtimer.setInterval(100)
         self.lcdtimer.timeout.connect(self.poll_serial_bytes)
@@ -660,10 +679,11 @@ class todlDevice():
 
         
 
-    def setup(self):
+    def setup(self,name):
+        """Setup of the device
+
         """
-        Setup of the device
-        """
+        self.name = name
         print('Hallo setup!')
                 # Source
         sources = ['serial','file','ip']
@@ -702,15 +722,6 @@ class todlDevice():
         self._s4l_settings_bu.setEnabled(False)
         self._s4l_settings_bu.clicked.connect(self._clicked_settings_bu)
 
-        # Widget to show info about how much bytes have been received
-        # TODO This should be an info widget
-        self.bytesreadlcd = QtWidgets.QLCDNumber(w)
-        self.bytesreadlcd.setDigitCount(15)
-        self.bytesreadlcd.display(200)
-        # Widget to show the average transfer rate
-        self.bytesspeedlabel = QtWidgets.QLabel('Bit/s')
-        self.bytesspeed      = QtWidgets.QLabel('NaN')                
-        
         # File source
         self.button_open_file      = QtWidgets.QPushButton('Open file')
         self.button_open_file.clicked.connect(self.open_file)
@@ -749,18 +760,16 @@ class todlDevice():
         """
         # The source data layout (serial, files)
         widgets_serial = [ self.setup_close_bu, self.combo_source, self.serial_test_bu, self.combo_serial,
-                           self.combo_baud, self.serial_open_bu, self.bytesreadlcd, self.bytesspeedlabel,
-                           self.bytesspeed]
+                           self.combo_baud, self.serial_open_bu ]
         widgets_file   = [ self.setup_close_bu,
                            self.combo_source,self.button_open_file,
                            self.button_startstopread_file,self.label_nbytes,
                            self.spin_file_read_nbytes,
                            self.label_file_read_dt,
-                           self.spin_file_read_dt]
+                           self.spin_file_read_dt ]
         widgets_ip = [ self.setup_close_bu,
                        self.combo_source,self.text_ip,
-                       self.button_open_socket,
-                       self.bytesspeedlabel, self.bytesspeed]        
+                       self.button_open_socket ]        
 
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
@@ -833,6 +842,7 @@ class todlDevice():
     def clicked_serial_open_bu(self):
         """Function to open a serial device
         """
+        funcname = 'clicked_serial_open_bu()'
         t = self.serial_open_bu.text()
         print('Click ' + str(t))
         if True:
@@ -863,20 +873,11 @@ class todlDevice():
                             # TODO Have to resize the widget to have nicer data
                         # The general purpose 
                         elif(vers >= 0.70):
-                            logger.debug('Opening Version 0.46 device setup')
+                            logger.debug('Opening Version 0.70+ device setup')
                             self._s4l_settings_bu.close()
-                            if(False):
-                                self._s4l_freq_combo = QtWidgets.QComboBox()
-                                #self._s4l_freq_combo.setEnabled(True)                            
-                                self._speeds_hz     = pymqds_todl.s4lv0_46_speeds_hz
-                                for i,speed in enumerate(self._speeds_hz):
-                                    self._s4l_freq_combo.addItem(str(speed))
-
-                                self.layout.addWidget(self._s4l_freq_combo,1,3)
+                            if(True):
                                 self._ad_table.clear()                                                        
                                 self._ad_table_setup()
-                                self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set)
-                                # TODO Have to resize the widget to have nicer data                            
                         else:
                             self._s4l_settings_bu.setEnabled(True)
                             self._ad_table.clear()                            
@@ -904,6 +905,9 @@ class todlDevice():
                 self.combo_serial.setEnabled(False)
                 self.combo_baud.setEnabled(False)                
                 self.status = 1
+                # Call the device changed function to notice the gui
+                # that the serial device is open
+                self.device_changed(funcname)
             else:
                 self.todl.stop_serial_data()
                 self.todl.stop_converting_raw_data()
@@ -921,6 +925,7 @@ class todlDevice():
         Opens a 
         """
         print('Open!')
+        funcname = 'clicked_open_socket()'
         addrraw = str(self.text_ip.text())
         print(addrraw)
         try:
@@ -966,6 +971,10 @@ class todlDevice():
                     self.todl.add_raw_data_stream()
                     time.sleep(0.2)
                     self.todl.start_converting_raw_data()
+
+                # Call the device changed function to notice the gui
+                # that the device is open
+                self.device_changed(funcname)
 
     def _clicked_settings_bu(self):
         """
@@ -1017,7 +1026,7 @@ class todlDevice():
         """
         Function to show the data
         """
-        print('Ja!')
+        print('Show data')
         self.disp_widget.show()
 
 
@@ -1028,19 +1037,43 @@ class todlDevice():
         self.deviceinfo.update(self.todl.device_info)
 
     def _ad_table_setup(self):
-        self._ad_table.setColumnCount(5)
-        self._ad_table.setRowCount(10)
+        """ Setup of the table
+        """
+        self._ad_table_ind_ch = []
+        if 'adcs' in self.todl.device_info.keys():
+            num_ltcs = len(self.todl.device_info['adcs'])
+            ltc_name = [i for i in self.todl.device_info['adcs']]
+            ch_seq = np.unique(np.asarray(self.todl.device_info['channel_seq']))
+            # Create an index between the channel numbers and the columns
+            self._ad_table_ind_ch = [ i for i in range(ch_seq.max()+1)]
+            header_label = ['Name']
+            for i in range(len(ch_seq)):
+                self._ad_table_ind_ch[ch_seq[i]] = i+1
+                header_label.append('Ch ' + str(ch_seq[i]))
+
+            num_cols = len(ch_seq) + 1
+        else:
+            num_ltcs = 8
+            num_cols = 4 + 1            
+            ltc_name = [i for i in range(num_ltcs)]
+            header_label = ['Name','Ch 0','Ch 1','Ch 2','Ch 3']            
+            for i in range(4):
+                self._ad_table_ind_ch.append(i+1)
+
+        num_rows =  num_ltcs + 3                        
+        self._ad_table.setColumnCount(num_cols)
+        self._ad_table.setRowCount(num_rows)
         self._ad_table.verticalHeader().setVisible(False)
         self._ad_table.setItem(0,
                                0, QtWidgets.QTableWidgetItem( ' Packet number' ))
         self._ad_table.setItem(1,
                                0, QtWidgets.QTableWidgetItem( ' Counter' ))
-        for i in range(0,8):
-            adname='LTC2442 ' + str(i)
+        for i in range(0,num_ltcs):
+            adname='LTC2442 ' + str(ltc_name[i])
             self._ad_table.setItem(i+2,
                                 0, QtWidgets.QTableWidgetItem( adname ))        
 
-        self._ad_table.setHorizontalHeaderLabels(['Name','Ch 0','Ch 1','Ch 2','Ch 3'])
+        self._ad_table.setHorizontalHeaderLabels(header_label)
         # Make width and height of the table such that all entries can be seen
         vwidth = self._ad_table.verticalHeader().width()
         hwidth = self._ad_table.horizontalHeader().length()
@@ -1216,6 +1249,7 @@ class todlDevice():
 
 
     def poll_serial_bytes(self):
+        self.deviceinfo.update_bytes(self.todl.bytes_read, self.todl.bytes_read_avg)
         #self.bytesreadlcd.display(self.todl.bytes_read)
         #self.bytesspeed.setText(str(self.todl.bytes_read_avg))
         pass        
@@ -1278,16 +1312,15 @@ class todlDevice():
         while(len(self.todl.intraqueue) > 0):
             data = self.todl.intraqueue.pop()
             if(data['type'] == 'Stat'):
-                print('Status packet!!!')
                 self.deviceinfo.update_status_packet(data)
                 
-
-        if(True):
+                
             if(len(data)>0):
                 # LTC channel data
                 if((data['type']=='L') and showL):
                     # Get channel                    
                     ch = data['ch']
+                    ind_col = self._ad_table_ind_ch[ch]
                     if(show_channels[ch]):
                         show_channels[ch] = False
                         #showL = False
@@ -1298,14 +1331,15 @@ class todlDevice():
                         V = data['V']
                         # Packet number            
                         item = QtWidgets.QTableWidgetItem(str(num))
-                        self._ad_table.setItem(0, ch + 1, item)
+                        self._ad_table.setItem(0, ind_col, item)
                         # Counter
                         item = QtWidgets.QTableWidgetItem(str(ct))
-                        self._ad_table.setItem(1, ch + 1, item)
+                        self._ad_table.setItem(1, ind_col, item)
                         # Update all LTC data of that channel
-                        for n,i in enumerate(self.todl.flag_adcs):
+                        #for n,i in enumerate(self.todl.flag_adcs):
+                        for n,i in enumerate(self.todl.device_info['adcs']):
                             item = QtWidgets.QTableWidgetItem(str(V[n]))
-                            self._ad_table.setItem(i+2, ch+1, item )
+                            self._ad_table.setItem(n+2, ind_col, item )
 
                 # IMU data                        
                 if((data['type']=='A') and showA):
@@ -1464,8 +1498,9 @@ class todlDevice():
         t = self._info_record_bu.text()
         logger.debug('Click ' + str(t))
         if(t == self._recording_status[0]):
-            print('Record')            
-            fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "CSV (*.csv);; All files (*)");
+            print('Record')
+            #self._show_data_widget
+            fname = QtWidgets.QFileDialog.getSaveFileName(self._show_data_widget, 'Select file','', "CSV (*.csv);; All files (*)");
             if(len(fname[0]) > 0):
                 print(fname)
                 filename = ntpath.basename(fname[0])
@@ -1495,7 +1530,7 @@ class todlDevice():
         if False:
             if(t == self._recording_status[0]):
                 print('Record')            
-                fname = QtWidgets.QFileDialog.getSaveFileName(self, 'Select file','', "UBJSON (*.ubjson);; All files (*)");
+                fname = QtWidgets.QFileDialog.getSaveFileName(self._show_data_widget, 'Select file','', "UBJSON (*.ubjson);; All files (*)");
                 if(len(fname[0]) > 0):
                     self._info_record_info.setText('Status: logfile: ' + fname[0])
                     self.loggerDS = pymqdatastream.slogger.LoggerDataStream(logging_level = logging.DEBUG, filename = fname[0], name = 'todl logger')
@@ -1528,6 +1563,16 @@ class todlDevice():
 
         self.disp_widget.close()
         self.setup_widget.close() # Closing the TODL setup widget
+
+        
+    def device_changed(self,fname):
+        """A function to notice a change
+
+        """
+        print('Something changed here:',fname)
+        # Call the update function
+        if(not(self.device_changed_function == None)):
+            self.device_changed_function(fname)        
 
 
 
@@ -1614,6 +1659,9 @@ class timeWidget(QtWidgets.QWidget):
 
         self.lab_nmea0183logger = []
         self.ind_gps = 4
+
+
+
 #
 #
 # The main window
@@ -1647,8 +1695,8 @@ class todlMainWindow(QtWidgets.QMainWindow):
         self.setup_time()
         # Create the device setup widget
         self.setup_devices()
-        # Create the info widget        
-        self.info_devices()
+        ## Create the info widget        
+        #self.info_devices()
         # Create the show widget                
         self.show_devices()
 
@@ -1656,7 +1704,7 @@ class todlMainWindow(QtWidgets.QMainWindow):
         self.tasks = []
         self.tasks.append({'name':'Time','widget':self.time_widget})        
         self.tasks.append({'name':'Devices','widget':self.device_setup_widget})
-        self.tasks.append({'name':'Info','widget':self.device_info_widget})
+        #self.tasks.append({'name':'Info','widget':self.device_info_widget})
         self.tasks.append({'name':'Show','widget':self.device_show_widget})        
         self.tasks.append({'name':'Plot','widget':QtWidgets.QPushButton('Plot data')})
         self.tasks.append({'name':'Quit','widget':QtWidgets.QPushButton('Quit')})
@@ -1734,10 +1782,15 @@ class todlMainWindow(QtWidgets.QMainWindow):
                 print('Found device ... with object name ' + str(d[devname]['object']))
                 obj = str(d[devname]['object'])
                 #tmp = getattr(globals(),'todlDevice')
-                # Call the object
-                # of the device and give the device_changed function
-                deviceobj = globals()[obj](self.device_changed) 
-                deviceobj.setup()
+
+                # Call the object of the device and give the
+                # device_changed function to allow this gui to be
+                # notified whenever the device has been changed
+                # (added, removed opened)
+                deviceobj = globals()[obj](self.device_changed)
+                devicename = self.combo_dev_add.currentText()
+                deviceobj.setup(name = devicename)
+
                 self.devices.append(deviceobj)
                 
         #type
@@ -1781,6 +1834,9 @@ class todlMainWindow(QtWidgets.QMainWindow):
             else:
                 pass
                 #print('Device',d)
+
+
+        self.update_show_devices()
 
                 
     def rem_devices(self):
@@ -1827,23 +1883,51 @@ class todlMainWindow(QtWidgets.QMainWindow):
         self.all_widgets.append(w)        
         self.device_show_widget_layout = QtWidgets.QGridLayout(self.device_show_widget)
 
-        dev_show = QtWidgets.QPushButton('Open Show')
-        dev_show.clicked.connect(self.show_devices)
-        dev_show.setEnabled(False)
+        self.bu_dev_show = QtWidgets.QPushButton('Open Show')
+        self.bu_dev_show.clicked.connect(self.clicked_show_devices)
+        self.bu_dev_show.setEnabled(False)
 
         self.combo_dev_show     = QtWidgets.QComboBox(w)
-
-        for d in config['devices']:
-            devname = list(d)[0]
-            self.combo_dev_show.addItem(devname)
 
         b = QtWidgets.QPushButton('Show')
         b.setEnabled(False)
         self.device_show_widget_layout.addWidget(b,0,0,1,2)
         self.device_show_widget_layout.addWidget(self.combo_dev_show,1,0)
-        self.device_show_widget_layout.addWidget(dev_show,1,1)
-        self.device_show_widget.show()        
+        self.device_show_widget_layout.addWidget(self.bu_dev_show,1,1)
+        self.device_show_widget.show()
+
+
+    def update_show_devices(self):
+        """ Whenever a new device has been added or removed, call this function to update the show devices list
+        """
+
+        self.combo_dev_show.clear()
         
+        for d in self.devices:
+            self.combo_dev_show.addItem(d.name)
+
+
+        if(len(self.devices) > 0):
+            self.bu_dev_show.setEnabled(True)
+        else:
+            self.bu_dev_show.setEnabled(False)
+            
+        #for d in config['devices']:
+        #    devname = list(d)[0]
+        #    self.combo_dev_show.addItem(devname)
+
+
+    def clicked_show_devices(self):
+        """ Calls the show function of the device choosen
+        """
+        devname = str( self.combo_dev_show.currentText() )
+        print('Show data of device:' + devname)
+        
+        for d in self.devices:
+            if(d.name == devname):
+                d.show_data()
+
+
 
     def close_application(self):
         logger.debug('Goodbye!')

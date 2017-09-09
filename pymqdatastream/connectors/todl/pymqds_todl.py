@@ -39,14 +39,16 @@ for i,speed in enumerate(s4lv0_4_speeds):
 
 
 s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]
-
 s4lv0_46_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 250, 333, 400, 500, 625, 1000, 1250, 2000]
-
+s4lv0_75_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 400, 500, 625, 1000, 1250, 2000]
 
 file_header_valid = b'\n>>>'
-file_header_start_todl = b'>>> -- HELLO! This is the Turbulent Ocean Data Logger -- <<<'
+file_header_start_todl = b'>>> -- HELLO! This is the Turbulent Ocean Data Logger (TODL) -- <<<'
 file_header_start_sam4log = b'>>> -- HELLO! This is SAM4LOG -- <<<' # Before 13.08.2017 the TODL project name was SAM4LOG
 file_header_valid_dos = b'\r\n>>>'
+
+
+file_header_end = b'# File Header End\n'
 
 def parse_device_info(data_str):
     """
@@ -106,16 +108,57 @@ def parse_device_info(data_str):
         channel_str = me.group()
 
 
+    # This is obsolete and should be removed soon
+    #print('Channel str:' + channel_str)
+    freq_str = ''
+    for i,me in enumerate(re.finditer(r'>>>Freqs:.*\n',data_str)):
+        freq_str = me.group()
+
+    #>>>Freqs:ADCs: 100, IMU: 5
+    if(len(freq_str) > 0):
+        freq_str = freq_str.replace('>>>Freqs:','')
+        freq_str = freq_str.replace('\n','')
+        # Check for frequencies (ADC)
+        if('ADCs' in freq_str):
+            ind1 = freq_str.find('ADCs:')
+            ind2 = freq_str[ind1:].find(',')
+            adcs_freq = float(freq_str[ind1 + 5 : ind2+ind1])
+        else:
+            adcs_freq = np.NaN
+        # Check for frequencies (IMU)
+        if('IMU' in freq_str):
+            ind1 = freq_str.find('IMU:')
+            ind2 = freq_str[ind1:].find(',')
+            if(ind2 == -1): # End of line
+                ind2 = len(freq_str[ind1:])
+                
+            imu_freq = float(freq_str[ind1 + 4 : ind2+ind1])
+        else:
+            imu_freq = np.NaN
+
+        # Check for frequencies (PYRO)
+        if('PYRO' in freq_str):
+            ind1 = freq_str.find('PYRO:')
+            ind2 = freq_str[ind1:].find(',')
+            if(ind2 == -1): # End of line
+                ind2 = len(freq_str[ind1:])            
+            pyro_freq = float(freq_str[ind1 + 5 : ind2+ind1])
+        else:
+            pyro_freq = np.NaN            
+            
+            
+
     #print('Channel str:' + channel_str)
     speed_str = ''
     for i,me in enumerate(re.finditer(r'>>>speed:.*\n',data_str)):
-        speed_str = me.group()                                    
+        speed_str = me.group()                                            
 
 
     data_format = [int(s) for s in re.findall(r'\b\d+\b', format_str)][-1]
     data_adcs = [int(s) for s in re.findall(r'\b\d+\b', adc_str)]
     data_channel_seq = [int(s) for s in re.findall(r'\b\d+\b', channel_str)]
     speed_data = [float(s) for s in re.findall(r'\d+\.\d+', speed_str)]
+
 
     #print('Speed str:' + speed_str)
     #print('Speed data:' + str(speed_data))
@@ -126,9 +169,13 @@ def parse_device_info(data_str):
     device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
     device_info['format'] = data_format
     device_info['adcs'] = data_adcs
+    device_info['adcs_freq'] = adcs_freq
     device_info['channel_seq'] = data_channel_seq
     device_info['speed_str'] = speed_str
     device_info['freq'] = speed_data[-1]
+    device_info['freq_str'] = freq_str
+    device_info['imu_freq'] = imu_freq
+    device_info['pyro_freq'] = pyro_freq    
     # Create a list for each channel and fill it later with streams
 
     # Update the local parameters
@@ -505,6 +552,10 @@ class todlDataStream(pymqdatastream.DataStream):
         self._log_thread_queue_ans = queue.Queue()
         self.logfile = open(filename,'wb')
         self.logfile_bytes_wrote = 0
+        # Writing the start header
+        tstartstr='# TODL file, pymqdatastream_version:' + pymqdatastream.version + '\n'
+        self.logfile.write(tstartstr.encode('utf-8'))
+        self.logfile_bytes_wrote += len(tstartstr)                
         # Writing local PC Time
         tlocalstr = time.strftime('# PC Time (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())
         self.logfile.write(tlocalstr.encode('utf-8'))
@@ -671,17 +722,20 @@ class todlDataStream(pymqdatastream.DataStream):
             self.convert_raw_data = self.convert_raw_data_format4
 
 
-    def init_todllogger(self,adcs,data_format=3,channels=[0],speed=30):
+    def init_todllogger(self,adcs,data_format=3,channels=[0],freq=5):
         """
     
         Function to set specific settings on the logger
         Args:
             flag_adcs: List of the ltc2442 channels to be send back [e.g. [0,2,7]], has to be between 0 and 7
             format: Output format of the logger
+            channels: channel sequence, a list with a channel sequence [e.g. [0,1,2,3,0,0]]
+            freq: conversion frequency
         
         """
         funcname = self.__class__.__name__ + '.init_todllogger()'
 
+        dt_wait = 0.1
         self.logger.debug(funcname)
         if(self.status >= 0):
             if(self.status >= 1): # Already converting
@@ -690,7 +744,9 @@ class todlDataStream(pymqdatastream.DataStream):
                 
             self.print_serial_data = True        
             self.send_serial_data('stop\n')
-            time.sleep(0.1)
+            time.sleep(dt_wait)
+            self.send_serial_data('showdata off\n')
+            time.sleep(dt_wait)            
             # Which ADCS?
             self.flag_adcs = adcs
             cmd = 'send ad'
@@ -698,10 +754,10 @@ class todlDataStream(pymqdatastream.DataStream):
                 cmd += ' %d' %ad
             self.send_serial_data(cmd + '\n')
             self.logger.debug(funcname + ' sending:' + cmd)
-            time.sleep(0.1)
-            # Due to a bug speed has to be send before data format if speed is 30, check firmware!
-            # Speed
-            cmd = 'speed ' + str(speed)
+            time.sleep(dt_wait)
+            # Due to a bug freq has to be send before data format if freq is 30, check firmware!
+            # Freq
+            cmd = 'freq ' + str(freq)
             self.send_serial_data(cmd + '\n')
             self.logger.debug(funcname + ' sending:' + cmd)
             
@@ -711,19 +767,22 @@ class todlDataStream(pymqdatastream.DataStream):
             cmd = 'format ' + str(data_format) + '\n'
             self.send_serial_data(cmd)
             self.logger.debug(funcname + ' sending:' + cmd)
-            time.sleep(0.1)
+            time.sleep(dt_wait)
             # Channel sequence
             cmd = 'channels '
             for ch in channels:
                 cmd += ' %d' %ch
             self.send_serial_data(cmd + '\n')
             self.logger.debug(funcname + ' sending:' + cmd)
-            time.sleep(0.1)        
+            time.sleep(dt_wait)
 
 
             self.print_serial_data = False            
             # Update the device_info struct etc.
             self.query_todllogger()
+            time.sleep(dt_wait)
+            self.send_serial_data('showdata on\n')
+            time.sleep(dt_wait)            
             self.send_serial_data('start\n')
             for fun in self.init_notification_functions:
                 fun()
@@ -1321,6 +1380,12 @@ class todlDataStream(pymqdatastream.DataStream):
         ad0_converted = 0
         data_packets = []
         data_str = ''
+
+        # Arrays for frequency calculation
+        dt_freq = 0.5
+        len_t_array = 1000
+        Lpacket_t = np.zeros((len_t_array,2)) # For LTC2442 packets
+        Lpacket_t_ind = 0
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
             nstreams = (max(self.device_info['channel_seq']) + 1)
@@ -1328,7 +1393,8 @@ class todlDataStream(pymqdatastream.DataStream):
             data_stream = [[] for _ in range(nstreams) ]
             # PH: Another hack for the v046, make clear 
             aux_data_stream = [[],[]]
-            data_packets = []            
+            data_packets = []
+            ts = time.time()
             time.sleep(dt)
             while(len(deque) > 0):
                 data = deque.pop()
@@ -1351,6 +1417,7 @@ class todlDataStream(pymqdatastream.DataStream):
                         try:
                             data_split = line.split(';')
                             packet_type = data_split[0]
+                            # LTC2444 packet
                             if(packet_type == 'L'):
                                 #packet_time_old = packet_time
                                 packet_time = int(data_split[1])/self.device_info['counterfreq']
@@ -1386,6 +1453,14 @@ class todlDataStream(pymqdatastream.DataStream):
 
                                 data_packets.append(data_packet)
                                 data_stream[channel].append(data_list)
+
+                                # Packet for frequency calculation
+                                if(Lpacket_t_ind < len_t_array):
+                                    Lpacket_t[Lpacket_t_ind,0] = ts
+                                    Lpacket_t[Lpacket_t_ind,1] = packet_time
+                                    Lpacket_t_ind += 1
+                                
+                                
                             # Time and counter information
                             elif(packet_type == 'T'):
                                 pass
@@ -1460,14 +1535,22 @@ class todlDataStream(pymqdatastream.DataStream):
             
             #if(len(data0)>0):
             #    streams[0].pub_data(data0)
-            # Debugging frequency
-            if(len(data_packets) >=2):
-                ct = data_packets[1]['t']
-                cto = data_packets[0]['t']
-                dtt = (ct - cto)
-                ftt = 1/dtt
-                print(ftt)                                
 
+            # Frequency packets
+            if(Lpacket_t_ind > 0):
+                dtL = Lpacket_t[:Lpacket_t_ind,0].max() - Lpacket_t[:Lpacket_t_ind,0].min()
+                if((Lpacket_t_ind >= len_t_array) or (dtL > dt_freq)):
+                    data_packet = {'type':'Lfr'} # Type L freq
+                    data_packet['dt'] = dtL
+                    dtLt = Lpacket_t[Lpacket_t_ind-1,1] - Lpacket_t[0,1]
+                    #print(dtLt)
+                    data_packet['f'] = (Lpacket_t_ind-1)/(dtLt)
+                    Lpacket_t[:,:] = 0
+                    Lpacket_t_ind = 0                    
+                    #print(data_packet)
+                    data_packets.append(data_packet)
+
+            
             # This data is for local plotting stuff (e.g. the gui)
             for data_packet in data_packets:
                 self.intraqueue.appendleft(data_packet)
@@ -1574,12 +1657,13 @@ class todlDataStream(pymqdatastream.DataStream):
                 print('len',len(data_str))                
                 [data_stream,data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
                 self.packets_converted += len(data_packets)
-                if(len(data_packets) >=2):
-                    ct = data_packets[1]['t']
-                    cto = data_packets[0]['t']
-                    dtt = (ct - cto)
-                    ftt = 1/dtt
-                    print(ftt)                    
+                if(False):
+                    if(len(data_packets) >=2):
+                        ct = data_packets[1]['t']
+                        cto = data_packets[0]['t']
+                        dtt = (ct - cto)
+                        ftt = 1/dtt
+                        print(ftt)                    
 
 
                 ta.append( time.time() )                    
