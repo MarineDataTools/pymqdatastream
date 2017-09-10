@@ -699,7 +699,8 @@ class todlDevice():
         # 
         self._ad_table = QtWidgets.QTableWidget()
         # http://stackoverflow.com/questions/14143506/resizing-table-columns-when-window-is-maximized
-        self._ad_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        #self._ad_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._ad_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) #pyqt5
         #self._ad_table.setMinimumSize(300, 300)
         #self._ad_table.setMaximumSize(300, 300)
         self._ad_table_setup()
@@ -709,7 +710,8 @@ class todlDevice():
         # PH: This is a hack TODO, make this clean
         #
         self._IMU_table = QtWidgets.QTableWidget()
-        self._IMU_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        #self._IMU_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._IMU_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) # pyqt5
         self._IMU_table_setup()
         
         #
@@ -717,7 +719,8 @@ class todlDevice():
         # PH: This is a hack TODO, make this clean
         #
         self._O2_table = QtWidgets.QTableWidget()
-        self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        #self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
+        self._O2_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) # pyqt5        
         self._O2_table_setup()
 
         # Widget to collect all information
@@ -1175,7 +1178,8 @@ class todlDevice():
             
         self._ad_table.setFixedHeight(height + hheight + fwidth)
         # Only select one item
-        self._ad_table.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+        #self._ad_table.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+        self._ad_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         # Add a right click menu to the table
         self._ad_table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self._ad_table.customContextMenuRequested.connect(self._table_menu)
