@@ -1375,7 +1375,7 @@ class todlDevice():
     def _clicked_show_data_bu(self):
         """
         """
-        sender = self.sender()
+        sender = self._show_data_widget.sender()
         t = self._show_data_bu.text()
         print('Click ' + str(t))
         if True:
@@ -1518,7 +1518,7 @@ class todlDevice():
         Starts a pyqtgraph plotting process
 
         """
-        sender = self.sender()
+        sender = self._show_data_widget.sender()
         t = sender.text()
         logger.debug('Plotting the streams')
         plot_IMU = False
