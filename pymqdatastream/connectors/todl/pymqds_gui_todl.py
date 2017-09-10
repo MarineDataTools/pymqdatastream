@@ -200,6 +200,7 @@ class todlConfig(QtWidgets.QWidget):
     # Conversion speeds of the device
 
     def __init__(self,todl=None, deviceinfowidget = None):
+        self.deviceinfo = deviceinfowidget        
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QGridLayout()
 
@@ -209,6 +210,8 @@ class todlConfig(QtWidgets.QWidget):
         self.timeWidget   = timeWidget()        
 
         # Conversion speed
+        self._freq_button     = QtWidgets.QPushButton('Set frequency')
+        self._freq_button.clicked.connect(self.clicked_set_freq)
         self._convspeed_combo = QtWidgets.QComboBox(self)
         # v0.75 speeds
         #self.speeds        = pymqds_todl.s4lv0_4_speeds
@@ -224,7 +227,8 @@ class todlConfig(QtWidgets.QWidget):
         # Data format
         self.formats =     [2              , 31   , 4                            ]
         self.formats_str = ['binary (cobs)','csv' , 'binary (cobs, reduced size)']
-        
+        self._set_format_button= QtWidgets.QPushButton('Set data format')
+        self._set_format_button.clicked.connect(self.clicked_set_format)
         self._dataformat_combo = QtWidgets.QComboBox(self)
         for i,dformat in enumerate(self.formats):
             format_str = str(dformat) + ' ' + self.formats_str[i]
@@ -236,13 +240,14 @@ class todlConfig(QtWidgets.QWidget):
         self._query_bu.clicked.connect(self._query)
         self._ad_apply_bu = QtWidgets.QPushButton('Send to device')
         self._ad_apply_bu.clicked.connect(self._setup_device)
-        self._ad_close_bu = QtWidgets.QPushButton('Close')
-        self._ad_close_bu.clicked.connect(self._close)
 
+        # Which ADCs to sample?
         # Create an adc checkbox widget
+        # 
+        self._ad_set_button = QtWidgets.QPushButton('Set sampling ADCS')
+        self._ad_set_button.clicked.connect(self.clicked_set_adcs)
         self._ad_widget_check = QtWidgets.QWidget()
         ad_layoutV = QtWidgets.QHBoxLayout(self._ad_widget_check)
-
 
         self._ad_check = []        
         for i in range(8):
@@ -251,7 +256,10 @@ class todlConfig(QtWidgets.QWidget):
             ad_layoutV.addWidget(ad_check)
 
 
+        # Which channels to sample?            
         # Create a channel sequence widget
+        self._channels_set_button = QtWidgets.QPushButton('Set channel sequence')
+        self._channels_set_button.clicked.connect(self.clicked_set_channels)
         channels = ['0','1','2','3','-']
         self._ad_seq_check = QtWidgets.QWidget()
         ad_seq_layoutV = QtWidgets.QVBoxLayout(self._ad_seq_check)
@@ -274,23 +282,24 @@ class todlConfig(QtWidgets.QWidget):
         ad_seq_layoutV.addWidget(_ad_seq_check_tmp)
 
 
-        self.deviceinfo = deviceinfowidget
-
-
         # The main layout
         layout.addWidget(self.timeWidget,0,0,5,1)
-        layout.addWidget(self.set_time,6,0)        
-        layout.addWidget(QtWidgets.QLabel('Set speed'),0,0+1)
-        layout.addWidget(self._convspeed_combo,0,1+1)
-        layout.addWidget(QtWidgets.QLabel('Set data format'),0,2+1)
-        layout.addWidget(self._dataformat_combo,0,3+1)
-        layout.addWidget(QtWidgets.QLabel('Choose LTC2442 ADCS '),1,0+1)
+        layout.addWidget(self.set_time,6,0)
+        
+        layout.addWidget(self._freq_button,1,0+1,1,2)
+        layout.addWidget(self._convspeed_combo,0,0+1,1,2)
+        
+        layout.addWidget(self._set_format_button,1,2+1,1,2)
+        layout.addWidget(self._dataformat_combo,0,2+1,1,2)
+        
+        layout.addWidget(self._ad_set_button,3,0+1,1,4)
         layout.addWidget(self._ad_widget_check,2,0+1,1,4)
-        layout.addWidget(QtWidgets.QLabel('Define channel sequence'),3,0+1)
+        
+        layout.addWidget(self._channels_set_button,5,0+1,1,4)
         layout.addWidget(self._ad_seq_check,4,0+1,1,4)
+        
         layout.addWidget(self._query_bu,6,0+1)
         layout.addWidget(self._ad_apply_bu,6,1+1)        
-        layout.addWidget(self._ad_close_bu,6,2+1)
 
 
         self.setLayout(layout)
@@ -362,17 +371,83 @@ class todlConfig(QtWidgets.QWidget):
         print('init todllogger')
         self.todl.init_todllogger(adcs = adcs,channels=chs,freq=freq_num,data_format=31)
         self._update_status()
-        self.deviceinfo.update(self.todl.device_info)        
+        self.deviceinfo.update(self.todl.device_info)
+
+
+    def clicked_set_freq(self):
+        """ Sets the frequency of the datalogger
+        """
+        funcname = 'clicked_set_freq()'
+        freq_str = self._convspeed_combo.currentText()
+        ind = self._convspeed_combo.currentIndex()
+        freq_num = self.speeds_hz[ind]
+        logger.debug(funcname + ': Setting speed to ' + str(freq_str)\
+                     + ' num:' + str(freq_num))
+
+
+        self.todl.init_todllogger(freq=freq_num)
+        self._update_status()
+        self.deviceinfo.update(self.todl.device_info)
+
+
+    def clicked_set_adcs(self):
+        """ Sets the sampling adcs
+        """
+        funcname = 'clicked_set_adcs()'
+        adcs = []
+        for i,ad_check in enumerate(self._ad_check):            
+            if(ad_check.isChecked()):
+                adcs.append(i)
+
+        logger.debug(funcname + ': Setting ADCS list' + str(adcs))
+        self.todl.init_todllogger(adcs=adcs)
+        self._update_status()
+        self.deviceinfo.update(self.todl.device_info)
+
+
+    def clicked_set_channels(self):
+        """ Sets the sampling channels
+        """
+        funcname = 'clicked_set_channels()'
+
+        chs = []
+        for i,seq_combo in enumerate(self._seq_combo):
+            ind = seq_combo.currentIndex()
+            if(ind < 4):
+                chs.append(ind)
+            else:
+                break
+
+        logger.debug(funcname + ': Setting channels' + str(chs))
+        self.todl.init_todllogger(channels=chs)
+        self._update_status()
+        self.deviceinfo.update(self.todl.device_info)
+
+        
+    def clicked_set_format(self):
+        """ Set the data format
+        """
+        funcname = 'clicked_set_format'
+
+        ind = self._dataformat_combo.currentIndex()
+        data_format = self.formats[ind]
+        data_format_str = self.formats_str[ind]        
+        logger.debug(funcname + ': Setting format to ' + str(data_format) + ' (' + data_format_str + ')')
+
+        
+    def clicked_set_time(self):
+        self.todl.set_time(datetime.datetime.now(datetime.timezone.utc))
+        pass                
+
 
     def _query(self):
+        """ Querying the datalogger
+        """
         self.todl.query_todllogger()
         
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)
-
-    def clicked_set_time(self):
-        self.todl.set_time(datetime.datetime.now(datetime.timezone.utc))
-        pass        
+        
 
     def _close(self):
         self.close()
@@ -712,7 +787,7 @@ class todlDevice():
         
         self.setup_close_bu = QtWidgets.QPushButton('Close')
         self.setup_close_bu.clicked.connect(w.close)
-        self.serial_open_bu = QtWidgets.QPushButton('Query')
+        self.serial_open_bu = QtWidgets.QPushButton('Search TODL')
         self.serial_open_bu.clicked.connect(self.clicked_serial_open_bu)
 
         self.serial_test_bu = QtWidgets.QPushButton('Test ports')
@@ -774,7 +849,9 @@ class todlDevice():
         logger.debug('get_source()')
         data_source = str( self.combo_source.currentText() )
         self.layout_source_row2.addWidget(self.deviceinfo,0,0)
-        self.layout_source_row2.addWidget(self.todlConfig,1,0)        
+
+        # TODO: Rescale the widget after things are removed or added ....
+        
         if(data_source == 'serial'):
             whide = widgets_file + widgets_ip
             for w in whide:
@@ -785,6 +862,8 @@ class todlDevice():
                     print(str(e))
                     pass
 
+            self.layout_source_row2.addWidget(self.todlConfig,1,0)
+            self.todlConfig.show()            
             for w in widgets_serial:
                 try:
                     self.layout_source.addWidget(w)
@@ -794,7 +873,13 @@ class todlDevice():
                     pass
                 
         elif(data_source == 'file'):
-            whide = widgets_serial + widgets_ip            
+            whide = widgets_serial + widgets_ip
+            try:
+                self.layout_source_row2.removeWidget(self.todlConfig)
+                self.todlConfig.hide()
+            except:
+                pass
+            
             for w in whide:
                 try:
                     self.layout_source.removeWidget(w)
@@ -818,6 +903,8 @@ class todlDevice():
                 except:
                     pass
 
+            self.layout_source_row2.addWidget(self.todlConfig,1,0)
+            self.todlConfig.show()            
             for w in widgets_ip:
                 try:
                     self.layout_source.addWidget(w)
@@ -846,7 +933,7 @@ class todlDevice():
         t = self.serial_open_bu.text()
         print('Click ' + str(t))
         if True:
-            if(t == 'Query'):
+            if(t == 'Search TODL'):
                 ser = str(self.combo_serial.currentText())
                 b = int(self.combo_baud.currentText())
                 print('Opening port' + ser + ' with baudrate ' + str(b))
@@ -911,7 +998,7 @@ class todlDevice():
             else:
                 self.todl.stop_serial_data()
                 self.todl.stop_converting_raw_data()
-                self.serial_open_bu.setText('Query')
+                self.serial_open_bu.setText('Search TODL')
                 self.combo_serial.setEnabled(True)
                 self.combo_baud.setEnabled(True)                                
                 self.status = 0

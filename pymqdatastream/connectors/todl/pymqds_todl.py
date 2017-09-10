@@ -722,16 +722,16 @@ class todlDataStream(pymqdatastream.DataStream):
             self.convert_raw_data = self.convert_raw_data_format4
 
 
-    def init_todllogger(self,adcs,data_format=3,channels=[0],freq=5):
-        """
-    
-        Function to set specific settings on the logger
+    def init_todllogger(self,adcs=None,data_format=None,channels=None,freq=None):
+        """Function to set specific settings on the logger, all arguments
+default to None, only with a valid argument that setting will be sent to the device
+
         Args:
             flag_adcs: List of the ltc2442 channels to be send back [e.g. [0,2,7]], has to be between 0 and 7
             format: Output format of the logger
             channels: channel sequence, a list with a channel sequence [e.g. [0,1,2,3,0,0]]
             freq: conversion frequency
-        
+
         """
         funcname = self.__class__.__name__ + '.init_todllogger()'
 
@@ -746,35 +746,41 @@ class todlDataStream(pymqdatastream.DataStream):
             self.send_serial_data('stop\n')
             time.sleep(dt_wait)
             self.send_serial_data('showdata off\n')
-            time.sleep(dt_wait)            
-            # Which ADCS?
-            self.flag_adcs = adcs
-            cmd = 'send ad'
-            for ad in self.flag_adcs:
-                cmd += ' %d' %ad
-            self.send_serial_data(cmd + '\n')
-            self.logger.debug(funcname + ' sending:' + cmd)
             time.sleep(dt_wait)
-            # Due to a bug freq has to be send before data format if freq is 30, check firmware!
-            # Freq
-            cmd = 'freq ' + str(freq)
-            self.send_serial_data(cmd + '\n')
-            self.logger.debug(funcname + ' sending:' + cmd)
-            
-            # Data format
-            self.device_info['format'] = data_format
-            self.init_data_format_functions()
-            cmd = 'format ' + str(data_format) + '\n'
-            self.send_serial_data(cmd)
-            self.logger.debug(funcname + ' sending:' + cmd)
-            time.sleep(dt_wait)
-            # Channel sequence
-            cmd = 'channels '
-            for ch in channels:
-                cmd += ' %d' %ch
-            self.send_serial_data(cmd + '\n')
-            self.logger.debug(funcname + ' sending:' + cmd)
-            time.sleep(dt_wait)
+            if(adcs is not None):
+                # Which ADCS?
+                self.flag_adcs = adcs
+                cmd = 'send ad'
+                for ad in self.flag_adcs:
+                    cmd += ' %d' %ad
+                self.send_serial_data(cmd + '\n')
+                self.logger.debug(funcname + ' sending:' + cmd)
+                time.sleep(dt_wait)
+
+            if(freq is not None):                
+                # Due to a bug freq has to be send before data format if freq is 30, check firmware! (old, check if still true)
+                # Freq
+                cmd = 'freq ' + str(freq)
+                self.send_serial_data(cmd + '\n')
+                self.logger.debug(funcname + ' sending:' + cmd)
+
+            if(data_format is not None):                
+                # Data format
+                self.device_info['format'] = data_format
+                self.init_data_format_functions()
+                cmd = 'format ' + str(data_format) + '\n'
+                self.send_serial_data(cmd)
+                self.logger.debug(funcname + ' sending:' + cmd)
+                time.sleep(dt_wait)
+
+            if(channels is not None):
+                # Channel sequence
+                cmd = 'channels '
+                for ch in channels:
+                    cmd += ' %d' %ch
+                    self.send_serial_data(cmd + '\n')
+                    self.logger.debug(funcname + ' sending:' + cmd)
+                time.sleep(dt_wait)
 
 
             self.print_serial_data = False            
@@ -806,15 +812,12 @@ class todlDataStream(pymqdatastream.DataStream):
 
             
     def query_todllogger(self):
-        """
-        
-        Queries the logger and sets the important parameters to the values read
-        TODO: Do something if query fails
+        """Queries the logger and sets the important parameters to the values read
+        TODO: Do something if query fails, check if the extra commands are needed
 
         Returns:
             bool: True if we found a todllogger, False otherwise
 
-        
         """
         dt = 0.2 # Additional wait between commands
         funcname = self.__class__.__name__ + '.query_todllogger()'
