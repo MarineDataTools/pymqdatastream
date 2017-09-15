@@ -34,6 +34,7 @@ if sys.version_info >= (3,4):
           'pymqds_plotxy=pymqdatastream.connectors.pyqtgraph.pymqds_plotxy:main',\
           'todl=pymqdatastream.connectors.todl.pymqds_todl:main',\
           'todl_gui=pymqdatastream.connectors.todl.pymqds_gui_todl:main',\
+          'todl_rawtonc=pymqdatastream.connectors.todl.pymqds_todl:todlraw_to_netCDF',\
           'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
           package_data = {'microrider':['data/*.DAT'],'':['VERSION'],'todl_gui':['connectors/todl/todl_config.yaml']},
           zip_safe=False)

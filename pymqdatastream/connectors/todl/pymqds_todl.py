@@ -21,6 +21,8 @@ import re
 from cobs import cobs
 import numpy as np
 import datetime
+import netCDF4 # For loading and saving files
+import argparse
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_todl')
@@ -62,6 +64,9 @@ def parse_device_info(data_str):
     funcname = __name__ + '.parse_device_info()'
     logger.debug(funcname)
     device_info = {}
+    # Pre-initialise some things
+    device_info['adcs'] = None
+    
     boardversion = '??'
     firmwareversion = '??'
     print(data_str)
@@ -230,16 +235,132 @@ def find_todl_header(data_file):
     return [VALID_HEADER,header]
 
 
-
-class todlFile():
-    """ A turbulent ocean data logger (TODL) file object. This object can open, read and convert files
+#
+#
+#
+#
+#
+class todlnetCDF4File():
+    """ A turbulent ocean data logger (TODL) netCDF4 file object. This object can open, read and convert files. TOD: In the bright future it should also stream data to a todl datastream ... 
     """
 
     def __init__(self,fname):
+        funcname = self.__class__.__name__ + '.__init__()'
+        self.logger = logger
         self.todl = todlDataStream()
+        # This can also 
         self.todl.load_file(fname,start_read = False)
+        # We have a device info now, lets create the netCDF4 groups
+        print(self.todl.device_info)
+        self.to_ncfile('test.nc4')
 
+        
+    def create_ncfile(self,fname):
+        """Creates a new netCDF4 File based on the device_info information of
+        the available data
 
+        Args:
+           fname: Filename of the netcdffile to be created
+
+        """
+        funcname = self.__class__.__name__ + '.create_ncfile()'
+        rootgrp = netCDF4.Dataset(fname, "w", format="NETCDF4")
+        # Test if we have adcs
+        if(self.todl.device_info['adcs'] is not None):
+            self.logger.debug(funcname + ': Creating adc group')
+            self.ncfile = rootgrp
+            adcgrp     = rootgrp.createGroup('adc')
+            ch_dims    = []
+            self.adc_vars   = []
+            self.adc_tvars  = []
+            # Creating up to four different time dimensions, to cover
+            # all channels
+            ch_seq = np.unique(np.asarray(self.todl.device_info['channel_seq']))
+            self.ch_seq = ch_seq
+            for nch,ch in enumerate(ch_seq):
+                dimname = 't_ch' + str(ch)
+                print(dimname)
+                ch_dim = adcgrp.createDimension(dimname, None)
+                ch_dims.append(ch_dim)
+                adc_tvar = adcgrp.createVariable(dimname, "f8", (dimname,))
+                self.adc_tvars.append(adc_tvar)
+                self.adc_vars.append([])
+                # Creating variables
+                for adc in self.todl.device_info['adcs']:
+                    varname = 'V_adc' + str(adc) + '_ch' + str(ch)
+                    adc_var = adcgrp.createVariable(varname, "f4", (dimname,))
+                    self.adc_vars[nch].append(adc_var)
+
+        # Check if we have an IMU
+        if(self.todl.device_info['imu_freq'] > 0):
+            self.logger.debug(funcname + ': Creating imu group')
+            imugrp     = rootgrp.createGroup('imu')
+            dimname = 't_imu'
+            imu_dim = imugrp.createDimension(dimname, None)
+            self.imu_t    = imugrp.createVariable('t_imu', "f8", (dimname,))
+            self.imu_accx = imugrp.createVariable('accx', "f8", (dimname,))
+            self.imu_accy = imugrp.createVariable('accy', "f8", (dimname,))
+            self.imu_accz = imugrp.createVariable('accz', "f8", (dimname,))
+            self.imu_gyrox = imugrp.createVariable('gyrox', "f8", (dimname,))
+            self.imu_gyroy = imugrp.createVariable('gyroy', "f8", (dimname,))
+            self.imu_gyroz = imugrp.createVariable('gyroz', "f8", (dimname,))
+            self.imu_magnx = imugrp.createVariable('magnx', "f8", (dimname,))
+            self.imu_magny = imugrp.createVariable('magny', "f8", (dimname,))
+            self.imu_magnz = imugrp.createVariable('magnz', "f8", (dimname,))            
+            
+            
+    def to_ncfile(self,fname):
+        # First create a netCDF4 File        
+        self.create_ncfile(fname)        
+        self.todl.start_converting_raw_data( ondemand = True )
+        self.todl.start_read_file( dt=0.0, num_bytes=2000, ondemand = True )
+        cnt = 0
+        while(True):
+            if(self.todl.file_status == 2):
+                break
+            #if(cnt == 10):
+            #    break
+            #time.sleep(1.0)
+            #print('Hallo')
+            while(len(self.todl.intraqueue) > 0):
+                data = self.todl.intraqueue.pop()        
+                print(data)
+                if(data['type'] == 'L'): # ADC data
+                    cnt += 1                    
+                    ind = np.where(self.ch_seq == data['ch'])[0]
+                    print('index:',ind)
+                    n = len(self.adc_tvars[ind])
+                    self.adc_tvars[ind][n+1] = data['t']
+                    # Put the voltage data into the variable
+                    for nadc,adc in enumerate(self.todl.device_info['adcs']):
+                        self.adc_vars[ind][nadc][n+1] = data['V'][nadc]
+
+                elif(data['type'] == 'A'): # IMU data
+                    n = len(self.imu_t)
+                    self.imu_t[n+1] = data['t']
+                    self.imu_accx[n+1] = data['acc'][0]
+                    self.imu_accy[n+1] = data['acc'][1]
+                    self.imu_accz[n+1] = data['acc'][2]
+                    self.imu_gyrox[n+1] = data['gyro'][0]
+                    self.imu_gyroy[n+1] = data['gyro'][1]
+                    self.imu_gyroz[n+1] = data['gyro'][2]
+                    self.imu_magnx[n+1] = data['magn'][0]
+                    self.imu_magny[n+1] = data['magn'][1]
+                    self.imu_magnz[n+1] = data['magn'][2]                                        
+                    
+                    
+
+    def close(self):
+        self.ncfile.close()        
+        
+        
+#       
+#
+#
+# The datastream
+#
+#
+#
 class todlDataStream(pymqdatastream.DataStream):
     """The Turbulent Ocean Data Logger (TODL) object.
 
@@ -253,7 +374,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self.name = 'todl'
         self.uuid = uuid
         self.status = -1 # -1 init, 0 opened serial port, 1 converting
-        self.file_status = -1 # -1 not opened, 0 = open, 1 = reading
+        self.file_status = -1 # -1 not opened, 0 = open, 1 = reading, 2 = end of file
         self.init_notification_functions = [] # A list of functions to be called after the logger has been initialized/reinitialized
         funcname = self.__class__.__name__ + '.__init__()'
         self.logger.debug(funcname)
@@ -261,6 +382,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self.flag_adcs = [] # List of adcs to be send by the logger hardware
         self.device_info = {}
         self.print_serial_data = False
+        self.raw_data_ondemand_queue = queue.Queue() # Queue used for on-demand raw_data, used at the moment for read_file_data
         self.serial_thread_queue = queue.Queue()
         self.serial_thread_queue_ans = queue.Queue()
 
@@ -288,6 +410,9 @@ class todlDataStream(pymqdatastream.DataStream):
 
         # The data format
         self.device_info['format'] = 0
+
+        # Adding a publish socket
+        self.add_pub_socket()
 
 
     def load_file(self,filename,dt=0.01,num_bytes=200,start_read=True):
@@ -318,10 +443,10 @@ class todlDataStream(pymqdatastream.DataStream):
         return True
 
     
-    def start_read_file(self,dt=0.01,num_bytes=200):
+    def start_read_file(self,dt=0.01,num_bytes=200, ondemand=False):
         funcname = self.__class__.__name__ + '.start_read_file()'
         if(self.file_status == 0):
-            self.file_thread = threading.Thread(target=self.read_file_data,kwargs={'dt':dt,'num_bytes':num_bytes})
+            self.file_thread = threading.Thread(target=self.read_file_data,kwargs={'dt':dt,'num_bytes':num_bytes,'ondemand':ondemand})
             self.file_thread.daemon = True
             self.file_thread.start()            
             self.logger.debug(funcname + ': Starting thread done')
@@ -333,36 +458,49 @@ class todlDataStream(pymqdatastream.DataStream):
     def stop_read_file(self):
         funcname = self.__class__.__name__ + '.stop_read_file()'        
         self.serial_thread_queue.put('stop')
-        self.file_status = 0 # Open
+        self.file_status = 0 # File open
         
 
     def close_file(self):
         funcname = self.__class__.__name__ + '.close_file()'
         self.stop_read_file()
-        self.file_status = -1 # Open
+        self.file_status = -1 # File closed
         
         
-    def read_file_data(self, dt = 0.01, num_bytes = 200):
+    def read_file_data(self, dt = 0.01, num_bytes = 200, ondemand=False):
         """
 
         The function which reads the file
+        Args:
+            dt: wait [s] between consecutive reads
+            num_bytes: read num bytes per dt
+            ondemand: waits for a piece of data at the self.raw_data_ondemand_queue queue, if got something continues sending data, convert data functions can put data on the self.raw_data_ondemand_queue queue to ask for new data
 
         """
         funcname = self.__class__.__name__ + '.read_serial_data()'
         self.logger.debug(funcname)
         while True:
-            time.sleep(dt)
-            if(True):
+            if(dt > 0):
+                time.sleep(dt)
+
+            if(ondemand):
+                response = self.raw_data_ondemand_queue.get()
+
+            if True:
                 try:
                     data = self.data_file.read(num_bytes)
+                    # If we have the end of file
                     if(len(data) == 0):
+                        self.file_status = 2
                         self.logger.debug(funcname + ': EOF')
                         return True
                     
-                    self.bytes_read += num_bytes
+                    #self.bytes_read += num_bytes
+                    self.bytes_read += len(data)
                     for n,deque in enumerate(self.deques_raw_serial):
                         deque.appendleft(data)
 
+                        
                 except Exception as e:
                     self.logger.debug(funcname + ':Exception:' + str(e))
 
@@ -622,7 +760,6 @@ class todlDataStream(pymqdatastream.DataStream):
         
         funcname = self.__class__.__name__ + '.add_raw_data_stream()'
         logger.debug(funcname)
-        self.add_pub_socket()
         rawvar = pymqdatastream.StreamVariable(name = 'serial binary',unit = '',datatype = 'b')
         variables = ['serial binary',]
         name = 'serial binary'
@@ -929,7 +1066,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         return True
 
            
-    def start_converting_raw_data(self):
+    def start_converting_raw_data(self, dt = None, ondemand = False):
         """
 
 
@@ -937,8 +1074,11 @@ default to None, only with a valid argument that setting will be sent to the dev
         Creating datastreams for the channels
 
         Args:
+            ondemand: Option enables an blocking mode, the conversion functions will send with send self.raw_data_ondemand_queue.put('ready') the notification that new data can be processed, 'ready' is only sent, with an empty intraqueue.
         Returns:
             stream: A stream of the converted data
+        
+            
 
 
         """
@@ -948,6 +1088,8 @@ default to None, only with a valid argument that setting will be sent to the dev
 
         if(self.device_info != None):
             deque = collections.deque(maxlen=self.dequelen)
+            # Add a overflow check flag to the deque
+            # This will be used by the raw_data read functions (at the moment read_file_data only)
             self.deques_raw_serial.append(deque)
             # Add datastreams for all LTC channels and devices
             for ch in self.device_info['channel_seq']:
@@ -1007,8 +1149,11 @@ default to None, only with a valid argument that setting will be sent to the dev
             # Analyse data format, choose the right conversion functions and start a conversion thread
             self.init_data_format_functions()
             self.packets_converted = 0
-            
-            self.convert_thread = threading.Thread(target=self.convert_raw_data, args = (deque,))
+            kw = {'ondemand':ondemand}
+            if(dt is not None):
+                kw['dt'] = dt
+
+            self.convert_thread = threading.Thread(target=self.convert_raw_data, args = (deque,), kwargs = kw)
             self.convert_thread.daemon = True
             self.convert_thread.start()            
             self.logger.debug(funcname + ': Starting thread done')
@@ -1039,7 +1184,7 @@ default to None, only with a valid argument that setting will be sent to the dev
 
 
     # Warning, this does not work anymore (at the moment) due to new streams!
-    def convert_raw_data_format0(self, deque, dt = 0.5):
+    def convert_raw_data_format0(self, deque, dt = 0.5, ondemand = False):
         """
         Converts raw data of the format 0, which is popped from the deque given as argument
         036:0>450003;16;30
@@ -1116,7 +1261,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                 pass                
 
 
-    def convert_raw_data_format2(self, deque, dt = 0.1):
+    def convert_raw_data_format2(self, deque, dt = 0.1, ondemand = False):
         """
 
         Converts raw data of the format 2, which is popped from the deque
@@ -1284,7 +1429,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                 pass
 
 
-    def convert_raw_data_format3(self, deque, dt = 0.05):
+    def convert_raw_data_format3(self, deque, dt = 0.05, ondemand = False):
         """
         Converts raw data of the format 3, which is popped from the deque given as argument
         Example:
@@ -1377,12 +1522,16 @@ default to None, only with a valid argument that setting will be sent to the dev
                 pass
 
             
-    def convert_raw_data_format31(self, deque, dt = 0.05):
+    def convert_raw_data_format31(self, deque, dt = 0.05, ondemand = False):
         """
         Converts raw data of the format 31, which is popped from the deque given as argument
         Example:
         L;00000000692003;00000000000342;2;+2.04882227;-9.99999999
         10 khz counter; num package;channel;Volt ad; ...
+        Args:
+            deque:
+            dt:
+            ondemand: Option is used to send self.raw_data_ondemand_queue.put('ready') to notify the raw_data routine that new data can be processed, 'ready' is only sent, with an empty intraqueue.
 
         HACK: This is also converting pyro science O2 data and IMU data, this should be cleaned up 
 
@@ -1487,13 +1636,17 @@ default to None, only with a valid argument that setting will be sent to the dev
                                 accz = float(data_split[6])
                                 gyrox = float(data_split[7])
                                 gyroy = float(data_split[8])
-                                gyroz = float(data_split[9])                                
+                                gyroz = float(data_split[9])
+                                magnx = float(data_split[10])
+                                magny = float(data_split[11])
+                                magnz = float(data_split[12])                                                                
                                 aux_data_stream[0].append([packet_num,packet_time,T,accx,accy,accz,gyrox,gyroy,gyroz])
                                 data_packet = {'num':packet_num,'t':packet_time}
                                 data_packet['type'] = 'A'                                
                                 data_packet['T'] = T
                                 data_packet['acc'] = [accx,accy,accz]
                                 data_packet['gyro'] = [gyrox,gyroy,gyroz]
+                                data_packet['magn'] = [magnx,magny,magnz]                                
                                 data_packets.append(data_packet)
 
                             # Status
@@ -1562,13 +1715,13 @@ default to None, only with a valid argument that setting will be sent to the dev
                     #print(data_packet)
                     data_packets.append(data_packet)
 
-            
-            # This data is for local plotting stuff (e.g. the gui)
+
+                       
+            # This data is for local data distribution (e.g. the gui, or netCDF file saving))
             for data_packet in data_packets:
                 self.intraqueue.appendleft(data_packet)
-                #self.channel_streams[ch]
-                # Fill the data_stream list
 
+                
             # This data is for the remote datastreams ( LTC data ) 
             for i in range(len(self.channel_streams)):
                 if(len(data_stream[i])>0):
@@ -1587,8 +1740,14 @@ default to None, only with a valid argument that setting will be sent to the dev
             except queue.Empty:
                 pass
 
+            # Check if ondemand mode, if yes send ready and wait for new data
+            if(ondemand):
+                if(len(self.intraqueue) == 0): # Check if intraqueue is empty, meaning that the data has been processed
+                    # Send ready to the ondemand queue                
+                    self.raw_data_ondemand_queue.put('ready')
+
             
-    def convert_raw_data_format4(self, deque, dt = 0.02):
+    def convert_raw_data_format4(self, deque, dt = 0.02, ondemand = False):
         """
 
         Converts raw data of the format 4, which is popped from the deque
@@ -1706,6 +1865,41 @@ default to None, only with a valid argument that setting will be sent to the dev
 
 
 
+def todlraw_to_netCDF():
+    """ Converts a todl file to netCDF
+    
+    """
+
+    usage_str = 'todl_rawtonc'
+    desc = 'Converts raw turbulent ocean data logger files into netCDF files. Example usage: ' + usage_str
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('rawfile', help= 'The filename of the raw data file')
+    parser.add_argument('ncfile',help='The filename of the converted netcdf file')    
+    parser.add_argument('--filename', '-f')
+    parser.add_argument('--verbose', '-v', action='count')    
+
+    args = parser.parse_args()
+    # Print help and exit when no arguments are given
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit(1)
+
+
+    try:
+        filename = args.filename
+        print(filename)
+    except Exception as e:
+        logger.debug('main(): ' + str(e))
+    
+    if(args.verbose == None):
+        loglevel = logging.CRITICAL
+    elif(args.verbose == 1):
+        loglevel = logging.INFO
+    elif(args.verbose > 1):
+        loglevel = logging.DEBUG
+        
+    logger.setLevel(loglevel)
+    
 
 
 
