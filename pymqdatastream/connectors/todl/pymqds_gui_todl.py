@@ -433,6 +433,9 @@ class todlConfig(QtWidgets.QWidget):
         data_format = self.formats[ind]
         data_format_str = self.formats_str[ind]        
         logger.debug(funcname + ': Setting format to ' + str(data_format) + ' (' + data_format_str + ')')
+        self.todl.init_todllogger(data_format=data_format)
+        self._update_status()
+        self.deviceinfo.update(self.todl.device_info)
 
         
     def clicked_set_time(self):

@@ -1655,7 +1655,7 @@ default to None, only with a valid argument that setting will be sent to the dev
             #print(type(data_str))
             #print('Hallo!!! ENDE')
 
-            if(len(data_str) >17):
+            if(len(data_str) > 17):
                 ta.append( time.time() )
                 print('len',len(data_str))                
                 [data_stream,data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
