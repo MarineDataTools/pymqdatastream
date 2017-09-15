@@ -918,6 +918,8 @@ class todlDevice():
                 except:
                     pass
 
+        self.setup_widget.adjustSize()
+
     def test_ports(self):
         """
         
@@ -1099,9 +1101,10 @@ class todlDevice():
 
 
     def startstopreadfile(self):
+        """Starts or stops reading the data file
+
         """
-        Starts or stops reading the data file
-        """
+        funcname = 'startstopreadfile()'
         logger.debug('Starting reading the datafile')
         t = self.button_startstopread_file.text()
         if('Start' in t):
@@ -1112,7 +1115,10 @@ class todlDevice():
             self.button_startstopread_file.setText('Stop reading')
         elif('Stop' in t):
             self.todl.stop_read_file()
-            self.button_startstopread_file.setText('Start read')            
+            self.button_startstopread_file.setText('Start read')
+
+        # Notice that the device changed 
+        self.device_changed(funcname)
 
 
     def show_data(self):
@@ -1968,9 +1974,9 @@ class todlMainWindow(QtWidgets.QMainWindow):
 
 
     def show_devices(self):
-        """
-        Create a QWidget with for calling the show_data function of the device. 
-        The device widget usually creates a widget
+        """Create a QWidget with for calling the show_data function of the
+        device.  The device widget usually creates a widget
+
         """
         self.device_show_widget        = QtWidgets.QWidget()
         w = self.device_setup_widget

@@ -231,6 +231,15 @@ def find_todl_header(data_file):
 
 
 
+class todlFile():
+    """ A turbulent ocean data logger (TODL) file object. This object can open, read and convert files
+    """
+
+    def __init__(self,fname):
+        self.todl = todlDataStream()
+        self.todl.load_file(fname,start_read = False)
+
+
 class todlDataStream(pymqdatastream.DataStream):
     """The Turbulent Ocean Data Logger (TODL) object.
 
