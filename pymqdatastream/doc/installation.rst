@@ -68,9 +68,9 @@ _________
   * Open the Anaconda prompt, go to the cloned pymqdatastream.git
     directory and install it by
 
-      .. code:: bash
+    .. code:: bash
    
-	 python setup.py develop
+       python setup.py develop
 
 
 Testing
@@ -80,9 +80,9 @@ Test the installation by creating a random datastream and displaying
 the data with the Qt interface:
 
 
-    .. code:: bash
+.. code:: bash
 	      
-       pymqds_rand &
-       pymqds_qtshowdata
+   pymqds_rand &
+   pymqds_qtshowdata
 
 
