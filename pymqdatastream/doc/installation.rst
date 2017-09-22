@@ -27,13 +27,13 @@ On a freshly installed Debian stretch install the following packages:
  installed using the pip installer. The following command install
  pymqdatastream for one user in develop mode.
 
-  .. code:: bash
+.. code:: bash
 
-     pip3 install cobs
+   pip3 install cobs
    
-     git clone https://github.com/MarineDataTools/pymqdatastream.git pymqdatastream.git
-     cd pymqdatastream.git
-     python3 setup.py develop --user
+   git clone https://github.com/MarineDataTools/pymqdatastream.git pymqdatastream.git
+   cd pymqdatastream.git
+   python3 setup.py develop --user
 
 
 Windows 10
