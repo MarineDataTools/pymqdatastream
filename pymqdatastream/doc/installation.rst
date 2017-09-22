@@ -2,10 +2,39 @@ Pymqdatastream installation
 ===========================
 
 
-Debian
-------
+Linux
+-----
 
-To be written.
+
+Debian Stretch (9) ADM64
+________________________
+
+On a freshly installed Debian stretch install the following packages:
+
+* python3
+* python3-setuptools
+* python3-pip
+* python3-numpy
+* python3-ubjson
+* python3-zmq
+* python3-qtpy
+* python3-serial
+* python3-yaml
+* python3-nmea2
+* python3-netcdf4
+
+ The `COBS <https://pypi.python.org/pypi/cobs/>`_ package needs to be
+ installed using the pip installer. The following command install
+ pymqdatastream for one user in develop mode.
+
+  .. code:: bash
+
+     pip3 install cobs
+   
+     git clone https://github.com/MarineDataTools/pymqdatastream.git pymqdatastream.git
+     cd pymqdatastream.git
+     python3 setup.py develop --user
+
 
 Windows 10
 ----------
@@ -20,7 +49,7 @@ _________
   .. code:: bash
    
      git clone https://github.com/MarineDataTools/pymqdatastream.git pymqdatastream.git
-     cd pymqdatastrea.git
+     cd pymqdatastream.git
 
    
 
