@@ -23,9 +23,9 @@ On a freshly installed Debian stretch install the following packages:
 * python3-nmea2
 * python3-netcdf4
 
- The `COBS <https://pypi.python.org/pypi/cobs/>`_ package needs to be
- installed using the pip installer. The following command install
- pymqdatastream for one user in develop mode.
+The `COBS <https://pypi.python.org/pypi/cobs/>`_ package needs to be
+installed using the pip installer. The following command install
+pymqdatastream for one user in develop mode.
 
 .. code:: bash
 
