@@ -63,7 +63,12 @@ def decode_format4(data_str,device_info):
     ind_ltcs = [0,0,0,0,0,0,0,0]
     nstreams = (max(device_info['channel_seq']) + 1)
     data_stream = [[] for _ in range(nstreams) ]    
-    data_split = data_str.split(b'\x00')
+    data_split = data_str.split(b'\x00') # Pakcets are separated by 0x00
+    err_packet = 0
+    cobs_err_packet = 0
+    ind_bad = []
+    ind_bad0 = 0
+    good_packet = 0    
     if(len(data_split) > 1):
         #print('data_str',data_str)
         #print('data_split',data_split)        
@@ -75,6 +80,7 @@ def decode_format4(data_str,device_info):
 
 
         for data_cobs in data_split:
+            ind_bad0 += len(data_cobs)
             # Timing
             ta = []    
 
@@ -89,6 +95,7 @@ def decode_format4(data_str,device_info):
                     #print(data_decobs[0],type(data_decobs[0]))                            
                     packet_ident    = data_decobs[0]
                     #logger.debug(funcname + ': packet_ident ' + str(packet_ident))
+                    # LTC2442 packet
                     if(packet_ident == 0xae):
                         #print('JA')
                         #packet_flag_ltc = ord(data_decobs[1]) # python2
@@ -122,7 +129,7 @@ def decode_format4(data_str,device_info):
                             packet_time     = int(packet_time_bin.hex(), 16)/device_info['counterfreq']
                             data_list = [packet_num,packet_time]
                             data_packet = {'num':packet_num,'t':packet_time}
-                            data_packet['type'] = 'L'                            
+                            data_packet['type'] = 'L'     
                             data_packet['spd'] = speed
                             data_packet['ch'] = channel
                             data_packet['ind'] = ind_ltcs
@@ -144,18 +151,50 @@ def decode_format4(data_str,device_info):
                                 #    data_packet.append(9999.99)
                             data_stream[channel].append(data_list)
                             data_packets.append(data_packet)
+                            good_packet += 1
                         else:
-                            logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
+                            # Peter temporary
+                            #logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
+                            err_packet += 1
+                            ind_bad.append(ind_bad0)
                             #print('data_cobs:',data_cobs)
-                            #print('data_cecobs:',data_decobs)                            
+                            #print('data_decobs:',data_decobs)
+                            
+                    elif(packet_ident == 0xae): # ACC
+                        pass
+                    elif(packet_ident == 0xf0): # Pyroscience firesting
+                        #\xf0\x00\x00\x00\x01Y\x00\x00\x08\x8f\x03RMR1 3 0 13 2 153908 -867323 -634011 -305757 -300000 -300000 482 16785 -1 -1 0 -62587\r
+                        if(len(data_decobs) > 12):
+                            ind = 1                            
+                            packet_num_bin  = data_decobs[ind:ind+5]
+                            packet_num      = int(packet_num_bin.hex(), 16) # python3
+                            ind += 5
+                            packet_time_bin = data_decobs[ind:ind+5]
+                            packet_time     = int(packet_time_bin.hex(), 16)/device_info['counterfreq']
+                            data_list_O     = [packet_num,packet_time]
+                            data_utf8       = data_decobs[11:].decode(encoding='utf-8')
+                            if("RMR1 3 0" in data_utf8):
+                                data_pyro   = data_utf8.split(' ')
+                                if(len(data_pyro) > 4):
+                                    data_stat   = float(data_pyro[4])                                        
+                                    data_dphi   = float(data_pyro[5])
+                                    data_umol   = float(data_pyro[6])
+                                    data_packet = {'num':packet_num,'t':packet_time}
+                                    data_packet['type'] = 'O'                                
+                                    data_packet['phi']  = data_dphi 
+                                    data_packet['umol'] = data_umol
+                                    data_packets.append(data_packet)             
 
             #except cobs.DecodeError:
             #    logger.debug(funcname + ': COBS DecodeError')
             except Exception as e:
-                logger.debug(funcname + ': Error:' + str(e))                
+                cobs_err_packet += 1
+                # Peter temporary
+                #logger.debug(funcname + ': Error:' + str(e))                
                 pass
 
-
+    packet_err = {'type':'format4_log','num_err':err_packet,'num_cobs_err':cobs_err_packet,'num_good':good_packet,'ind_bad':ind_bad}
+    data_packets.append(packet_err)
     return [data_stream,data_packets,data_str]
 
 

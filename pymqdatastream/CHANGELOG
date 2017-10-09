@@ -1,0 +1,9 @@
+0.7.1:
+	- Re-Added GPS functionality
+
+0.7.2:
+	- Added conversion utility to netCDF4 (with command
+
+0.7.3:
+	- Reworked TODL for format 4
+
