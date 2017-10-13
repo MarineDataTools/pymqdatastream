@@ -23,6 +23,8 @@ import numpy as np
 import datetime
 import netCDF4 # For loading and saving files
 import argparse
+import traceback # For debugging purposes
+import sys
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_todl')
@@ -430,7 +432,7 @@ class todlnetCDF4File():
 
                 if(data['type'] == 'L'): # ADC data
                     try:
-                        ind = np.where(self.ch_seq == data['ch'])[0]
+                        ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
                         n = len(self.adc_tvars[ind])
                         self.adc_tvars[ind][n+1] = data['t']
                         # Put the voltage data into the variable
@@ -467,7 +469,7 @@ class todlnetCDF4File():
            fname: Filename
            num_bytes: num_bytes to read per conversion step
         """
-        funcname = 'to_ncfile()'
+        funcname = 'to_ncfile_fast()'
         # First create a netCDF4 File
         num_good = 0
         num_err = 0
@@ -508,7 +510,7 @@ class todlnetCDF4File():
 
                 if(data['type'] == 'L'): # ADC data
                     try:
-                        ind = np.where(self.ch_seq == data['ch'])[0]
+                        ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
                         self.adc_tvars_tmp[ind].append(data['t'])
                         # Put the voltage data into the variable
                         for nadc,adc in enumerate(self.todl.device_info['adcs']):
@@ -889,9 +891,7 @@ class todlDataStream(pymqdatastream.DataStream):
 
 
     def stop_serial_data(self):
-        """
-
-        Closes the serial port and does a cleanup of running threads etc.
+        """Closes the serial port and does a cleanup of running threads etc.
 
         """
         funcname = self.__class__.__name__ + '.stop_serial_data()'
@@ -1212,6 +1212,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         data_str = ''
         while(len(deque) > 0):
             data = deque.pop()
+            print('data:',data)
             try:
                 data_str += data.decode(encoding='utf-8')
             except Exception as e:
@@ -1796,134 +1797,30 @@ default to None, only with a valid argument that setting will be sent to the dev
                     data_str = data_str_split[-1]
                     data_str_split.pop()
 
-                for line in data_str_split:
-                    if(len(line)>3):
-                        try:
-                            data_split = line.split(';')
-                            packet_type = data_split[0]
-                            # LTC2444 packet
-                            if(packet_type == 'L'):
-                                #packet_time_old = packet_time
-                                packet_time = int(data_split[1])/self.device_info['counterfreq']
-                                packet_num = int(data_split[2])
-                                channel = int(data_split[3])
-                                ad_data = data_split[4:]
-                                # Fill the data list
-                                data_list = [packet_num,packet_time]                    
-                                # Fill the data packet dictionary
-                                data_packet = {}
-                                data_packet = {'num':packet_num,'t':packet_time}
-                                data_packet['type'] = 'L'                                
-                                data_packet['ch'] = channel
-                                data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
-                                
-                                # Test if the lengths are same
-                            #if(len(ad_data) == len(self.device_info['adcs'] * 2)):
-                                #for n,i in enumerate(range(0,len(ad_data))):
-                                for n,i in enumerate(self.device_info['adcs']):
-                                    n = int(n)
-                                    # Test if we have data at all
-                                    if(len(ad_data[n]) > 0):
-                                        V = float(ad_data[n])
-                                    else:
-                                        V = -9.0
-                                        
-                                    data_packet['V'][i] = V
-                                    data_list.append(V)
-
-                                #else:
-                                #   logger.debug( funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])) + ' str:' +  str(data_str_split))
-
-
-                                data_packets.append(data_packet)
-                                data_stream[channel].append(data_list)
-
-                                # Packet for frequency calculation
-                                if(Lpacket_t_ind < len_t_array):
-                                    Lpacket_t[Lpacket_t_ind,0] = ts
-                                    Lpacket_t[Lpacket_t_ind,1] = packet_time
-                                    Lpacket_t_ind += 1
-                                
-                                
-                            # Time and counter information
-                            elif(packet_type == 'T'):
-                                pass
-
-                            elif(packet_type == 'A'):
-                                #A;00000021667084;00000000103737;+40.9;-0.09180;-0.02295;-1.01172;-0.05344;-1.02290;-0.63359;0.000000;0.000000;0.000000
-                                packet_time = int(data_split[1])/self.device_info['counterfreq']
-                                packet_num = int(data_split[2])
-                                T = float(data_split[3])
-                                accx = float(data_split[4])
-                                accy = float(data_split[5])
-                                accz = float(data_split[6])
-                                gyrox = float(data_split[7])
-                                gyroy = float(data_split[8])
-                                gyroz = float(data_split[9])
-                                magnx = float(data_split[10])
-                                magny = float(data_split[11])
-                                magnz = float(data_split[12])                                                                
-                                aux_data_stream[0].append([packet_num,packet_time,T,accx,accy,accz,gyrox,gyroy,gyroz])
-                                data_packet = {'num':packet_num,'t':packet_time}
-                                data_packet['type'] = 'A'                                
-                                data_packet['T'] = T
-                                data_packet['acc'] = [accx,accy,accz]
-                                data_packet['gyro'] = [gyrox,gyroy,gyroz]
-                                data_packet['magn'] = [magnx,magny,magnz]                                
-                                data_packets.append(data_packet)
-
-                            # Status
-                            # Stat;2000.01.14 07:07:33;Fr:31;1965398;6440195;St:1;Sh:1;Lg:0;SD:0;
-                            elif('Stat' in packet_type):
-                                data_packet = {'type':'Stat'}
-                                tstr = data_split[1]
-                                data_packet['date']   = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
-                                data_packet['date_str']   = tstr
-                                data_packet['format'] = int(data_split[2].split(':')[1])
-                                data_packet['t']      = float(data_split[3])/self.device_info['counterfreq']
-                                data_packet['t32']    = int(data_split[4])
-                                data_packet['start']  = int(data_split[5].split(':')[1])
-                                data_packet['show']   = int(data_split[6].split(':')[1])
-                                data_packet['log']    = int(data_split[7].split(':')[1])
-                                data_packet['sd']     = int(data_split[8].split(':')[1])
-                                if(len(data_split[9]) > 1):
-                                    data_packet['filename'] = data_split[9]
-                                else:
-                                    data_packet['filename'] = None
-
-                                #print('Status!',data_packet)
-                                data_packets.append(data_packet)
-                                    
-                            # Pyroscience packet
-                            elif('U3' in packet_type):
-                                # Packet of the form
-                                #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383
-                                if("RMR1 3 0" in data_split[2]):
-                                    data_pyro   = data_split[2].split(' ')                                    
-                                    if(len(data_pyro) > 4):
-                                        packet_time = int(data_split[1])/self.device_info['counterfreq']
-                                        packet_num  = 0
-                                        data_stat   = float(data_pyro[4])                                        
-                                        data_dphi   = float(data_pyro[5])
-                                        data_umol   = float(data_pyro[6])
-                                        # PH: make this cleaner and more general
-                                        aux_data_stream[1].append([packet_num,packet_time,data_dphi,data_umol])
-                                        data_packet = {'num':packet_num,'t':packet_time}
-                                        data_packet['type'] = 'O'                                
-                                        data_packet['phi']  = data_dphi 
-                                        data_packet['umol'] = data_umol
-                                        data_packets.append(data_packet)                                    
-
-                        except Exception as e:
-                            logger.debug(funcname + ':' + str(e) + ' ' + str(line))
-                            pass
+                data_packets.extend(data_packages.decode_format31(data_str_split,self.device_info))
                             
             # Push the read data
             ti = time.time()
-            
-            #if(len(data0)>0):
-            #    streams[0].pub_data(data0)
 
+            # Sorted the data and put into lists for datastream
+            # distribution as well as frequency calculations
+            for data_packet in data_packets:
+                if(data_packet['type'] == 'L'): # LTC2442 packet
+                    data_stream[data_packet['ch']].append(data_packet['V'])                
+                    # Packet for frequency calculation
+                    if(Lpacket_t_ind < len_t_array):
+                        Lpacket_t[Lpacket_t_ind,0] = ts
+                        Lpacket_t[Lpacket_t_ind,1] = data_packet['t']
+                        Lpacket_t_ind += 1
+
+                elif(data_packet['type'] == 'A'): # IMU packet
+                    #data_packet['magn']
+                    aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
+                elif(data_packet['type'] == 'U3'): # Firesting packet         
+                    aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
+
+
+            
             # Frequency packets
             if(Lpacket_t_ind > 0):
                 dtL = Lpacket_t[:Lpacket_t_ind,0].max() - Lpacket_t[:Lpacket_t_ind,0].min()
@@ -1939,12 +1836,11 @@ default to None, only with a valid argument that setting will be sent to the dev
                     data_packets.append(data_packet)
 
 
-                       
-            # This data is for local data distribution (e.g. the gui, or netCDF file saving))
+            # This data is first put into the local intraque for data distribution (mainly the gui up to now)
             for data_packet in data_packets:
                 self.intraqueue.appendleft(data_packet)
 
-                
+
             # This data is for the remote datastreams ( LTC data ) 
             for i in range(len(self.channel_streams)):
                 if(len(data_stream[i])>0):

@@ -2,15 +2,126 @@ from cobs import cobs
 import numpy as np
 import logging
 import pymqdatastream.connectors.todl.ltc2442 as ltc2442
+import traceback # For debugging purposes
+import sys
+import datetime
 
 logger = logging.getLogger('todl_data_packages')
 logger.setLevel(logging.DEBUG)
 
-def decode_format31(data_str,device_info):
+def decode_format31(data_str_split,device_info):
     """
     Converts raw data of the format 31
     """
-    pass
+    funcname = '.decode_format31()'
+    data_packets = []    
+    for line in data_str_split:
+        if(len(line)>3):
+            try:
+                data_split = line.split(';')
+                packet_type = data_split[0]
+                # LTC2444 packet
+                if(packet_type == 'L'):
+                    #packet_time_old = packet_time
+                    packet_time = int(data_split[1])/device_info['counterfreq']
+                    packet_num = int(data_split[2])
+                    channel = int(data_split[3])
+                    ad_data = data_split[4:]
+                    # Fill the data list
+                    data_list = [packet_num,packet_time]
+                    # Fill the data packet dictionary
+                    data_packet = {}
+                    data_packet = {'num':packet_num,'t':packet_time}
+                    data_packet['type'] = 'L'                                
+                    data_packet['ch'] = channel
+                    data_packet['V'] = [9999.99] * len(device_info['adcs'])
+                    for n,i in enumerate(device_info['adcs']):
+                        n = int(n)
+                        # Test if we have data at all
+                        if(len(ad_data[n]) > 0):
+                            V = float(ad_data[n])
+                        else:
+                            V = -9.0
+
+                        data_packet['V'][n] = V
+                        data_list.append(V)
+                        data_packets.append(data_packet)
+                        ##data_stream[channel].append(data_list)
+
+                        # Time and counter information
+                elif(packet_type == 'T'):
+                    pass
+
+                # IMU Information
+                elif(packet_type == 'A'):
+                    #A;00000021667084;00000000103737;+40.9;-0.09180;-0.02295;-1.01172;-0.05344;-1.02290;-0.63359;0.000000;0.000000;0.000000
+                    packet_time = int(data_split[1])/device_info['counterfreq']
+                    packet_num = int(data_split[2])
+                    T = float(data_split[3])
+                    accx = float(data_split[4])
+                    accy = float(data_split[5])
+                    accz = float(data_split[6])
+                    gyrox = float(data_split[7])
+                    gyroy = float(data_split[8])
+                    gyroz = float(data_split[9])
+                    magnx = float(data_split[10])
+                    magny = float(data_split[11])
+                    magnz = float(data_split[12])                                                                
+                    #aux_data_stream[0].append([packet_num,packet_time,T,accx,accy,accz,gyrox,gyroy,gyroz])
+                    data_packet = {'num':packet_num,'t':packet_time}
+                    data_packet['type'] = 'A'
+                    data_packet['T'] = T
+                    data_packet['acc'] = [accx,accy,accz]
+                    data_packet['gyro'] = [gyrox,gyroy,gyroz]
+                    data_packet['magn'] = [magnx,magny,magnz]                                
+                    data_packets.append(data_packet)
+
+                # Status
+                # Stat;2000.01.14 07:07:33;Fr:31;1965398;6440195;St:1;Sh:1;Lg:0;SD:0;
+                elif('Stat' in packet_type):
+                    data_packet = {'type':'Stat'}
+                    tstr = data_split[1]
+                    data_packet['date']   = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
+                    data_packet['date_str']   = tstr
+                    data_packet['format'] = int(data_split[2].split(':')[1])
+                    data_packet['t']      = float(data_split[3])/device_info['counterfreq']
+                    data_packet['t32']    = int(data_split[4])
+                    data_packet['start']  = int(data_split[5].split(':')[1])
+                    data_packet['show']   = int(data_split[6].split(':')[1])
+                    data_packet['log']    = int(data_split[7].split(':')[1])
+                    data_packet['sd']     = int(data_split[8].split(':')[1])
+                    if(len(data_split[9]) > 1):
+                        data_packet['filename'] = data_split[9]
+                    else:
+                        data_packet['filename'] = None
+
+                    #print('Status!',data_packet)
+                    data_packets.append(data_packet)
+
+                # Pyroscience packet
+                elif('U3' in packet_type):
+                    # Packet of the form
+                    #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383
+                    if("RMR1 3 0" in data_split[2]):
+                        data_pyro   = data_split[2].split(' ')                                    
+                        if(len(data_pyro) > 4):
+                            packet_time = int(data_split[1])/device_info['counterfreq']
+                            packet_num  = 0
+                            data_stat   = float(data_pyro[4])                                        
+                            data_dphi   = float(data_pyro[5])
+                            data_umol   = float(data_pyro[6])
+                            data_packet = {'num':packet_num,'t':packet_time}
+                            data_packet['type'] = 'O'                                
+                            data_packet['phi']  = data_dphi 
+                            data_packet['umol'] = data_umol
+                            data_packets.append(data_packet)                                    
+
+            except Exception as e:
+                logger.debug(funcname + ':' + str(e) + ' ' + str(line))
+                traceback.print_exc(file=sys.stdout)
+
+
+    return data_packets
 
 
 def decode_format4(data_str,device_info):
@@ -58,12 +169,12 @@ def decode_format4(data_str,device_info):
         []: List of data
 
     """
-    funcname = 'decode_format4'
+    funcname = '.decode_format4()'    
     data_packets = []
     ind_ltcs = [0,0,0,0,0,0,0,0]
     nstreams = (max(device_info['channel_seq']) + 1)
     data_stream = [[] for _ in range(nstreams) ]    
-    data_split = data_str.split(b'\x00') # Pakcets are separated by 0x00
+    data_split = data_str.split(b'\x00') # Packets are separated by 0x00
     err_packet = 0
     cobs_err_packet = 0
     ind_bad = []
@@ -113,7 +224,7 @@ def decode_format4(data_str,device_info):
                         packet_com_ltc2 = data_decobs[4]
                         # Decode the command
                         #speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
-                        speed,channel = ltc2442.interprete_ltc2442_command_test([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)                        
+                        speed,channel = ltc2442.interprete_ltc2442_command_test([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)                       
                         ind = 5
                         #logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
                         #logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
@@ -190,7 +301,7 @@ def decode_format4(data_str,device_info):
             except Exception as e:
                 cobs_err_packet += 1
                 # Peter temporary
-                #logger.debug(funcname + ': Error:' + str(e))                
+                logger.debug(funcname + ': Error:' + str(e))
                 pass
 
     packet_err = {'type':'format4_log','num_err':err_packet,'num_cobs_err':cobs_err_packet,'num_good':good_packet,'ind_bad':ind_bad}

@@ -3,6 +3,12 @@ import os
 
 import sys
 
+
+# Requires (TODO put it into a proper requirement list)
+# psutil
+# zeromq
+# serial
+
 if sys.version_info >= (3,4):
 
     ROOT_DIR='pymqdatastream'

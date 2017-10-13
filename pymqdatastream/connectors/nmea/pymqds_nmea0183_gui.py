@@ -15,6 +15,7 @@ import time
 import argparse
 import glob
 import pymqdatastream.connectors.nmea.pymqds_nmea0183logger as pymqds_nmea0183logger
+from pymqdatastream.utils.utils_serial import serial_ports, test_serial_lock_file, serial_lock_file
 
 try:
     import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
@@ -56,7 +57,7 @@ logger.setLevel(logging.DEBUG)
 
 #pynmeatools.nmea0183logger.logger.setLevel(logging.DEBUG)
 
-def serial_ports():
+def serial_portsold():
     """ Lists serial port names
 
         :raises EnvironmentError:
@@ -387,6 +388,7 @@ class serialWidget(QWidget):
         self._combo_serial_baud.setCurrentIndex(4)
         self._button_serial_openclose = QPushButton('Open')
         self._button_serial_openclose.clicked.connect(self._openclose)
+        # Check which serial ports are available
         self._test_serial_ports()
         
         layout.addWidget(self._combo_serial_devices,0,0)

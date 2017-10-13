@@ -3,6 +3,7 @@ import sys
 import os
 import logging
 import glob
+import psutil
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('utils_serial')
@@ -36,6 +37,7 @@ def serial_ports():
         try:
             logger.debug("serial_ports(): Testing serial port " + str(port))
             if(FLAG_UNIXOID): # test if serial port has been locked
+                logger.debug('Testing serial port ' + str(port))
                 ret = test_serial_lock_file(port,brutal=True)
             else:
                 ret = False
@@ -64,12 +66,12 @@ def test_serial_lock_file(port, brutal = False):
     """
     devicename = port.split('/')[-1]
     filename = '/var/lock/LCK..'+devicename
-    print('serial_lock_file(): filename:' + str(filename))
+    logger.debug('serial_lock_file(): filename:' + str(filename))
     try:
         flock = open(filename,'r')
         pid_str = flock.readline()
         flock.close()
-        print('test_serial_lock_file(): PID:' + pid_str)
+        logger.debug('test_serial_lock_file(): PID:' + pid_str)
         PID_EXIST=None
         try:
             pid = int(pid_str)
@@ -77,9 +79,9 @@ def test_serial_lock_file(port, brutal = False):
             pid_ex = ' does not exist.'
             if(PID_EXIST):
                 pid_ex = ' exists.'
-            print('Process with PID:' + pid_str[:-1] + pid_ex)
+            logger.debug('Process with PID:' + pid_str[:-1] + pid_ex)
         except Exception as e:
-            print('No valid PID value' + str(e))
+            logger.debug('No valid PID value' + str(e))
 
             
         if(PID_EXIST == True):
@@ -88,12 +90,12 @@ def test_serial_lock_file(port, brutal = False):
             if(brutal == False):
                 return True
             else: # Lock file with "old" PID
-                print('Removing lock file, as it has a not existing PID')
+                logger.debug('Removing lock file, as it has a not existing PID')
                 os.remove(filename)
                 return False
         elif(PID_EXIST == None): # No valid PID value
             if(brutal):
-                print('Removing lock file, as it no valid PID')
+                logger.debug('Removing lock file, as it no valid PID')
                 os.remove(filename)
                 return False
             else:
@@ -109,24 +111,24 @@ def serial_lock_file(port,remove=False):
     """
     devicename = port.split('/')[-1]
     filename = '/var/lock/LCK..'+devicename
-    print('serial_lock_file(): filename:' + str(filename))
+    logger.debug('serial_lock_file(): filename:' + str(filename))
         
     if(remove == False):
         try:
             flock = open(filename,'w')
             lockstr = str(os.getpid()) + '\n'
-            print('Lockstr:' + lockstr)
+            logger.debug('Lockstr:' + lockstr)
             flock.write(lockstr)
             flock.close()
         except Exception as e:
-            print('serial_lock_file():' + str(e))
+            logger.debug('serial_lock_file():' + str(e))
     else:
         try:
-            print('serial_lock_file(): removing filename:' + str(filename))
+            logger.debug('serial_lock_file(): removing filename:' + str(filename))
             flock = open(filename,'r')
             line = flock.readline()
-            print('data',line)
+            logger.debug('data:' + str(line))
             flock.close()
             os.remove(filename)
         except Exception as e:
-            print('serial_lock_file():' + str(e))
+            logger.debug('serial_lock_file():' + str(e))

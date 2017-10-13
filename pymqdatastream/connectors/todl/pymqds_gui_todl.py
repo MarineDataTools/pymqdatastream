@@ -91,7 +91,7 @@ counter_test = 0
 
             
 # Serial baud rates
-baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
+baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,460800,576000,921600]
 
 
 class todlInfo(QtWidgets.QWidget):
@@ -820,10 +820,11 @@ class todlDevice():
         # IP source
         self.text_ip = QtWidgets.QLineEdit()
         # Hack, this should be removed later
-        self.text_ip.setText('192.168.236.18:28117')
+        #self.text_ip.setText('192.168.236.18:28117') # EMB DSL System, Port C
+        self.text_ip.setText('192.168.0.200:10002') # PCTD mobile system, Port L
         self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
         self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
-        #self.button_open_socket.clicked.connect(self.clicked_open_socket)
+        self.button_open_socket.clicked.connect(self.clicked_open_socket)
 
         # This function shows or hides the widgets needed for the choosen source
         self.combo_source.currentIndexChanged.connect(self.get_source)
@@ -1016,8 +1017,7 @@ class todlDevice():
 
 
     def clicked_open_socket(self):
-        """
-        Opens a 
+        """ Opens a TCP/IP socket
         """
         print('Open!')
         funcname = 'clicked_open_socket()'
@@ -1045,13 +1045,15 @@ class todlDevice():
                         print('No device found!')
                         return
 
-                if(True):
+                return
+                # Sending configuration
+                if(False):
                     #self.todl.
                     self.todl.send_serial_data('stop\n')
                     time.sleep(0.1)                                                
                     self.todl.send_serial_data('stop\n')
                     time.sleep(0.2)                            
-                    self.todl.send_serial_data('freq 200\n')
+                    #self.todl.send_serial_data('freq 200\n')
                     #self.todl.send_serial_data('freq 333\n')
                     time.sleep(0.2)                            
                     if(self.todl.query_todllogger() == True):
@@ -1061,6 +1063,7 @@ class todlDevice():
                         self.todl.send_serial_data('start\n')
 
 
+                # Start converting data
                 if(True):            
                     time.sleep(.5)
                     self.todl.add_raw_data_stream()
