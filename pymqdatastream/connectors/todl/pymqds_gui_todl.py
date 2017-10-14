@@ -1252,7 +1252,7 @@ class todlDevice():
     def _IMU_table_setup(self):
         accname = ['x','y','z']
         self._IMU_table.setColumnCount(2)
-        self._IMU_table.setRowCount(9)
+        self._IMU_table.setRowCount(12)
         self._IMU_table.verticalHeader().setVisible(False)
         self._IMU_table.setItem(0,
                                0, QtWidgets.QTableWidgetItem( ' Packet number' ))
@@ -1269,7 +1269,13 @@ class todlDevice():
         for i in range(0,3):
             adname='gyro ' + accname[i]
             self._IMU_table.setItem(i+6,
-                                0, QtWidgets.QTableWidgetItem( adname ))                    
+                                0, QtWidgets.QTableWidgetItem( adname ))
+
+
+        for i in range(0,3):
+            adname='mag ' + accname[i]
+            self._IMU_table.setItem(i+9,
+                                0, QtWidgets.QTableWidgetItem( adname ))                                
 
         self._IMU_table.setHorizontalHeaderLabels(['Name','IMU 0'])
         if(False):
@@ -1466,6 +1472,11 @@ class todlDevice():
                         tabdata = data['gyro'][i]
                         item = QtWidgets.QTableWidgetItem(str(tabdata))
                         self._IMU_table.setItem(i+6, 1, item )
+                    for i in range(3):
+                        tabdata = data['mag'][i]
+                        item = QtWidgets.QTableWidgetItem(str(tabdata))
+                        self._IMU_table.setItem(i+9, 1, item )
+                        
 
 
                 # Oxygen data            

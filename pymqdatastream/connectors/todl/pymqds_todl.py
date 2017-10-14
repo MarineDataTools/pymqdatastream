@@ -356,26 +356,27 @@ class todlnetCDF4File():
             dimname = 't_imu'
             imu_dim = imugrp.createDimension(dimname, None)
             self.imu_t    = imugrp.createVariable('t_imu', "f8", (dimname,))
+            self.imu_temp = imugrp.createVariable('temp', "f8", (dimname,))            
             self.imu_accx = imugrp.createVariable('accx', "f8", (dimname,))
             self.imu_accy = imugrp.createVariable('accy', "f8", (dimname,))
             self.imu_accz = imugrp.createVariable('accz', "f8", (dimname,))
             self.imu_gyrox = imugrp.createVariable('gyrox', "f8", (dimname,))
             self.imu_gyroy = imugrp.createVariable('gyroy', "f8", (dimname,))
             self.imu_gyroz = imugrp.createVariable('gyroz', "f8", (dimname,))
-            self.imu_magnx = imugrp.createVariable('magnx', "f8", (dimname,))
-            self.imu_magny = imugrp.createVariable('magny', "f8", (dimname,))
-            self.imu_magnz = imugrp.createVariable('magnz', "f8", (dimname,))
-
+            self.imu_magx = imugrp.createVariable('magx', "f8", (dimname,))
+            self.imu_magy = imugrp.createVariable('magy', "f8", (dimname,))
+            self.imu_magz = imugrp.createVariable('magz', "f8", (dimname,))
             self.imu_t_tmp     = []
+            self.imu_temp_tmp  = []            
             self.imu_accx_tmp  = []
             self.imu_accy_tmp  = []
             self.imu_accz_tmp  = []
             self.imu_gyrox_tmp = []
             self.imu_gyroy_tmp = []
             self.imu_gyroz_tmp = []
-            self.imu_magnx_tmp = []
-            self.imu_magny_tmp = []
-            self.imu_magnz_tmp = []
+            self.imu_magx_tmp = []
+            self.imu_magy_tmp = []
+            self.imu_magz_tmp = []
 
 
         # Or a Pyroscience Firesting?
@@ -418,7 +419,7 @@ class todlnetCDF4File():
             data_str += raw_data
             if(len(data_str) > 17):
                 print('len',len(data_str))                
-                [data_stream,data_packets,data_str] = data_packages.decode_format4(data_str,self.todl.device_info)
+                [data_packets,data_str] = data_packages.decode_format4(data_str,self.todl.device_info)
 
                 
             # Put the data into the netcdf
@@ -452,9 +453,9 @@ class todlnetCDF4File():
                     self.imu_gyrox[n+1] = data['gyro'][0]
                     self.imu_gyroy[n+1] = data['gyro'][1]
                     self.imu_gyroz[n+1] = data['gyro'][2]
-                    self.imu_magnx[n+1] = data['magn'][0]
-                    self.imu_magny[n+1] = data['magn'][1]
-                    self.imu_magnz[n+1] = data['magn'][2]
+                    self.imu_magx[n+1] = data['mag'][0]
+                    self.imu_magy[n+1] = data['mag'][1]
+                    self.imu_magz[n+1] = data['mag'][2]
 
 
 
@@ -494,7 +495,7 @@ class todlnetCDF4File():
             data_str += raw_data
             if(len(data_str) > 17):
                 print('len',len(data_str))
-                [data_stream,data_packets,data_str] = data_packages.decode_format4(data_str,self.todl.device_info)
+                [data_packets,data_str] = data_packages.decode_format4(data_str,self.todl.device_info)
                 err_packet = data_packets[-1]
                 num_good += err_packet['num_good']
                 num_err += err_packet['num_err']                
@@ -509,6 +510,7 @@ class todlnetCDF4File():
                     pass
 
                 if(data['type'] == 'L'): # ADC data
+                    print('L')
                     try:
                         ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
                         self.adc_tvars_tmp[ind].append(data['t'])
@@ -521,16 +523,18 @@ class todlnetCDF4File():
                         
                         
                 elif(data['type'] == 'A'): # IMU data
+                    print('a')
                     self.imu_t_tmp.append(data['t'])
+                    self.imu_temp_tmp.append(data['T'])                    
                     self.imu_accx_tmp.append(data['acc'][0])
                     self.imu_accy_tmp.append(data['acc'][1])
                     self.imu_accz_tmp.append(data['acc'][2])
                     self.imu_gyrox_tmp.append(data['gyro'][0])
                     self.imu_gyroy_tmp.append(data['gyro'][1])
                     self.imu_gyroz_tmp.append(data['gyro'][2])
-                    self.imu_magnx_tmp.append(data['magn'][0])
-                    self.imu_magny_tmp.append(data['magn'][1])
-                    self.imu_magnz_tmp.append(data['magn'][2])
+                    self.imu_magx_tmp.append(data['mag'][0])
+                    self.imu_magy_tmp.append(data['mag'][1])
+                    self.imu_magz_tmp.append(data['mag'][2])
 
 
                 elif(data['type'] == 'O'): # Pyro Firesting data
@@ -557,15 +561,16 @@ class todlnetCDF4File():
                 n = len(self.imu_t)
                 print(self.imu_accx_tmp[:])
                 self.imu_t[n:n+m]     = self.imu_t_tmp[:]
+                self.imu_temp[n:n+m]  = self.imu_temp_tmp[:]
                 self.imu_accx[n:n+m]  = self.imu_accx_tmp[:]
                 self.imu_accy[n:n+m]  = self.imu_accy_tmp[:]
                 self.imu_accz[n:n+m]  = self.imu_accz_tmp[:]
                 self.imu_gyrox[n:n+m] = self.imu_gyrox_tmp[:]
                 self.imu_gyroy[n:n+m] = self.imu_gyroy_tmp[:]
                 self.imu_gyroz[n:n+m] = self.imu_gyroz_tmp[:]
-                self.imu_magnx[n:n+m] = self.imu_magnx_tmp[:]
-                self.imu_magny[n:n+m] = self.imu_magny_tmp[:]
-                self.imu_magnz[n:n+m] = self.imu_magnz_tmp[:]
+                self.imu_magx[n:n+m] = self.imu_magx_tmp[:]
+                self.imu_magy[n:n+m] = self.imu_magy_tmp[:]
+                self.imu_magz[n:n+m] = self.imu_magz_tmp[:]
 
             if(self.todl.device_info['pyro_freq'] > 0):
                 m = len(self.pyro_t_tmp)                
@@ -1802,11 +1807,12 @@ default to None, only with a valid argument that setting will be sent to the dev
             # Push the read data
             ti = time.time()
 
-            # Sorted the data and put into lists for datastream
+            # Sort the data and put into lists for datastream
             # distribution as well as frequency calculations
             for data_packet in data_packets:
                 if(data_packet['type'] == 'L'): # LTC2442 packet
-                    data_stream[data_packet['ch']].append(data_packet['V'])                
+                    data_list = [data_packet['num'],data_packet['t']] + data_packet['V']
+                    data_stream[data_packet['ch']].append(data_list)
                     # Packet for frequency calculation
                     if(Lpacket_t_ind < len_t_array):
                         Lpacket_t[Lpacket_t_ind,0] = ts
@@ -1814,9 +1820,9 @@ default to None, only with a valid argument that setting will be sent to the dev
                         Lpacket_t_ind += 1
 
                 elif(data_packet['type'] == 'A'): # IMU packet
-                    #data_packet['magn']
+                    #data_packet['mag']
                     aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
-                elif(data_packet['type'] == 'U3'): # Firesting packet         
+                elif(data_packet['type'] == 'O'): # Firesting packet         
                     aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
 
 
@@ -1846,6 +1852,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                 if(len(data_stream[i])>0):
                     self.channel_streams[i].pub_data(data_stream[i])
 
+            # These are the aux streams (IMU stream [0], firesting stream [1], TODO, unify!)
             for i in range(len(self.aux_streams)):
                 if(len(aux_data_stream[i])>0):
                     self.aux_streams[i].pub_data(aux_data_stream[i])
@@ -1914,39 +1921,44 @@ default to None, only with a valid argument that setting will be sent to the dev
         ad0_converted = 0
         data_str = b''
         cnt = 0
-        
         cto = 0 # Get frequency (hack)
         ct = cto
         while True:
             cnt += 1
-            # logger.debug(funcname + ': converted: ' + str(ad0_converted))
-            # Create an empty list for every channel
-            # http://stackoverflow.com/questions/8713620/appending-items-to-a-list-of-lists-in-python
+            aux_data_stream = [[],[]]
+            nstreams = (max(self.device_info['channel_seq']) + 1)            
+            data_stream = [[] for _ in range(nstreams) ]
             ta = []
             time.sleep(dt)
             ta.append(time.time())
             while(len(deque) > 0):
                 data = deque.pop()
                 data_str += data
-                # Get commands first
-                # 
-                #for i,me in enumerate(re.finditer(b'[><][><][><].*\n',data_str)):
-                #    print('COMMAND!',i)
-                #    print(me)
-                #    print(me.group(0))
-                #    print(me.span(0))
-                #    self.commands.append(me.group(0))
-
-            #print('data_str')
-            #print(data_str)
-            #print(type(data_str))
-            #print('Hallo!!! ENDE')
 
             if(len(data_str) > 17):
                 ta.append( time.time() )
-                print('len',len(data_str))                
-                [data_stream,data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
+                #print('len',len(data_str))                
+                [data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
                 self.packets_converted += len(data_packets)
+
+                # Sort the data and put into lists for datastream
+                # distribution as well as frequency calculations
+                for data_packet in data_packets:
+                    if(data_packet['type'] == 'L'): # LTC2442 packet
+                        data_list = [data_packet['num'],data_packet['t']] + data_packet['V']
+                        data_stream[data_packet['ch']].append(data_list)
+                        # Packet for frequency calculation
+                        #if(Lpacket_t_ind < len_t_array):
+                        #    Lpacket_t[Lpacket_t_ind,0] = ts
+                        #    Lpacket_t[Lpacket_t_ind,1] = data_packet['t']
+                        #    Lpacket_t_ind += 1
+
+                    elif(data_packet['type'] == 'A'): # IMU packet
+                        aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
+                    elif(data_packet['type'] == 'O'): # Firesting packet         
+                        aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
+
+                    
                 if(False):
                     if(len(data_packets) >=2):
                         ct = data_packets[1]['t']
@@ -1956,15 +1968,20 @@ default to None, only with a valid argument that setting will be sent to the dev
                         print(ftt)                    
 
 
-                ta.append( time.time() )                    
+                ta.append( time.time() )
+
+                # This data is first put into the local intraque for data distribution (mainly the gui up to now)
+                for data_packet in data_packets:
+                    self.intraqueue.appendleft(data_packet)
                 # Lets publish the converted data!
                 for i in range(len(self.channel_streams)):
                     if(len(data_stream[i])>0):
                         self.channel_streams[i].pub_data(data_stream[i])
-                        # Put a different format into the intraqueue,
-                        # since the channels are seperate datastreams
-                        # TODO, this is only the last, have to create a list!
-                        self.intraqueue.appendleft(data_packets[-1])
+
+                # These are the aux streams (IMU stream [0], firesting stream [1], TODO, unify!)
+                for i in range(len(self.aux_streams)):
+                    if(len(aux_data_stream[i])>0):
+                        self.aux_streams[i].pub_data(aux_data_stream[i])                        
 
 
                 ta.append(time.time())
@@ -2009,7 +2026,7 @@ def todlraw_to_netCDF():
     print(rawfile,ncfile)
 
     ncconv = todlnetCDF4File(rawfile)
-    ncconv.to_ncfile(ncfile)
+    ncconv.to_ncfile_fast(ncfile)
     ncconv.close()
     print('Done')
     

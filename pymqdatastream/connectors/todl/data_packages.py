@@ -64,16 +64,16 @@ def decode_format31(data_str_split,device_info):
                     gyrox = float(data_split[7])
                     gyroy = float(data_split[8])
                     gyroz = float(data_split[9])
-                    magnx = float(data_split[10])
-                    magny = float(data_split[11])
-                    magnz = float(data_split[12])                                                                
+                    magx = float(data_split[10])
+                    magy = float(data_split[11])
+                    magz = float(data_split[12])                                                                
                     #aux_data_stream[0].append([packet_num,packet_time,T,accx,accy,accz,gyrox,gyroy,gyroz])
                     data_packet = {'num':packet_num,'t':packet_time}
                     data_packet['type'] = 'A'
                     data_packet['T'] = T
                     data_packet['acc'] = [accx,accy,accz]
                     data_packet['gyro'] = [gyrox,gyroy,gyroz]
-                    data_packet['magn'] = [magnx,magny,magnz]                                
+                    data_packet['mag'] = [magx,magy,magz]                                
                     data_packets.append(data_packet)
 
                 # Status
@@ -173,7 +173,7 @@ def decode_format4(data_str,device_info):
     data_packets = []
     ind_ltcs = [0,0,0,0,0,0,0,0]
     nstreams = (max(device_info['channel_seq']) + 1)
-    data_stream = [[] for _ in range(nstreams) ]    
+    #data_stream = [[] for _ in range(nstreams) ]    
     data_split = data_str.split(b'\x00') # Packets are separated by 0x00
     err_packet = 0
     cobs_err_packet = 0
@@ -260,7 +260,7 @@ def decode_format4(data_str,device_info):
                                     data_list.append(conv)
                                 #else:
                                 #    data_packet.append(9999.99)
-                            data_stream[channel].append(data_list)
+                            #data_stream[channel].append(data_list)
                             data_packets.append(data_packet)
                             good_packet += 1
                         else:
@@ -270,9 +270,65 @@ def decode_format4(data_str,device_info):
                             ind_bad.append(ind_bad0)
                             #print('data_cobs:',data_cobs)
                             #print('data_decobs:',data_decobs)
+
+                    elif(packet_ident == 0x53): # Status string packet 'S'
+                        data_utf8       = data_decobs.decode(encoding='utf-8')
+                        data_split = data_utf8.split(';')                        
+                        data_packet = {'type':'Stat'}
+                        tstr = data_split[1]
+                        data_packet['date']   = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
+                        data_packet['date_str']   = tstr
+                        data_packet['format'] = int(data_split[2].split(':')[1])
+                        data_packet['t']      = float(data_split[3])/device_info['counterfreq']
+                        data_packet['t32']    = int(data_split[4])
+                        data_packet['start']  = int(data_split[5].split(':')[1])
+                        data_packet['show']   = int(data_split[6].split(':')[1])
+                        data_packet['log']    = int(data_split[7].split(':')[1])
+                        data_packet['sd']     = int(data_split[8].split(':')[1])
+                        if(len(data_split[9]) > 1):
+                            data_packet['filename'] = data_split[9]
+                        else:
+                            data_packet['filename'] = None
+
+                            #print('Status!',data_packet)
+                        data_packets.append(data_packet)                        
                             
-                    elif(packet_ident == 0xae): # ACC
-                        pass
+                    elif(packet_ident == 0xac): # ACC IMU packet
+                        if(len(data_decobs) > 12):
+                            ind = 1                            
+                            packet_num_bin  = data_decobs[ind:ind+5]
+                            packet_num      = int(packet_num_bin.hex(), 16) # python3, its unsigned, TODO check how to do that
+                            ind += 5
+                            packet_time_bin = data_decobs[ind:ind+5]
+                            packet_time     = int(packet_time_bin.hex(), 16)/device_info['counterfreq']
+                            ind += 5
+                            accx = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                            ind += 2
+                            accy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                            ind += 2
+                            accz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                            ind += 2
+                            T    = int(data_decobs[ind:ind+2].hex(),16)
+                            T    = T / 333.87 + 21.0
+                            ind += 2                            
+                            gyrox = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            gyroy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            gyroz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            magx = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            magy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            magz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)                            
+                            data_packet = {'num':packet_num,'t':packet_time}
+                            data_packet['type'] = 'A'
+                            data_packet['T'] = T
+                            data_packet['acc'] = [accx,accy,accz]
+                            data_packet['gyro'] = [gyrox,gyroy,gyroz]
+                            data_packet['mag'] = [magx,magy,magz]
+                            data_packets.append(data_packet)        
                     elif(packet_ident == 0xf0): # Pyroscience firesting
                         #\xf0\x00\x00\x00\x01Y\x00\x00\x08\x8f\x03RMR1 3 0 13 2 153908 -867323 -634011 -305757 -300000 -300000 482 16785 -1 -1 0 -62587\r
                         if(len(data_decobs) > 12):
@@ -294,7 +350,7 @@ def decode_format4(data_str,device_info):
                                     data_packet['type'] = 'O'                                
                                     data_packet['phi']  = data_dphi 
                                     data_packet['umol'] = data_umol
-                                    data_packets.append(data_packet)             
+                                    data_packets.append(data_packet)
 
             #except cobs.DecodeError:
             #    logger.debug(funcname + ': COBS DecodeError')
@@ -306,7 +362,7 @@ def decode_format4(data_str,device_info):
 
     packet_err = {'type':'format4_log','num_err':err_packet,'num_cobs_err':cobs_err_packet,'num_good':good_packet,'ind_bad':ind_bad}
     data_packets.append(packet_err)
-    return [data_stream,data_packets,data_str]
+    return [data_packets,data_str]
 
 
 
