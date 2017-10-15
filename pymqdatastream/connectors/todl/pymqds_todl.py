@@ -481,8 +481,8 @@ class todlnetCDF4File():
         cnt = 0
         data_str = b''
         tmpcnt = 1
-        #while(True):
-        while(tmpcnt):
+        #while(tmpcnt):        
+        while(True):
             tmpcnt -= 1
             raw_data = self.todl.data_file.read(num_bytes)
             bytes_read += len(raw_data)
