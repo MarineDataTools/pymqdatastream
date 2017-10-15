@@ -1,8 +1,16 @@
 #device=/dev/mmcblk0
-device=/dev/sda
-P=/home/holterma/peter.owncloud.holtermann.online/Documents/electronic/sam4log/todlfs/data
+#device=/dev/sda
+device=$1
+P=$2
+
+if [ "$1" == "-h" ]; then
+  echo "Usage: `read_todlfs.sh` device output_file"
+  exit 0
+fi
+
+
 DATE=`date +%Y-%m-%d:%H:%M:%S`
-filename=$P/todl_data_${DATE}.todl
+filename=$P
 echo "Reading data from $device into $filename"
 dd if=$device of=$filename bs=512 count=1;
 

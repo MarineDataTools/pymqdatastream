@@ -29,6 +29,7 @@ if sys.version_info >= (3,4):
                      'pymqdatastream/connectors/test/pymqds_test.py',\
                      'pymqdatastream/connectors/nmea/pymqds_NMEA0183.py',\
                      'pymqdatastream/connectors/logger/pymqds_slogger.py',\
+                     'pymqdatastream/connectors/todl/todlfs/todlfs_read_device.sh',\
                      'pymqdatastream/connectors/logger/pymqds_gui_slogger.py'],
           entry_points={ 'console_scripts': ['NMEA0183grabber=pymqdatastream.connectors.nmea.NMEA0183grabber:main',\
           'pymqds_query=pymqdatastream:query',\
@@ -41,6 +42,8 @@ if sys.version_info >= (3,4):
           'todl=pymqdatastream.connectors.todl.pymqds_todl:main',\
           'todl_gui=pymqdatastream.connectors.todl.pymqds_gui_todl:main',\
           'todl_rawtonc=pymqdatastream.connectors.todl.pymqds_todl:todlraw_to_netCDF',\
+          'todl_quickview=pymqdatastream.connectors.todl.todlfs.todl_quickview:main',\
+          'todlfs_get_files=pymqdatastream.connectors.todl.todlfs.todlfs_get_files:main',\
           'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
           package_data = {'microrider':['data/*.DAT'],'':['VERSION'],'todl_gui':['connectors/todl/todl_config.yaml']},
           zip_safe=False)

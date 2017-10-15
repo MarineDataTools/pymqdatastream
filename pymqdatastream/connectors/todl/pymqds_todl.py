@@ -350,7 +350,8 @@ class todlnetCDF4File():
                     self.adc_vars_tmp[nch].append([])
 
         # Check if we have an IMU
-        if(self.todl.device_info['imu_freq'] > 0):
+        #if(self.todl.device_info['imu_freq'] > 0):
+        if True:
             self.logger.debug(funcname + ': Creating imu group')
             imugrp     = rootgrp.createGroup('imu')
             dimname = 't_imu'
@@ -510,7 +511,6 @@ class todlnetCDF4File():
                     pass
 
                 if(data['type'] == 'L'): # ADC data
-                    print('L')
                     try:
                         ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
                         self.adc_tvars_tmp[ind].append(data['t'])
@@ -523,7 +523,6 @@ class todlnetCDF4File():
                         
                         
                 elif(data['type'] == 'A'): # IMU data
-                    print('a')
                     self.imu_t_tmp.append(data['t'])
                     self.imu_temp_tmp.append(data['T'])                    
                     self.imu_accx_tmp.append(data['acc'][0])
