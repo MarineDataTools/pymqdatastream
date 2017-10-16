@@ -219,7 +219,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         return stream
         
             
-    def set_plotting_mode(self,mode='cont',xl=None):
+    def set_plotting_mode(self,mode='cont',xl=None,yl=None):
         """
         Defines the plotting modes
         Args:
@@ -227,6 +227,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             xl: Xlimit
         """
         logger.debug('set_plotting_mode()')
+        self.pyqtgraph['yl'] = yl
         # Check if we have the long version of mode, if yes get index and use short version
         for i,m in enumerate(self.pyqtgraph['modes']):
             if(m == mode):
@@ -782,6 +783,10 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
                                     xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
                                     yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
+                                    # If we have a yrange
+                                    if(not self.Datastream.pyqtgraph['yl'] == None ):
+                                        self.pyqtgraph_axes.setYRange(self.Datastream.pyqtgraph['yl'][0],
+                                                                      self.Datastream.pyqtgraph['yl'][1])
 
                                     # Test for continous mode
                                     if(self.Datastream.pyqtgraph['mode'] == 'cont'):

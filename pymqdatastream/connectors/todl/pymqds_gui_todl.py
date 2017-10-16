@@ -526,14 +526,14 @@ def _start_pymqds_plotxy_test(graphs):
         for dstream in streams:
             addr = dstream['address']
             stream = datastream.subscribe_stream(addr)
-            print('HAllo,stream'+ str(stream))
+            print('Hallo,stream'+ str(stream))
             if(stream == None): # Could not subscribe
                 logger.warning("_start_pymqds_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
                 return False
 
             datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = dstream['ind_x'], ind_y = dstream['ind_y'], plot_nth_point = dstream['nth_point'])
             datastream.plot_datastream(True)
-            datastream.set_plotting_mode(mode='cont')        
+            datastream.set_plotting_mode(mode='cont',yl=dstream['yl'])
             datastreams.append(datastream)
 
             if(False):
@@ -820,8 +820,8 @@ class todlDevice():
         # IP source
         self.text_ip = QtWidgets.QLineEdit()
         # Hack, this should be removed later
-        #self.text_ip.setText('192.168.236.18:28117') # EMB DSL System, Port C
-        self.text_ip.setText('192.168.0.200:10002') # PCTD mobile system, Port L
+        self.text_ip.setText('192.168.236.18:28117') # EMB DSL System, Port C
+        #self.text_ip.setText('192.168.0.200:10002') # PCTD mobile system, Port L
         self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
         self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
         self.button_open_socket.clicked.connect(self.clicked_open_socket)
@@ -1045,9 +1045,8 @@ class todlDevice():
                         print('No device found!')
                         return
 
-                return
                 # Sending configuration
-                if(False):
+                if(True):
                     #self.todl.
                     self.todl.send_serial_data('stop\n')
                     time.sleep(0.1)                                                
@@ -1566,6 +1565,8 @@ class todlDevice():
             if(stream.get_family() == "todl adc"):
                 addresses.append(self.todl.get_stream_address(stream))
                 dstream = {}
+                #dstream['yl'] = [-.1, 5.0]
+                dstream['yl'] = None
                 dstream['address'] = addresses[-1]
                 dstream['ind_x'] = 1
                 dstream['ind_y'] = 2
@@ -1575,7 +1576,9 @@ class todlDevice():
             if(stream.get_family() == "todl IMU"):
                 addresses.append(self.todl.get_stream_address(stream))
                 for i in range(3):
-                    dstream = {}                
+                    dstream = {}
+                    #dstream['yl'] = [-1.2,1.2]
+                    dstream['yl'] = None
                     dstream['address'] = addresses[-1]
                     dstream['ind_x'] = 1
                     dstream['ind_y'] = 3 + iIMU
@@ -1585,7 +1588,8 @@ class todlDevice():
                     
             if(stream.get_family() == "todl O2"):
                 addresses.append(self.todl.get_stream_address(stream))
-                dstream = {}                
+                dstream = {}
+                dstream['yl'] = None                
                 dstream['address'] = addresses[-1]
                 dstream['ind_x'] = 1
                 dstream['ind_y'] = 2
@@ -1593,9 +1597,9 @@ class todlDevice():
                 dstreams_O2.append(dstream)
                 
         if(plot_IMU):
-            graphs = [[dstreams_IMU[0]],[dstreams_IMU[1]],[dstreams_IMU[2]]]            
+            graphs = [[dstreams_IMU[0]],[dstreams_IMU[1]],[dstreams_IMU[2]]]
         else:
-            graphs = [[dstreams[0]],[dstreams[1]],dstreams_O2]            
+            graphs = [[dstreams[0]],[dstreams[1]],dstreams_O2]
             
         self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy_test,args=(graphs,))
         self._plotxyprocess.start()        
