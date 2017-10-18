@@ -531,9 +531,15 @@ def _start_pymqds_plotxy_test(graphs):
                 logger.warning("_start_pymqds_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
                 return False
 
-            datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = dstream['ind_x'], ind_y = dstream['ind_y'], plot_nth_point = dstream['nth_point'])
+            datastream.set_stream_settings(stream, bufsize = 50000, plot_data = True, ind_x = dstream['ind_x'], ind_y = dstream['ind_y'], plot_nth_point = dstream['nth_point'])
             datastream.plot_datastream(True)
-            datastream.set_plotting_mode(mode='cont',ymode=dstream['ymode'],yl=dstream['yl'])
+            try:
+                yl_valid = dstream['yl_valid']
+            except:
+                yl_valid = None
+
+            
+            datastream.set_plotting_mode(mode='cont',ymode=dstream['ymode'],yl=dstream['yl'],yl_valid=yl_valid)
             datastreams.append(datastream)
 
             if(False):
@@ -1087,7 +1093,9 @@ class todlDevice():
         Opens a datafile
         """
         logger.debug('Open file')
-        fname = QtWidgets.QFileDialog.getOpenFileName(self.setup_widget, 'Select file','', "Turbulent Ocean Data Logger [todl] (*.todl);; CSV (*.csv);; All files (*)");
+        fformat = "Turbulent Ocean Data Logger [todl] (*.todl);; CSV (*.csv);; All files (*)"        
+            
+        fname = QtWidgets.QFileDialog.getOpenFileName(self.setup_widget, 'Select file','', fformat);
         print(fname)
         if(len(fname[0]) > 0):
             if(isinstance(fname, str)):
@@ -1563,14 +1571,14 @@ class todlDevice():
         for stream in self.todl.Streams:
             print(stream.get_family())
 
-
             if(stream.get_family() == "todl adc"):
                 addresses.append(self.todl.get_stream_address(stream))
-                dstream = {}                
-                dstream['ymode'] = None                
+                dstream = {}     
+                dstream['ymode'] = None
                 #dstream['yl'] = [-.1, 5.0]
                 dstream['ymode'] = 'ra' # Running average
                 dstream['yl'] = None
+                dstream['yl_valid'] = [0,4.1]
                 dstream['address'] = addresses[-1]
                 dstream['ind_x'] = 1
                 dstream['ind_y'] = 2
@@ -1625,7 +1633,13 @@ class todlDevice():
         if(t == self._recording_status[0]):
             print('Record')
             #self._show_data_widget
-            fname = QtWidgets.QFileDialog.getSaveFileName(self._show_data_widget, 'Select file','', "CSV (*.csv);; All files (*)");
+            # Suggest the right file format
+            if(self.todl.device_info['format'] == 4):
+                fformat = "COBS Binary (*.todl);; All files (*)"
+            else:
+                fformat = "CSV (*.csv);; All files (*)"
+
+            fname = QtWidgets.QFileDialog.getSaveFileName(self._show_data_widget, 'Select file','', fformat)
             if(len(fname[0]) > 0):
                 print(fname)
                 filename = ntpath.basename(fname[0])

@@ -37,21 +37,41 @@ def main():
     nc = netCDF4.Dataset(fname)
     nca = nc.groups['adc']
     t_ch1 = nca.variables['t_ch1'][:]
+    t_ch2 = nca.variables['t_ch2'][:]
+    f1 = 1/(np.diff(t_ch1).mean())
+    f2 = 1/(np.diff(t_ch2).mean())    
     V_ch1 = nca.variables['V_adc0_ch1']
     V_ch2 = nca.variables['V_adc0_ch2']
+
+
+    ncp = nc.groups['pyro']
+    t_p = ncp.variables['t_pyro']
+    fp = 1/(np.diff(t_p).mean())    
+    phi = ncp.variables['phi']    
 
     pl.figure(1)
     pl.clf()
     pl.subplot(2,1,1)
     pl.plot(t_ch1,V_ch1)
-    pl.title('V_adc0_ch1')
+    pl.title('V_adc0_ch1; Freq:' + str(f1.round(2)))
     pl.xlabel('t [s]')
     pl.ylabel('U [V]')
 
     pl.subplot(2,1,2)
-    pl.plot(t_ch1,V_ch2)
-    pl.title('V_adc0_ch2')
+    pl.plot(t_ch2,V_ch2)
+    pl.title('V_adc0_ch2; Freq:' + str(f2.round(2)))
     pl.xlabel('t [s]')
     pl.ylabel('U [V]')    
     pl.draw()
+
+
+    
+    pl.figure(2)
+    pl.clf()
+    pl.plot(t_p,phi)
+    pl.title('Firesting data; Freq:' + str(fp.round(2)))
+    pl.draw()
+
+
+
     pl.show()

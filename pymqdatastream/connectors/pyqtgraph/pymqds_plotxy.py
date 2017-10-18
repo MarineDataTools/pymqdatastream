@@ -219,15 +219,17 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         return stream
         
             
-    def set_plotting_mode(self,mode='cont',ymode=None, xl=None, yl=None):
+    def set_plotting_mode(self,mode='cont',ymode=None, xl=None, yl=None,yl_valid=None):
         """ Defines the plotting modes
         Args:
             mode: The plotting modes ("cont": Continous, "xl": xlimit; plots the last data within the xlimits, "xr": Plots until xl is reached, then plot is cleared and started again)
             xl: Xlimit
+            yl_valid: The range of valid data, all other data is shown but rejected for e.g. average calculation
         """
         logger.debug('set_plotting_mode()')
         self.pyqtgraph['ymode'] = None
         self.pyqtgraph['yl'] = yl
+        self.pyqtgraph['yl_valid'] = yl_valid
         # Check if we have the long version of mode, if yes get index and use short version
         for i,m in enumerate(self.pyqtgraph['modes']):
             if(m == mode):
@@ -799,9 +801,18 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
                                     xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
                                     yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
+                                    # Y valid data
+                                    # TODO X valid data
+                                    try:
+                                        ydv = np.asarray(yd)
+                                        ind_valid = (ydv > self.Datastream.pyqtgraph['yl_valid'][0]) & (ydv < self.Datastream.pyqtgraph['yl_valid'][1])
+                                        ydv = ydv[ind_valid]
+                                    except Exception as e:
+                                        ydv = yd
+                                        
                                     if self.Datastream.pyqtgraph['ymode'] == 'ra': # Check for running average
-                                        ylm = yd.mean()
-                                        ylstd = yd.std()
+                                        ylm = ydv.mean()
+                                        ylstd = ydv.std()
                                         yl0 = ylm - 2 * ylstd
                                         yl1 = ylm + 2 * ylstd
                                         self.pyqtgraph_axes.setYRange(yl0,yl1)                                    
@@ -810,7 +821,6 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                         self.pyqtgraph_axes.setYRange(self.Datastream.pyqtgraph['yl'][0],
                                                                       self.Datastream.pyqtgraph['yl'][1])
                                     
-                                        
                                         
 
                                     # Test for continous mode
