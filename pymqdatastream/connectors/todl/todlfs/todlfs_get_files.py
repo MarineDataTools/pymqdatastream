@@ -34,7 +34,8 @@ def main():
     desc = 'Splits a todlfs dump into the individual files. Example usage: ' + usage_str
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('todlfs', help= 'The filename of the todlfs file')
-    parser.add_argument('data_folder',help='The folder in which the splitted files will be saved')    
+    parser.add_argument('data_folder',help='The folder in which the splitted files will be saved')
+    parser.add_argument('deployment',help='The name of the deployment')        
     parser.add_argument('--verbose', '-v', action='count')
 
     args = parser.parse_args()
@@ -42,8 +43,8 @@ def main():
     if len(sys.argv)==1:
         parser.print_help()
         sys.exit(1)
-
-
+        
+    todl_fname = args.deployment
     todl_data_full  = args.todlfs
     todl_data_split = args.data_folder
 

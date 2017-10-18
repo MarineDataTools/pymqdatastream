@@ -1173,7 +1173,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         """ Sets the time of the TODL
         """
         funcname = self.__class__.__name__ + '.set_time()'
-        timeset = timeset + datetime.timedelta(milliseconds=1000) # Add 0.1 seconds because of the stop command
+        timeset = timeset + datetime.timedelta(milliseconds=1500) # Add 0.1 seconds because of the stop command
         tstr = timeset.strftime('%Y-%m-%d %H:%M:%S')
         print('setting time to:' + tstr)
         cmd = 'set time ' + tstr

@@ -503,7 +503,7 @@ def _start_pymqds_plotxy(addresses):
     plotxywindow.show()
     sys.exit(app.exec_())    
     logger.debug("_start_pymqds_plotxy(): done")
-
+    return plotxywindow
 
 
 
@@ -533,7 +533,7 @@ def _start_pymqds_plotxy_test(graphs):
 
             datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = dstream['ind_x'], ind_y = dstream['ind_y'], plot_nth_point = dstream['nth_point'])
             datastream.plot_datastream(True)
-            datastream.set_plotting_mode(mode='cont',yl=dstream['yl'])
+            datastream.set_plotting_mode(mode='cont',ymode=dstream['ymode'],yl=dstream['yl'])
             datastreams.append(datastream)
 
             if(False):
@@ -555,7 +555,7 @@ def _start_pymqds_plotxy_test(graphs):
     plotxywindow.show()
     sys.exit(app.exec_())    
     logger.debug("_start_pymqds_plotxy(): done")
-
+    return plotxywindow
 
 
 #
@@ -789,7 +789,7 @@ class todlDevice():
         for b in baud:
             self.combo_baud.addItem(str(b))
 
-        self.combo_baud.setCurrentIndex(len(baud)-1)
+        self.combo_baud.setCurrentIndex(len(baud)-3)
         
         self.setup_close_bu = QtWidgets.QPushButton('Close')
         self.setup_close_bu.clicked.connect(w.close)
@@ -1562,10 +1562,14 @@ class todlDevice():
         iIMU = 0
         for stream in self.todl.Streams:
             print(stream.get_family())
+
+
             if(stream.get_family() == "todl adc"):
                 addresses.append(self.todl.get_stream_address(stream))
-                dstream = {}
+                dstream = {}                
+                dstream['ymode'] = None                
                 #dstream['yl'] = [-.1, 5.0]
+                dstream['ymode'] = 'ra' # Running average
                 dstream['yl'] = None
                 dstream['address'] = addresses[-1]
                 dstream['ind_x'] = 1
@@ -1577,6 +1581,7 @@ class todlDevice():
                 addresses.append(self.todl.get_stream_address(stream))
                 for i in range(3):
                     dstream = {}
+                    dstream['ymode'] = None                                    
                     #dstream['yl'] = [-1.2,1.2]
                     dstream['yl'] = None
                     dstream['address'] = addresses[-1]
@@ -1589,6 +1594,7 @@ class todlDevice():
             if(stream.get_family() == "todl O2"):
                 addresses.append(self.todl.get_stream_address(stream))
                 dstream = {}
+                dstream['ymode'] = None
                 dstream['yl'] = None                
                 dstream['address'] = addresses[-1]
                 dstream['ind_x'] = 1
@@ -1602,7 +1608,8 @@ class todlDevice():
             graphs = [[dstreams[0]],[dstreams[1]],dstreams_O2]
             
         self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy_test,args=(graphs,))
-        self._plotxyprocess.start()        
+        self._plotxyprocess.daemon = True
+        self._plotxyprocess.start()
 
         
     def _record_clicked(self):
@@ -1681,6 +1688,11 @@ class todlDevice():
 
         self.disp_widget.close()
         self.setup_widget.close() # Closing the TODL setup widget
+
+        try:
+            self._plotxyprocess.stop()
+        except:
+            pass
 
         
     def device_changed(self,fname):

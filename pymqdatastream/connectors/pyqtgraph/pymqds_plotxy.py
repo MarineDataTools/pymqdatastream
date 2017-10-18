@@ -43,8 +43,8 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         self.line_colors = [QtGui.QColor(255,0,0),QtGui.QColor(0,255,0),QtGui.QColor(0,0,255),QtGui.QColor(255,0,255)]
         self.color_ind = 0
         self.pyqtgraph = {}        
-        self.pyqtgraph['modes']           = ['continous','xlim','xreset']
-        self.pyqtgraph['modes_short']     = ['cont','xl','xr']        
+        self.pyqtgraph['modes']           = ['continous','xlim','xreset','running mean']
+        self.pyqtgraph['modes_short']     = ['cont','xl','xr','ra']
         self.pyqtgraph['plot_datastream'] = False
         self.pyqtgraph['flag_change']     = False        
         # Define the plotting mode
@@ -219,14 +219,14 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         return stream
         
             
-    def set_plotting_mode(self,mode='cont',xl=None,yl=None):
-        """
-        Defines the plotting modes
+    def set_plotting_mode(self,mode='cont',ymode=None, xl=None, yl=None):
+        """ Defines the plotting modes
         Args:
             mode: The plotting modes ("cont": Continous, "xl": xlimit; plots the last data within the xlimits, "xr": Plots until xl is reached, then plot is cleared and started again)
             xl: Xlimit
         """
         logger.debug('set_plotting_mode()')
+        self.pyqtgraph['ymode'] = None
         self.pyqtgraph['yl'] = yl
         # Check if we have the long version of mode, if yes get index and use short version
         for i,m in enumerate(self.pyqtgraph['modes']):
@@ -234,19 +234,25 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
                 logger.debug('Long to short mode string ' + m)
                 mode = self.pyqtgraph['modes_short'][i]
                 break
+
+
+        for i,m in enumerate(self.pyqtgraph['modes']):
+            if(m == ymode):
+                logger.debug('Long to short y-mode string ' + m)
+                ymode = self.pyqtgraph['modes_short'][i]
+                break            
+            
         # cont mode
         if(mode == self.pyqtgraph['modes_short'][0]):
             logger.debug('Constant mode')
             self.pyqtgraph['mode'] = mode
             self.pyqtgraph['autorange'] = True
             self.pyqtgraph['xrs'] = None            
-            return
         # xlim mode
         elif(mode == self.pyqtgraph['modes_short'][1]):
             logger.debug('Xlim mode')            
             if(xl == None):
                 logger.warning('Specify xl for the "xl" mode, doing nothing now')
-                return
             else:
                 self.pyqtgraph['mode'] = mode
                 self.pyqtgraph['xl'] = xl
@@ -257,14 +263,15 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             logger.debug('xr mode')                        
             if(xl == None):
                 logger.warning('Specify xl for the "xr" mode, doing nothing now')
-                return
             else:
                 self.pyqtgraph['mode'] = mode
                 self.pyqtgraph['xl'] = xl
                 self.pyqtgraph['autorange'] = True                
                 self.pyqtgraph['xrs'] = None
                 
-            
+        if(ymode == 'ra'): # Running average
+            self.pyqtgraph['ymode'] = 'ra'
+            pass
 
 
 def setup_stream_pyqtgraph(stream):
@@ -302,6 +309,11 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         self.combo_plotmode.addItems(self.Datastream.get_plot_modes())
         self.combo_plotmode.currentIndexChanged.connect(self._set_combo_mode)
         xll = QtWidgets.QLabel('X Limit')
+
+        self.combo_ylimmode = QtWidgets.QComboBox(self)
+        self.combo_ylimmode.addItems(self.Datastream.get_plot_modes())
+        self.combo_ylimmode.currentIndexChanged.connect(self._set_combo_mode)
+        yll = QtWidgets.QLabel('Y Limit')        
         self.lined_xlim = QtWidgets.QLineEdit(self)
         self.lined_xlim.setEnabled(False)
         self.lined_xlim.returnPressed.connect(self._set_xlim)
@@ -312,6 +324,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         self.layout_options.addWidget(xll)
         self.layout_options.addWidget(self.lined_xlim)
         self.layout_options.addWidget(self.label_xlunit)
+        self.layout_options.addWidget(self.combo_ylimmode)
 
         
         layout_widget = QtWidgets.QWidget()
@@ -337,17 +350,20 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         self.update_button_plot_stream(self.button_plot)
         #.pyqtgraph['ind_x']
 
+        
     def _set_combo_mode(self):
         """
         """
         print('Hallo setting to mode:',self.combo_plotmode.currentText())
-        mode = str(self.combo_plotmode.currentText())
-        self.Datastream.set_plotting_mode(mode=mode,xl=10)
-        if((mode == self.Datastream.pyqtgraph['modes'][1]) or (mode == self.Datastream.pyqtgraph['modes'][2])):
+        modex = str(self.combo_plotmode.currentText())
+        modey = str(self.combo_ylimmode.currentText())        
+        self.Datastream.set_plotting_mode(mode=modex,ymode=modey,xl=10)
+        if((modex == self.Datastream.pyqtgraph['modes'][1]) or (modex == self.Datastream.pyqtgraph['modes'][2])):
             self.lined_xlim.setEnabled(True)
             self._set_xlim()
         else:
             self.lined_xlim.setEnabled(False)
+
 
     def _set_xlim(self):
         """
@@ -783,10 +799,19 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
                                     xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
                                     yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
+                                    if self.Datastream.pyqtgraph['ymode'] == 'ra': # Check for running average
+                                        ylm = yd.mean()
+                                        ylstd = yd.std()
+                                        yl0 = ylm - 2 * ylstd
+                                        yl1 = ylm + 2 * ylstd
+                                        self.pyqtgraph_axes.setYRange(yl0,yl1)                                    
                                     # If we have a yrange
                                     if(not self.Datastream.pyqtgraph['yl'] == None ):
                                         self.pyqtgraph_axes.setYRange(self.Datastream.pyqtgraph['yl'][0],
                                                                       self.Datastream.pyqtgraph['yl'][1])
+                                    
+                                        
+                                        
 
                                     # Test for continous mode
                                     if(self.Datastream.pyqtgraph['mode'] == 'cont'):
@@ -823,9 +848,9 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
                                     # finally set the data for the line
                                     # HACK!!!
-                                    ind_good = yd > -8.0
-                                    xd = xd[ind_good]
-                                    yd = yd[ind_good]                                    
+                                    #ind_good = yd > -8.0
+                                    #xd = xd[ind_good]
+                                    #yd = yd[ind_good]                                    
                                     stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
 
 

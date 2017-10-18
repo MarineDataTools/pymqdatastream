@@ -38,9 +38,20 @@ def main():
     nca = nc.groups['adc']
     t_ch1 = nca.variables['t_ch1'][:]
     V_ch1 = nca.variables['V_adc0_ch1']
+    V_ch2 = nca.variables['V_adc0_ch2']
 
     pl.figure(1)
     pl.clf()
+    pl.subplot(2,1,1)
     pl.plot(t_ch1,V_ch1)
+    pl.title('V_adc0_ch1')
+    pl.xlabel('t [s]')
+    pl.ylabel('U [V]')
+
+    pl.subplot(2,1,2)
+    pl.plot(t_ch1,V_ch2)
+    pl.title('V_adc0_ch2')
+    pl.xlabel('t [s]')
+    pl.ylabel('U [V]')    
     pl.draw()
     pl.show()
