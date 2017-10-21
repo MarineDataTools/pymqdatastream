@@ -314,6 +314,25 @@ class todlnetCDF4File():
         rootgrp = netCDF4.Dataset(fname, "w", format="NETCDF4")
         # Add the device information as an attribute
         rootgrp.device_info = self.todl.device_info['info_str']
+        rootgrp.version  = pymqdatastream.__version__
+        # Creating group for status information
+        sgrp             = rootgrp.createGroup('stat')
+        dimname          = 't'
+        t_dim            = sgrp.createDimension(dimname, None)
+        self.stat_tvar        = sgrp.createVariable(dimname, "f8", (dimname,))
+        self.stat_tvar_tmp    = []
+        self.stat_tvar.units  = 'time in seconds since device power on'
+        self.stat_timevar     = sgrp.createVariable("time", "f8", (dimname,))
+        self.stat_timevar_tmp = []
+        
+        if(self.todl.device_info['time'] == None):
+            time_unit    = "0000.01.01 00:00:00"
+        else:
+            time_unit    = self.todl.device_info['time'].strftime('%Y-%m-%d 00:00:00')
+            
+        self.time_base = datetime.datetime.strptime(time_unit,"%Y-%m-%d %H:%M:%S")
+        self.stat_timevar.units = 'time in seconds since ' + time_unit
+        
         # Test if we have adcs
         if(self.todl.device_info['adcs'] is not None):
             self.logger.debug(funcname + ': Creating adc group')
@@ -322,7 +341,6 @@ class todlnetCDF4File():
             ch_dims    = []
             self.adc_vars   = []
             self.adc_tvars  = []
-
             # For temporary storage of data, this is faster as a direct write to the ncfile
             self.adc_vars_tmp   = []
             self.adc_tvars_tmp  = []            
@@ -334,8 +352,10 @@ class todlnetCDF4File():
                 dimname = 't_ch' + str(ch)
                 print(dimname)
                 ch_dim = adcgrp.createDimension(dimname, None)
+                ch_dim
                 ch_dims.append(ch_dim)
                 adc_tvar = adcgrp.createVariable(dimname, "f8", (dimname,))
+                adc_tvar.units = 'time in seconds since device power on'
                 self.adc_tvars.append(adc_tvar)
                 self.adc_vars.append([])
 
@@ -357,6 +377,7 @@ class todlnetCDF4File():
             dimname = 't_imu'
             imu_dim = imugrp.createDimension(dimname, None)
             self.imu_t    = imugrp.createVariable('t_imu', "f8", (dimname,))
+            self.imu_t.units = 'time in seconds since device power on'
             self.imu_temp = imugrp.createVariable('temp', "f8", (dimname,))            
             self.imu_accx = imugrp.createVariable('accx', "f8", (dimname,))
             self.imu_accy = imugrp.createVariable('accy', "f8", (dimname,))
@@ -384,9 +405,11 @@ class todlnetCDF4File():
         if(self.todl.device_info['pyro_freq'] > 0):
             self.logger.debug(funcname + ': Creating pyro group')
             pyrogrp     = rootgrp.createGroup('pyro')
+            self.pyrogrp = pyrogrp
             dimname = 't_pyro'
             pyro_dim = pyrogrp.createDimension(dimname, None)
             self.pyro_t        =  pyrogrp.createVariable('t_pyro', "f8", (dimname,))
+            self.pyro_t.units = 'time in seconds since device power on'            
             self.pyro_t_tmp    = []
             self.pyro_phi      =  pyrogrp.createVariable('phi',    "f8", (dimname,))
             self.pyro_phi_tmp  = []
@@ -394,78 +417,8 @@ class todlnetCDF4File():
             self.pyro_umol_tmp = []
             
             
-    def to_ncfile(self,fname, num_bytes = 1000000):
-        """ Reads the data in fname, converts it and puts it into a ncfile
-
-        Args:
-           fname: Filename
-           num_bytes: num_bytes to read per conversion step
-        """
-        funcname = 'to_ncfile()'
-        # First create a netCDF4 File
-        self.create_ncfile(fname)
-        self.todl.device_info['format']
-        bytes_read = 0
-        cnt = 0
-        data_str = b''
-        while(True):
-            raw_data = self.todl.data_file.read(num_bytes)
-            bytes_read += len(raw_data)
-            # If we have the end of file
-            if(len(raw_data) == 0):
-                self.file_status = 2
-                self.logger.debug(funcname + ': EOF')
-                return True            
-
-            data_str += raw_data
-            if(len(data_str) > 17):
-                print('len',len(data_str))                
-                [data_packets,data_str] = data_packages.decode_format4(data_str,self.todl.device_info)
-
-                
-            # Put the data into the netcdf
-            for data in data_packets:
-                cnt += 1
-                if(np.mod(cnt,100) == 0):
-                    print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' bytes read')
-                #print(data)
-                if(data['type'] == 'Stat'): # Status packet
-                    pass
-
-                if(data['type'] == 'L'): # ADC data
-                    try:
-                        ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
-                        n = len(self.adc_tvars[ind])
-                        self.adc_tvars[ind][n+1] = data['t']
-                        # Put the voltage data into the variable
-                        for nadc,adc in enumerate(self.todl.device_info['adcs']):
-                            self.adc_vars[ind][nadc][n+1] = data['V'][nadc]
-
-                    except Exception as e:
-                        self.logger.debug(funcname + ':Exception:' + str(e))                            
-                        
-                        
-                elif(data['type'] == 'A'): # IMU data
-                    n = len(self.imu_t)
-                    self.imu_t[n+1] = data['t']
-                    self.imu_accx[n+1] = data['acc'][0]
-                    self.imu_accy[n+1] = data['acc'][1]
-                    self.imu_accz[n+1] = data['acc'][2]
-                    self.imu_gyrox[n+1] = data['gyro'][0]
-                    self.imu_gyroy[n+1] = data['gyro'][1]
-                    self.imu_gyroz[n+1] = data['gyro'][2]
-                    self.imu_magx[n+1] = data['mag'][0]
-                    self.imu_magy[n+1] = data['mag'][1]
-                    self.imu_magz[n+1] = data['mag'][2]
-
-
-
-
-
-
-
     def to_ncfile_fast(self,fname, num_bytes = 1000000):
-        """ Reads the data in fname, converts it and puts it into a ncfile
+        """ Reads the data in fname, converts and puts it into a ncfile
 
         Args:
            fname: Filename
@@ -489,6 +442,22 @@ class todlnetCDF4File():
             # If we have the end of file
             if(len(raw_data) == 0):
                 self.file_status = 2
+                # create interpolated time variables using Stat
+                if(len(self.stat_tvar) > 0):
+                    t    = self.stat_tvar[:]
+                    time = self.stat_timevar[:]
+                    if(self.todl.device_info['pyro_freq'] > 0):
+                        self.pyro_time        = self.pyrogrp.createVariable('time', "f8", ('t_pyro',))
+                        self.pyro_time.units  = self.stat_timevar.units
+                        self.pyro_time[:]     = np.interp(self.pyro_t[:],t,time)
+
+                # TODO: make it proper
+                if(self.todl.device_info['adcs'] is not None):
+                    for nch,ch in enumerate(self.ch_seq):
+                        self.adc_tvars[nch] = self.adc_tvars_tmp[nch][:]
+
+
+                # DONE!
                 self.logger.debug(funcname + ': EOF')
                 return True            
 
@@ -506,11 +475,13 @@ class todlnetCDF4File():
                 cnt += 1
                 if(np.mod(cnt,1000) == 0):
                     print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' bytes read',num_good,num_err,err_packet)
-                #print(data)
-                if(data['type'] == 'Stat'): # Status packet
-                    pass
 
-                if(data['type'] == 'L'): # ADC data
+                if(data['type'] == 'Stat'): # Status packet
+                    self.stat_tvar_tmp.append(data['t'])
+                    dt = data['date'] - self.time_base
+                    self.stat_timevar_tmp.append(dt.total_seconds())
+
+                elif(data['type'] == 'L'): # ADC data
                     try:
                         ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
                         self.adc_tvars_tmp[ind].append(data['t'])
@@ -520,7 +491,6 @@ class todlnetCDF4File():
 
                     except Exception as e:
                         self.logger.debug(funcname + ':Exception:' + str(e))                            
-                        
                         
                 elif(data['type'] == 'A'): # IMU data
                     self.imu_t_tmp.append(data['t'])
@@ -535,7 +505,6 @@ class todlnetCDF4File():
                     self.imu_magy_tmp.append(data['mag'][1])
                     self.imu_magz_tmp.append(data['mag'][2])
 
-
                 elif(data['type'] == 'O'): # Pyro Firesting data
                     self.pyro_t_tmp.append(data['t'])
                     self.pyro_phi_tmp.append(data['phi'])
@@ -544,6 +513,14 @@ class todlnetCDF4File():
 
             # Writing data to ncfile
             print('Writing to netCDF')
+            # Status information
+            n = len(self.stat_tvar)
+            m = len(self.stat_tvar_tmp)
+            self.stat_tvar[n:n+m] = self.stat_tvar_tmp[:]
+            self.stat_tvar_tmp = []
+            self.stat_timevar[n:n+m] = self.stat_timevar_tmp[:]
+            self.stat_timevar_tmp = []
+            # ADCS
             for nch,ch in enumerate(self.ch_seq):
                 n = len(self.adc_tvars[nch])
                 m = len(self.adc_tvars_tmp[nch][:])
@@ -553,8 +530,7 @@ class todlnetCDF4File():
                     self.adc_vars[nch][nadc][n:n+m] = self.adc_vars_tmp[nch][nadc][:]
                     self.adc_vars_tmp[nch][nadc] = [] # Clear again
 
-            print('Hallo!')
-
+                    
             if(self.todl.device_info['imu_freq'] > 0):
                 m = len(self.imu_t_tmp)                
                 n = len(self.imu_t)
@@ -570,15 +546,33 @@ class todlnetCDF4File():
                 self.imu_magx[n:n+m] = self.imu_magx_tmp[:]
                 self.imu_magy[n:n+m] = self.imu_magy_tmp[:]
                 self.imu_magz[n:n+m] = self.imu_magz_tmp[:]
+                # Clear the lists                
+                self.imu_t_tmp = []
+                self.imu_temp_tmp = []
+                self.imu_accx_tmp = []
+                self.imu_accy_tmp = []
+                self.imu_accz_tmp = []
+                self.imu_gyrox_tmp = []
+                self.imu_gyroy_tmp = []
+                self.imu_gyroz_tmp = []
+                self.imu_magx_tmp = []
+                self.imu_magy_tmp = []
+                self.imu_magz_tmp = []
 
             if(self.todl.device_info['pyro_freq'] > 0):
                 m = len(self.pyro_t_tmp)                
                 n = len(self.pyro_t)                
-                self.pyro_t[n:n+m]        = self.pyro_t_tmp
-                self.pyro_phi[n:n+m]      = self.pyro_phi_tmp
-                self.pyro_umol[n:n+m]     = self.pyro_umol_tmp
-
-                    
+                self.pyro_t[n:n+m]        = self.pyro_t_tmp[:]
+                self.pyro_phi[n:n+m]      = self.pyro_phi_tmp[:]
+                self.pyro_umol[n:n+m]     = self.pyro_umol_tmp[:]
+                # Clear the lists
+                self.pyro_t_tmp    = [] 
+                self.pyro_phi_tmp  = []
+                self.pyro_umol_tmp = []
+                
+            
+            
+        
     def close(self):
         self.ncfile.close()        
         
