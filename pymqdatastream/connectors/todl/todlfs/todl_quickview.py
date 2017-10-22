@@ -43,12 +43,22 @@ def main():
     V_ch1 = nca.variables['V_adc0_ch1'][:]
     V_ch2 = nca.variables['V_adc0_ch2'][:]
 
-
+    # Read in PyroScience data
     ncp = nc.groups['pyro']
     t_p = ncp.variables['t_pyro']
     fp = 1/(np.diff(t_p).mean())    
-    phi = ncp.variables['phi']
+    phi = ncp.variables['phi'][:]
 
+    # Read in IMU
+    nci = nc.groups['imu']
+    t_imu = nci.variables['t_imu']
+    fi = 1/(np.diff(t_imu).mean())    
+    accx = nci.variables['accx'][:]
+    accy = nci.variables['accy'][:]
+    accz = nci.variables['accz'][:]
+    gyrox = nci.variables['gyrox'][:]
+    gyroy = nci.variables['gyroy'][:]
+    gyroz = nci.variables['gyroz'][:]        
 
     V_ch1_pl = np.asarray(V_ch1[:])
     V_ch2_pl = np.asarray(V_ch2[:])
@@ -59,6 +69,7 @@ def main():
     ind_bad2 = (V_ch2_pl < 0.0) | (V_ch2_pl > 5.0)
     V_ch2_pl = np.ma.masked_where(ind_bad2,V_ch2_pl)    
 
+    # Plot ADC data
     pl.figure(1)
     pl.clf()
     pl.subplot(2,1,1)
@@ -74,11 +85,29 @@ def main():
     pl.ylabel('U [V]')    
     pl.draw()
 
-
+    # Plot Firesting data
     pl.figure(2)
     pl.clf()
     pl.plot(t_p,phi)
     pl.title('Firesting data; Freq:' + str(fp.round(2)))
+    pl.draw()
+
+    # Plot IMU data
+    pl.figure(3)
+    pl.clf()
+    pl.subplot(2,1,1)
+    pl.plot(t_imu,accx)
+    pl.plot(t_imu,accy)
+    pl.plot(t_imu,accz)        
+    pl.title('Acceleration IMU; Freq:' + str(fi.round(2)))
+    pl.legend(('x','y','z'))    
+
+    pl.subplot(2,1,2)
+    pl.plot(t_imu,gyrox)
+    pl.plot(t_imu,gyroy)
+    pl.plot(t_imu,gyroz)
+    pl.title('Gyro IMU; Freq:' + str(fi.round(2)))
+    pl.legend(('x','y','z'))
     pl.draw()    
 
 

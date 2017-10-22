@@ -62,7 +62,7 @@ def main():
     # Read the first free sector
     first_free_sector = int.from_bytes(data[0:4], byteorder='big')
     num_sectors = first_free_sector - 1
-    print(num_sectors)
+    print('Num sectors:' + str(num_sectors))
 
     # Get file information
     cur_sector = 2
@@ -76,20 +76,36 @@ def main():
         last_file_sector = int.from_bytes(data_f[IND_LASTSECTOR[0]:IND_LASTSECTOR[1]], byteorder='big')
         f.seek(512 * (cur_sector + 1))
         file_data = f.read((last_file_sector - cur_sector) * 512)
-        print(filesize,last_file_sector)
+        print(' ')
+        print(' ')        
+        print('New file:')
+        print('Filesize:' + str(filesize) + ' last sector of file (in 512 byte steps):' + str(last_file_sector))
         ind = IND_LASTSECTOR[1]
         file_info = b''
-        while(data_f[ind] != 0):
+        # This should basically work, but v0.78 and prior version have a bug not writing the "F"
+        #file_name = file_info.split('@@F:')[1]
+        # Look like this: @C:2017.10.21 10:39:04@@M:2017.10.22 07:09:29@@\x00:todl_data_000001.todl\x00
+        # Should look like this: @C:2017.10.21 10:39:04@@M:2017.10.22 07:09:29@@F:todl_data_000001.todl\x00        
+        # Lets read until we have a \x00 and many (2) @s        
+        while(True):
             #print(str(data_f[ind]))
+            if( (data_f[ind] == 0) and (data_f[ind+1] == 0x40) and (data_f[ind+2] == 0x40)):
+                break            
             file_info += data_f[ind:ind+1]
             ind += 1
+            
 
-        file_info = file_info.decode("utf-8")
+        # Replace the missing F
         print(file_info)
+        file_info = file_info.replace(b'\x00',b'F')
+        print(file_info)        
+        file_info = file_info.decode("utf-8")
+        print('File info:' + file_info)
         file_name = file_info.split('@@F:')[1]
-        print(file_name)
+        #file_name = file_info.rsplit(':')[0]
+        print('Filename:' + file_name)
         file_name_full = todl_data_split + todl_fname + '__' + '{:04d}'.format(num_file) + '_' + file_name
-        print(file_name_full)
+        print('Filename full:' + file_name_full)
         # Write data to file
         fsplit = open(file_name_full,'bw')
         fsplit.write(str(filesize).encode('utf-8'))

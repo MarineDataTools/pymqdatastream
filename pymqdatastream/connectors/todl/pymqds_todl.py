@@ -338,6 +338,7 @@ class todlnetCDF4File():
             self.logger.debug(funcname + ': Creating adc group')
             self.ncfile = rootgrp
             adcgrp     = rootgrp.createGroup('adc')
+            self.adcgrp = adcgrp
             ch_dims    = []
             self.adc_vars   = []
             self.adc_tvars  = []
@@ -374,6 +375,7 @@ class todlnetCDF4File():
         if True:
             self.logger.debug(funcname + ': Creating imu group')
             imugrp     = rootgrp.createGroup('imu')
+            self.imugrp = imugrp
             dimname = 't_imu'
             imu_dim = imugrp.createDimension(dimname, None)
             self.imu_t    = imugrp.createVariable('t_imu', "f8", (dimname,))
@@ -434,7 +436,7 @@ class todlnetCDF4File():
         cnt = 0
         data_str = b''
         tmpcnt = 1
-        #while(tmpcnt):        
+        #while(tmpcnt):
         while(True):
             tmpcnt -= 1
             raw_data = self.todl.data_file.read(num_bytes)
@@ -446,17 +448,36 @@ class todlnetCDF4File():
                 if(len(self.stat_tvar) > 0):
                     t    = self.stat_tvar[:]
                     time = self.stat_timevar[:]
+                    
+                    # PyroScience
                     if(self.todl.device_info['pyro_freq'] > 0):
+                        print('Creating timevariable for Pyroscience Firesting')
                         self.pyro_time        = self.pyrogrp.createVariable('time', "f8", ('t_pyro',))
                         self.pyro_time.units  = self.stat_timevar.units
                         self.pyro_time[:]     = np.interp(self.pyro_t[:],t,time)
 
-                # TODO: make it proper
-                if(self.todl.device_info['adcs'] is not None):
-                    for nch,ch in enumerate(self.ch_seq):
-                        self.adc_tvars[nch] = self.adc_tvars_tmp[nch][:]
-
-
+                    # ADC
+                    if(self.todl.device_info['adcs'] is not None):
+                        for nch,ch in enumerate(self.ch_seq):
+                            print('Creating a timevariable for channel:' + str(ch))
+                            varname = 'time_ch' + str(ch)
+                            dimname = 't_ch' + str(ch)                        
+                            adc_timevar = self.adcgrp.createVariable(varname, "f8", (dimname,))
+                            adc_timevar.units  = self.stat_timevar.units
+                            adc_timevar[:]     = np.interp(self.adc_tvars[nch][:],t,time)
+                            
+                    # IMU
+                    if(self.todl.device_info['imu_freq'] > 0):
+                        print('Creating a timevariable for IMU')
+                        dimname = 't_imu'
+                        varname = 'time'
+                        imu_time    = self.imugrp.createVariable(varname, "f8", (dimname,))
+                        imu_time.units = self.stat_timevar.units
+                        imu_time[:] = np.interp(self.imu_t[:],t,time)
+                        
+                        
+                        
+                        
                 # DONE!
                 self.logger.debug(funcname + ': EOF')
                 return True            
