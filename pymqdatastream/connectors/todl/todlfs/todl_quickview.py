@@ -38,6 +38,8 @@ def main():
     nca = nc.groups['adc']
     t_ch1 = nca.variables['t_ch1'][:]
     t_ch2 = nca.variables['t_ch2'][:]
+    time_ch1 = nca.variables['time_ch1'][:]
+    time_ch2 = nca.variables['time_ch2'][:]
     f1 = 1/(np.diff(t_ch1).mean())
     f2 = 1/(np.diff(t_ch2).mean())    
     V_ch1 = nca.variables['V_adc0_ch1'][:]
@@ -46,6 +48,7 @@ def main():
     # Read in PyroScience data
     ncp = nc.groups['pyro']
     t_p = ncp.variables['t_pyro']
+    time_p = netCDF4.num2date(ncp.variables['time'][:],units = ncp.variables['time'].units)
     fp = 1/(np.diff(t_p).mean())    
     phi = ncp.variables['phi'][:]
 
@@ -73,13 +76,15 @@ def main():
     pl.figure(1)
     pl.clf()
     pl.subplot(2,1,1)
-    pl.plot(t_ch1,V_ch1_pl)
+    #pl.plot(t_ch1,V_ch1_pl)
+    pl.plot(time_ch1,V_ch1_pl)
     pl.title('V_adc0_ch1; Freq:' + str(f1.round(2)))
     pl.xlabel('t [s]')
     pl.ylabel('U [V]')
 
     pl.subplot(2,1,2)
-    pl.plot(t_ch2,V_ch2_pl)
+    #pl.plot(t_ch2,V_ch2_pl)
+    pl.plot(time_ch2,V_ch2_pl)
     pl.title('V_adc0_ch2; Freq:' + str(f2.round(2)))
     pl.xlabel('t [s]')
     pl.ylabel('U [V]')    
@@ -88,7 +93,8 @@ def main():
     # Plot Firesting data
     pl.figure(2)
     pl.clf()
-    pl.plot(t_p,phi)
+    #pl.plot(t_p,phi)
+    pl.plot(time_p,phi)
     pl.title('Firesting data; Freq:' + str(fp.round(2)))
     pl.draw()
 

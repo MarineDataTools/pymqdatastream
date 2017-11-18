@@ -423,9 +423,9 @@ class zmq_socket(object):
     
     
     def start_poll_substream_thread(self):
-        """
-        Starts a thread which is polling the substream socket for new data
+        """ Starts a thread which is polling the substream socket for new data
         and puts it into the given deque
+
         """
         funcname = 'start_poll_substream_thread()'
         self.logger.debug(funcname)
@@ -669,27 +669,27 @@ class zmq_socket(object):
 
 
 class Stream(object):
-    """
-    A stream of data
+    """ A stream of data
     
     Args: 
        address:
        socket:
        variables:
        data_format:
-       queuelen:
+       queuelen: The Stream has a deque object. This deque (collections.deque(maxlen=queuelen)) is filled with data from polled thread of the zmq_socket. The queuelen gives the maximum amount of received packets before data is overwritten. A -1 creates a not unlimited length queue.
        statistics:
        remote:
        name:
        family
        data_type:
+       number: The number of the Stream, defaults to -1, will be set by the Parental Datastream object
     Returns:
        None
     """
-    def __init__(self,stream_type, address = None, socket = None, variables = None, data_format = 'py_json', queuelen = 1000,statistic = False, remote = False, name = 'Stream', family = 'NA', data_type = 'continous', logging_level= 'INFO'):
+    def __init__(self,stream_type, address = None, socket = None, variables = None, data_format = 'py_json', queuelen = 1000,statistic = False, remote = False, name = 'Stream', family = 'NA', data_type = 'continous', number = '-1', logging_level= 'INFO'):
         funcname = '__init__()'
 
-
+        self.number = number
         # Create a uuid for streams 
         if( (remote == False) and \
             ( (stream_type == 'control') or \
@@ -735,7 +735,10 @@ class Stream(object):
         self.variables = variables
         self.data_type = data_type
         self.data_format = data_format
-        self.deque = collections.deque(maxlen=queuelen) # An empty collections data type
+        if(queuelen == -1):
+            self.deque = collections.deque() # An empty collections data type
+        else:
+            self.deque = collections.deque(maxlen=queuelen) # An empty collections data type
         if(self.stream_type == 'pubstream'):
             self.socket = [] # A list of sockets the stream data is published to
             if(isinstance(socket,zmq_socket)):
@@ -792,9 +795,8 @@ class Stream(object):
 
 
     def pub_data(self, data):
-        """
+        """ Encodes and publishes the data together with the uuid of the stream as a list: [self.uuid,data]
 
-        Encodes and publishes the data together with the uuid of the stream as a list: [self.uuid,data]
         Args:
             data: Data
 
@@ -817,9 +819,7 @@ class Stream(object):
             raise Exception(funcname + ": wrong stream type") 
 
     def pop_data(self, n=1):
-        """
-
-        Pops data from the deque which is received by the 
+        """ Pops data from the deque which is received by the 
         :func:`pymqdatastream.zmq_socket.poll_substream_thread`.
 
         Args:
@@ -858,9 +858,7 @@ class Stream(object):
 
 
     def reqrep(self,request,dt_wait=0.05):
-        """
-        
-        Init a request->reply pattern if this stream is a reqstream, otherwise return an error
+        """ Init a request->reply pattern if this stream is a reqstream, otherwise return an error
 
         Args:
            request: The request to be send
@@ -992,12 +990,12 @@ class Stream(object):
 
             
     def get_info_dict(self):
-        """
-        A dictionary of the stream info
+        """ A dictionary of the stream info
         """
 
         info_dict = {}
         info_dict['uuid'] = self.uuid
+        info_dict['number'] = self.number
         info_dict['name'] = self.name
         info_dict['family'] = self.family
         info_dict['stream_type'] = self.stream_type
@@ -1080,6 +1078,7 @@ def create_Stream_from_info_dict(info_dict, remote = True):
                     variables = info_dict['variables'], \
                     data_type = info_dict['data_type'], \
                     data_format = info_dict['data_format'], \
+                    number = info_dict['number'], \
                     remote = remote, name = info_dict['name'])
     stream.uuid = info_dict['uuid']
     if(isinstance(info_dict['socket'],list)):
@@ -1291,6 +1290,7 @@ class DataStream(object):
         
         self.sockets = [] # A list of open sockets
         self.Streams = [] # A list of Streams
+        self.num_streams = 0 # An ever increasing Stream number
         self.remote = remote
         self.name = name
         self.created = time.time()
@@ -1307,14 +1307,13 @@ class DataStream(object):
             self.sockets.append(control_socket)
 
             # Create control stream
-            self.control_stream = Stream(name = 'Control Stream',stream_type = 'control', socket = control_socket,logging_level = self.logging_level)
+            self.control_stream = Stream(name = 'Control Stream',stream_type = 'control', socket = control_socket,logging_level = self.logging_level,number=self.num_streams)
+            self.num_streams += 1
             self.Streams.append(self.control_stream)
 
 
     def get_datastream_info(self,address,dt_wait = 0.1):
-        """
-        Connecting to a remote datastream, querying the stream and
-        disconnect afterwards
+        """ Connecting to a remote datastream, querying the stream and disconnect afterwards
 
         """
         funcname = 'get_datastream_info()'
@@ -1401,7 +1400,8 @@ class DataStream(object):
 
         """
         if(socket.socket_type == 'pubstream'): # Check for correct socket type
-            stream = Stream(stream_type = 'pubstream',socket = socket, variables = variables, name = name, family = family, statistic = statistic, logging_level = self.logging_level)
+            stream = Stream(stream_type = 'pubstream',socket = socket, variables = variables, name = name, family = family, statistic = statistic, logging_level = self.logging_level, number = self.num_streams)
+            self.num_streams += 1
             self.Streams.append(stream)
             return stream
         else:
@@ -1422,10 +1422,9 @@ class DataStream(object):
         self.add_pub_stream(socket = self.sockets[-1],name=name,variables=variables, statistic=statistic)
 
 
-    def create_rep_stream(self,address = None, variables = None, name = 'rep', statistic = False, socket_reply_function = None):
-        """
+    def create_rep_stream(self, address = None, variables = None, name = 'rep', statistic = False, socket_reply_function = None):
+        """ Creates a new reply stream
 
-        Creates a new reply stream
         Args:
             address:
 
@@ -1444,19 +1443,19 @@ class DataStream(object):
         print(rep_socket)
         self.sockets.append(rep_socket)
 
-        stream = Stream(stream_type = 'repstream',socket = rep_socket, variables = variables, name = name, statistic = statistic, logging_level = self.logging_level)
-
+        stream = Stream(stream_type = 'repstream',socket = rep_socket, variables = variables, name = name, statistic = statistic, logging_level = self.logging_level, number=self.num_streams)
+        
+        self.num_streams += 1
         self.Streams.append(stream)
         
         return stream
         
     
     def add_stream(self,Stream):
-        """
-
-        Adds a Stream to the datastream object
+        """ Adds a Stream to the datastream object
 
         """
+        self.num_streams += 1        
         self.Streams.append(Stream)
         self.sockets.append(Stream.socket)
 
@@ -1489,12 +1488,10 @@ class DataStream(object):
 
 
     def subscribe_stream(self,substream = None, statistic=False):
-        """
-
-        Subscribes a stream of a remote datastream
+        """ Subscribes a stream of a remote datastream, this can be either a Stream object or a valid string. Valid address strings are a full address like: 8b3ccf7a-cc79-11e7-8307-aced5c604eba::tcp://127.0.0.1:28737@tcp://127.0.0.1:18055 or the string number of the datastream: e.g. 2@tcp://127.0.0.1:18055
 
         Args:
-            substream: either a datastream.Stream object or a valid stream address to subscribe to
+            substream: either a datastream.Stream object or a valid stream address to subscribe to, a valid address 
             statistic: do statistics of stream ( i.e. bytes received, packets received)
         Returns:
             stream: A stream object of the subscribed stream or None if subscription failed
@@ -1516,13 +1513,13 @@ class DataStream(object):
             self.logger.debug(funcname + ': subscribing to stream:' + str(stream))
             if(stream.stream_type == 'pubstream'):
                 self.logger.debug(funcname + ': created a substream for subscription')
-                subscribe_stream = Stream('substream',statistic=statistic)
+                subscribe_stream = Stream('substream',statistic=statistic, number=self.num_streams)
             elif(stream.stream_type == 'repstream'):
                 self.logger.debug(funcname + ': created a reqstream for subscription')
-                subscribe_stream = Stream('reqstream',statistic=statistic)
+                subscribe_stream = Stream('reqstream',statistic=statistic, number=self.num_streams)
             else:
                 raise Exception('Unknown stream type:' + str(stream.stream_type) + ', dont know how to subscribe ...')
-            
+
             # Connect the stream
             ret = subscribe_stream.connect_stream(stream,statistic=statistic)
             if(subscribe_stream.socket != None): # When succesfully connected, socket is not None anymore
@@ -1536,6 +1533,8 @@ class DataStream(object):
             else:
                 self.logger.debug(funcname + ': failed to subscribe stream:\n' + str(stream))
                 return None
+            
+            
         # If we have a address we have to create a remote datastream
         # object and a remote stream object first
         elif(address != None):
@@ -1547,7 +1546,12 @@ class DataStream(object):
             if(found_datastream):
                 self.logger.info('Found a datastream at: ' + datastream_address)
                 DSremote = create_datastream_from_info_dict(info_dict,logging_level = self.logging_level)
-                stream = DSremote.get_stream_from_uuid(stream_address)
+                # Check if the stream address is an address or a number
+                if('::' in stream_address): # We have a probably valid stream address
+                    stream = DSremote.get_stream_from_uuid(stream_address)                    
+                else:
+                    stream = DSremote.get_stream_from_number(int(stream_address))
+
                 self.logger.debug(funcname + ':' + str(stream))
                 ret = self.subscribe_stream(substream = stream)
                 return ret
@@ -1595,10 +1599,10 @@ class DataStream(object):
 
         else:
             self.logger.debug(funcname + ': unknown request')
-
-
+            
+            
     def get_stream_from_uuid(self,uuid):
-        """
+        """ 
         Returns a stream object for the given uuid/address string
         Args:
             uuid: uuid string
@@ -1616,6 +1620,23 @@ class DataStream(object):
 
             
         return None
+
+
+    def get_stream_from_number(self,number):
+        """  Returns a stream object for the given stream number
+        Args:
+            number: number
+        Returns:
+            Stream object or None if nothing was found
+        """
+        funcname = 'get_stream_from_number()'
+        for i,stream in enumerate(self.Streams):
+            if(stream.number == number):
+                self.logger.debug(funcname + ': Found stream at: ' + str(number))
+                return stream
+
+            
+        return None    
     
     
     def query_datastreams(self,addresses=None,queue=None):
@@ -1752,7 +1773,7 @@ class DataStream(object):
             ret_str += ';created: ' + str(self.created)
             ret_str += '\n;Streams: \n'
             for i,stream in enumerate(self.Streams):
-                ret_str += '    ' +str(i) + ':' + stream.get_info_str('stream')
+                ret_str += '    ' +str(stream.number) + ':' + stream.get_info_str('stream')
                 ret_str += '\n          ' + stream.get_info_str('socket')
                 ret_str += '\n'
             

@@ -331,7 +331,7 @@ class todlnetCDF4File():
             time_unit    = self.todl.device_info['time'].strftime('%Y-%m-%d 00:00:00')
             
         self.time_base = datetime.datetime.strptime(time_unit,"%Y-%m-%d %H:%M:%S")
-        self.stat_timevar.units = 'time in seconds since ' + time_unit
+        self.stat_timevar.units = 'seconds since ' + time_unit
         
         # Test if we have adcs
         if(self.todl.device_info['adcs'] is not None):
