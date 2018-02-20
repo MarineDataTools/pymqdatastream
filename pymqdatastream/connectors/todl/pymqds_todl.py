@@ -1942,7 +1942,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         freq_packet = {'name':'Lfrdata'}
         freq_packet['dt_freq'] = 0.5
         freq_packet['len_t_array'] = 1000
-        freq_packet['data'] = np.zeros((len_t_array,2)) # For LTC2442 packets
+        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets
         freq_packet['ind'] = 0
         freq_packets['Lfrdata'] = freq_packet
         
@@ -1953,7 +1953,8 @@ default to None, only with a valid argument that setting will be sent to the dev
             data_stream = [[] for _ in range(nstreams) ]
             ta = []
             time.sleep(dt)
-            ta.append(time.time())
+            ts = time.time()
+            ta.append(ts)
             while(len(deque) > 0):
                 data = deque.pop()
                 data_str += data
@@ -1986,24 +1987,20 @@ default to None, only with a valid argument that setting will be sent to the dev
 
                 # Frequency packets
                 if(freq_packets['Lfrdata']['ind'] > 0):
-                    dtL =
-                    freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].max()
-                    -
-                    freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].min()
+                    # Maximum time difference
+                    dtL = freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].max() - freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].min()
                     if((freq_packets['Lfrdata']['ind'] >=
                         freq_packets['Lfrdata']['len_t_array']) or (dtL >
-                                                                    dt_freq)):
+                                                                    freq_packets['Lfrdata']['dt_freq'])):
                         data_packet = {'type':'Lfr'} # Type L freq
                         
                         data_packet['dt'] = dtL
-                        dtLt =
-                        freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind']-1,1]
-                        - freq_packets['Lfrdata']['data'][0,1]
+                        dtLt = freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind']-1,1] - freq_packets['Lfrdata']['data'][0,1]
                         #print(dtLt)
                         data_packet['f'] = (freq_packets['Lfrdata']['ind']-1)/(dtLt)
                         freq_packets['Lfrdata']['data'][:,:] = 0
                         freq_packets['Lfrdata']['ind'] = 0                    
-                        #print(data_packet)
+                        print(data_packet)
                         data_packets.append(data_packet)                        
 
                     
