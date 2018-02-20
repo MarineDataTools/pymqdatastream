@@ -1840,7 +1840,6 @@ default to None, only with a valid argument that setting will be sent to the dev
                     aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
 
 
-            
             # Frequency packets
             if(Lpacket_t_ind > 0):
                 dtL = Lpacket_t[:Lpacket_t_ind,0].max() - Lpacket_t[:Lpacket_t_ind,0].min()
@@ -1937,6 +1936,16 @@ default to None, only with a valid argument that setting will be sent to the dev
         cnt = 0
         cto = 0 # Get frequency (hack)
         ct = cto
+
+        # Array for frequency calculation (LTC2442 )
+        freq_packets = {}
+        freq_packet = {'name':'Lfrdata'}
+        freq_packet['dt_freq'] = 0.5
+        freq_packet['len_t_array'] = 1000
+        freq_packet['data'] = np.zeros((len_t_array,2)) # For LTC2442 packets
+        freq_packet['ind'] = 0
+        freq_packets['Lfrdata'] = freq_packet
+        
         while True:
             cnt += 1
             aux_data_stream = [[],[]]
@@ -1959,18 +1968,43 @@ default to None, only with a valid argument that setting will be sent to the dev
                 # distribution as well as frequency calculations
                 for data_packet in data_packets:
                     if(data_packet['type'] == 'L'): # LTC2442 packet
+                        #repack it for a datastream compatible format
+                        #(list instead of dict)
                         data_list = [data_packet['num'],data_packet['t']] + data_packet['V']
                         data_stream[data_packet['ch']].append(data_list)
                         # Packet for frequency calculation
-                        #if(Lpacket_t_ind < len_t_array):
-                        #    Lpacket_t[Lpacket_t_ind,0] = ts
-                        #    Lpacket_t[Lpacket_t_ind,1] = data_packet['t']
-                        #    Lpacket_t_ind += 1
+                        if(freq_packets['Lfrdata']['ind'] < freq_packets['Lfrdata']['len_t_array']):
+                            freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],0] = ts
+                            freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],1] = data_packet['t']
+                            freq_packets['Lfrdata']['ind'] += 1                        
 
                     elif(data_packet['type'] == 'A'): # IMU packet
                         aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
                     elif(data_packet['type'] == 'O'): # Firesting packet         
                         aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
+
+
+                # Frequency packets
+                if(freq_packets['Lfrdata']['ind'] > 0):
+                    dtL =
+                    freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].max()
+                    -
+                    freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].min()
+                    if((freq_packets['Lfrdata']['ind'] >=
+                        freq_packets['Lfrdata']['len_t_array']) or (dtL >
+                                                                    dt_freq)):
+                        data_packet = {'type':'Lfr'} # Type L freq
+                        
+                        data_packet['dt'] = dtL
+                        dtLt =
+                        freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind']-1,1]
+                        - freq_packets['Lfrdata']['data'][0,1]
+                        #print(dtLt)
+                        data_packet['f'] = (freq_packets['Lfrdata']['ind']-1)/(dtLt)
+                        freq_packets['Lfrdata']['data'][:,:] = 0
+                        freq_packets['Lfrdata']['ind'] = 0                    
+                        #print(data_packet)
+                        data_packets.append(data_packet)                        
 
                     
                 if(False):
