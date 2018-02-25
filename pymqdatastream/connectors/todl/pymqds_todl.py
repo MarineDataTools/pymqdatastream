@@ -123,6 +123,7 @@ def parse_device_info(data_str):
     # >>>Time: 2017.09.11 10:06:44
     device_info['time_str']   = ''
     device_info['time']   = None
+    time_str = ''
     for i,me in enumerate(re.finditer(r'>>>Time:.*\n',data_str)):
         time_str = me.group()        
 
@@ -1937,14 +1938,29 @@ default to None, only with a valid argument that setting will be sent to the dev
         cto = 0 # Get frequency (hack)
         ct = cto
 
-        # Array for frequency calculation (LTC2442 )
+        # Frequency packets
         freq_packets = {}
-        freq_packet = {'name':'Lfrdata'}
+        # LTC2442 frequency        
+        freq_packet = {'name':'Lfr'}
         freq_packet['dt_freq'] = 0.5
         freq_packet['len_t_array'] = 1000
         freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets
         freq_packet['ind'] = 0
         freq_packets['Lfrdata'] = freq_packet
+        # IMU frequency
+        freq_packet = {'name':'IMUfr'}
+        freq_packet['dt_freq'] = 0.5
+        freq_packet['len_t_array'] = 1000
+        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
+        freq_packet['ind'] = 0
+        freq_packets['IMUfrdata'] = freq_packet                
+        # Pyroscience frequency
+        freq_packet = {'name':'Ofr'}
+        freq_packet['dt_freq'] = 0.5
+        freq_packet['len_t_array'] = 1000
+        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
+        freq_packet['ind'] = 0
+        freq_packets['Ofrdata'] = freq_packet        
         
         while True:
             cnt += 1
@@ -1981,38 +1997,41 @@ default to None, only with a valid argument that setting will be sent to the dev
 
                     elif(data_packet['type'] == 'A'): # IMU packet
                         aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
+                        # Packet for frequency calculation
+                        if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
+                            freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
+                            freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['t']
+                            freq_packets['IMUfrdata']['ind'] += 1
+                            
                     elif(data_packet['type'] == 'O'): # Firesting packet         
                         aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
+                        # Packet for frequency calculation
+                        if(freq_packets['Ofrdata']['ind'] < freq_packets['Ofrdata']['len_t_array']):
+                            freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],0] = ts
+                            freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],1] = data_packet['t']
+                            freq_packets['Ofrdata']['ind'] += 1                        
 
 
                 # Frequency packets
-                if(freq_packets['Lfrdata']['ind'] > 0):
-                    # Maximum time difference
-                    dtL = freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].max() - freq_packets['Lfrdata']['data'][:freq_packets['Lfrdata']['ind'],0].min()
-                    if((freq_packets['Lfrdata']['ind'] >=
-                        freq_packets['Lfrdata']['len_t_array']) or (dtL >
-                                                                    freq_packets['Lfrdata']['dt_freq'])):
-                        data_packet = {'type':'Lfr'} # Type L freq
-                        
-                        data_packet['dt'] = dtL
-                        dtLt = freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind']-1,1] - freq_packets['Lfrdata']['data'][0,1]
-                        #print(dtLt)
-                        data_packet['f'] = (freq_packets['Lfrdata']['ind']-1)/(dtLt)
-                        freq_packets['Lfrdata']['data'][:,:] = 0
-                        freq_packets['Lfrdata']['ind'] = 0                    
-                        print(data_packet)
-                        data_packets.append(data_packet)                        
+                for name_freq_pack in freq_packets:
+                    freq_pack = freq_packets[name_freq_pack]
+                    if(freq_pack['ind'] > 0):
+                        # Maximum time difference
+                        dtL = freq_pack['data'][:freq_pack['ind'],0].max() - freq_pack['data'][:freq_pack['ind'],0].min()
+                        if((freq_pack['ind'] >=
+                            freq_pack['len_t_array']) or (dtL > freq_pack['dt_freq'])):
+                            data_packet = {'type':freq_pack['name']}
+
+                            data_packet['dt'] = dtL
+                            dtLt = freq_pack['data'][freq_pack['ind']-1,1] - freq_pack['data'][0,1]
+                            #print(dtLt)
+                            data_packet['f'] = (freq_pack['ind']-1)/(dtLt)
+                            freq_pack['data'][:,:] = 0
+                            freq_pack['ind'] = 0                    
+                            print(data_packet)
+                            data_packets.append(data_packet)                        
 
                     
-                if(False):
-                    if(len(data_packets) >=2):
-                        ct = data_packets[1]['t']
-                        cto = data_packets[0]['t']
-                        dtt = (ct - cto)
-                        ftt = 1/dtt
-                        print(ftt)                    
-
-
                 ta.append( time.time() )
 
                 # This data is first put into the local intraque for data distribution (mainly the gui up to now)

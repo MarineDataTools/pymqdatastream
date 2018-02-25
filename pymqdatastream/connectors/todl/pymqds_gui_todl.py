@@ -1064,7 +1064,10 @@ class todlDevice():
                     if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
                         self.print_serial_data = False
-                        time.sleep(0.1)            
+                        # Update the ADC table information
+                        self._ad_table.clear()
+                        self._ad_table_setup()                        
+                        time.sleep(0.1)
                         self.todl.send_serial_data('start\n')
 
 
@@ -1148,6 +1151,12 @@ class todlDevice():
     def _ad_table_setup(self):
         """ Setup of the table
         """
+        self._ad_table_index = {}
+        self._ad_table_index['num'] = 0
+        self._ad_table_index['counter'] = 1
+        self._ad_table_index['freq'] = 2
+        self._ad_table_index['freq_ltc'] = 3
+        self._ad_table_index['ltc'] = []
         self._ad_table_ind_ch = []
         if 'adcs' in self.todl.device_info.keys():
             num_ltcs = len(self.todl.device_info['adcs'])
@@ -1169,17 +1178,27 @@ class todlDevice():
             for i in range(4):
                 self._ad_table_ind_ch.append(i+1)
 
-        num_rows =  num_ltcs + 3                        
+        for i in range(0,num_ltcs):
+            self._ad_table_index['ltc'].append(i + len(self._ad_table_index))
+            
+        num_rows =  num_ltcs + len(self._ad_table_index) - 1
+        
         self._ad_table.setColumnCount(num_cols)
         self._ad_table.setRowCount(num_rows)
         self._ad_table.verticalHeader().setVisible(False)
-        self._ad_table.setItem(0,
+        self._ad_table.setItem(self._ad_table_index['num'],
                                0, QtWidgets.QTableWidgetItem( ' Packet number' ))
-        self._ad_table.setItem(1,
+        self._ad_table.setItem(self._ad_table_index['counter'],
                                0, QtWidgets.QTableWidgetItem( ' Counter' ))
+        self._ad_table.setItem(self._ad_table_index['freq'],
+                               0, QtWidgets.QTableWidgetItem( ' Frequency all' ))
+        # Set span?
+        self._ad_table.setSpan(self._ad_table_index['freq'], 1, 1, num_cols - 1);
+        self._ad_table.setItem(self._ad_table_index['freq_ltc'],
+                               0, QtWidgets.QTableWidgetItem( ' Frequency' ))                
         for i in range(0,num_ltcs):
             adname='LTC2442 ' + str(ltc_name[i])
-            self._ad_table.setItem(i+2,
+            self._ad_table.setItem(self._ad_table_index['ltc'][i],
                                 0, QtWidgets.QTableWidgetItem( adname ))        
 
         self._ad_table.setHorizontalHeaderLabels(header_label)
@@ -1258,30 +1277,40 @@ class todlDevice():
 
     def _IMU_table_setup(self):
         accname = ['x','y','z']
+        self._IMU_table_index = {}
+        self._IMU_table_index['num'] = 0
+        self._IMU_table_index['counter'] = 1
+        self._IMU_table_index['freq'] = 2
+        self._IMU_table_index['temp'] = 3
+        self._IMU_table_index['acc'] = [4,5,6]
+        self._IMU_table_index['gyro'] = [7,8,9]
+        self._IMU_table_index['mag'] = [10,11,12]                
         self._IMU_table.setColumnCount(2)
-        self._IMU_table.setRowCount(12)
+        self._IMU_table.setRowCount(13)
         self._IMU_table.verticalHeader().setVisible(False)
-        self._IMU_table.setItem(0,
+        self._IMU_table.setItem(self._IMU_table_index['num'],
                                0, QtWidgets.QTableWidgetItem( ' Packet number' ))
-        self._IMU_table.setItem(1,
+        self._IMU_table.setItem(self._IMU_table_index['counter'],
                                0, QtWidgets.QTableWidgetItem( ' Counter' ))
 
-        self._IMU_table.setItem(2,
+        self._IMU_table.setItem(self._IMU_table_index['freq'],
+                               0, QtWidgets.QTableWidgetItem( ' Frequency' ))        
+
+        self._IMU_table.setItem(self._IMU_table_index['temp'],
                                0, QtWidgets.QTableWidgetItem( ' Temp' ))        
         for i in range(0,3):
             adname='acc ' + accname[i]            
-            self._IMU_table.setItem(i+3,
+            self._IMU_table.setItem(self._IMU_table_index['acc'][i],
                                 0, QtWidgets.QTableWidgetItem( adname ))
 
         for i in range(0,3):
             adname='gyro ' + accname[i]
-            self._IMU_table.setItem(i+6,
+            self._IMU_table.setItem(self._IMU_table_index['gyro'][i],
                                 0, QtWidgets.QTableWidgetItem( adname ))
-
 
         for i in range(0,3):
             adname='mag ' + accname[i]
-            self._IMU_table.setItem(i+9,
+            self._IMU_table.setItem(self._IMU_table_index['mag'][i],
                                 0, QtWidgets.QTableWidgetItem( adname ))                                
 
         self._IMU_table.setHorizontalHeaderLabels(['Name','IMU 0'])
@@ -1302,15 +1331,24 @@ class todlDevice():
 
     def _O2_table_setup(self):
         self._O2_table.setColumnCount(2)
-        self._O2_table.setRowCount(4)
+        self._O2_table.setRowCount(5)
         self._O2_table.verticalHeader().setVisible(False)
-        self._O2_table.setItem(0,
+        self._O2_table_index = {}
+        #self._O2_table_index['num'] = 0
+        self._O2_table_index['counter'] = 0
+        self._O2_table_index['freq'] = 1
+        self._O2_table_index['dphi'] = 2
+        self._O2_table_index['umol'] = 3        
+        self._O2_table.setItem(self._O2_table_index['counter'],
                                0, QtWidgets.QTableWidgetItem( ' Counter' ))
+        
+        self._O2_table.setItem(self._O2_table_index['freq'],
+                               0, QtWidgets.QTableWidgetItem( ' Frequency' ))        
 
-        self._O2_table.setItem(1,
+        self._O2_table.setItem(self._O2_table_index['dphi'],
                                0, QtWidgets.QTableWidgetItem( ' dphi' ))
 
-        self._O2_table.setItem(2,
+        self._O2_table.setItem(self._O2_table_index['umol'],
                                0, QtWidgets.QTableWidgetItem( ' umol' ))                
 
         self._O2_table.setHorizontalHeaderLabels(['Name','O2 0'])
@@ -1430,7 +1468,6 @@ class todlDevice():
             if(data['type'] == 'Stat'):
                 self.deviceinfo.update_status_packet(data)
                 
-                
             if(len(data)>0):
                 # LTC channel data
                 if((data['type']=='L') and showL):
@@ -1445,17 +1482,19 @@ class todlDevice():
                         num = data['num']
                         ct = data['t']
                         V = data['V']
+
+                        
                         # Packet number            
                         item = QtWidgets.QTableWidgetItem(str(num))
-                        self._ad_table.setItem(0, ind_col, item)
+                        self._ad_table.setItem(self._ad_table_index['num'], ind_col, item)
                         # Counter
                         item = QtWidgets.QTableWidgetItem(str(ct))
-                        self._ad_table.setItem(1, ind_col, item)
+                        self._ad_table.setItem(self._ad_table_index['counter'], ind_col, item)
                         # Update all LTC data of that channel
                         #for n,i in enumerate(self.todl.flag_adcs):
                         for n,i in enumerate(self.todl.device_info['adcs']):
                             item = QtWidgets.QTableWidgetItem(str(V[n]))
-                            self._ad_table.setItem(n+2, ind_col, item )
+                            self._ad_table.setItem(self._ad_table_index['ltc'][n], ind_col, item )
 
                 # IMU data                        
                 if((data['type']=='A') and showA):
@@ -1464,27 +1503,32 @@ class todlDevice():
                     ct = data['t']
                     # Packet number            
                     item = QtWidgets.QTableWidgetItem(str(num))
-                    self._IMU_table.setItem(0, 1, item)
+                    self._IMU_table.setItem(self._IMU_table_index['num'], 1, item)
                     # Counter
                     item = QtWidgets.QTableWidgetItem(str(ct))
-                    self._IMU_table.setItem(1, 1, item)
+                    self._IMU_table.setItem(self._IMU_table_index['counter'], 1, item)
+                    # Temperature
                     tabdata = data['T']
                     item = QtWidgets.QTableWidgetItem(str(tabdata))                    
-                    self._IMU_table.setItem(2, 1, item)                    
+                    self._IMU_table.setItem(self._IMU_table_index['temp'], 1, item)                    
                     for i in range(3):
                         tabdata = data['acc'][i]
                         item = QtWidgets.QTableWidgetItem(str(tabdata))
-                        self._IMU_table.setItem(i+3, 1, item )
+                        self._IMU_table.setItem(self._IMU_table_index['acc'][i], 1, item )
                     for i in range(3):
                         tabdata = data['gyro'][i]
                         item = QtWidgets.QTableWidgetItem(str(tabdata))
-                        self._IMU_table.setItem(i+6, 1, item )
+                        self._IMU_table.setItem(self._IMU_table_index['gyro'][i], 1, item )
                     for i in range(3):
                         tabdata = data['mag'][i]
                         item = QtWidgets.QTableWidgetItem(str(tabdata))
-                        self._IMU_table.setItem(i+9, 1, item )
-                        
+                        self._IMU_table.setItem(self._IMU_table_index['mag'][i], 1, item )
 
+                # IMU frequency
+                if(data['type']=='IMUfr'):
+                    # Counter
+                    item = QtWidgets.QTableWidgetItem(str(round(data['f'],2)))
+                    self._IMU_table.setItem(self._IMU_table_index['freq'], 1, item)
 
                 # Oxygen data            
                 if((data['type']=='O') and showO):
@@ -1494,13 +1538,19 @@ class todlDevice():
                     ct = data['t']
                     # Packet number            
                     item = QtWidgets.QTableWidgetItem(str(ct))
-                    self._O2_table.setItem(0, 1, item)
+                    self._O2_table.setItem(self._O2_table_index['counter'], 1, item)
                     tabdata = data['phi']
                     item = QtWidgets.QTableWidgetItem(str(tabdata))                    
-                    self._O2_table.setItem(1, 1, item)
+                    self._O2_table.setItem(self._O2_table_index['dphi'], 1, item)
                     tabdata = data['umol']
                     item = QtWidgets.QTableWidgetItem(str(tabdata))                    
-                    self._O2_table.setItem(2, 1, item)                                                            
+                    self._O2_table.setItem(self._O2_table_index['umol'], 1, item)
+
+                # Oxygen frequency
+                if(data['type']=='Ofr'):
+                    # Counter
+                    item = QtWidgets.QTableWidgetItem(str(round(data['f'],2)))
+                    self._O2_table.setItem(self._O2_table_index['freq'], 1, item)
                     
 
         # Update the recording file status as well (addding file size)
