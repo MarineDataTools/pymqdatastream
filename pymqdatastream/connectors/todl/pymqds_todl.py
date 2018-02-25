@@ -151,7 +151,7 @@ def parse_device_info(data_str):
     device_info['cnt10k']       = None
     device_info['cnt32k_str']   = ''
     device_info['cnt32k']       = None
-    
+    cnt10k_str = ''
     for i,me in enumerate(re.finditer(r'>>>10kHz cnt:.*\n',data_str)):
         cnt10k_str = me.group()
 
@@ -159,11 +159,18 @@ def parse_device_info(data_str):
         cnt32k_str = me.group()
 
     device_info['cnt10k_str'] = cnt10k_str
-    cnt10k = [int(s) for s in re.findall(r'\b\d+\b', cnt10k_str)][-1]
-    device_info['cnt10k'] = cnt10k
+    try:
+        cnt10k = [int(s) for s in re.findall(r'\b\d+\b', cnt10k_str)][-1]
+        device_info['cnt10k'] = cnt10k
+    except:
+        device_info['cnt10k'] = None
+        
     device_info['cnt32k_str'] = cnt32k_str
-    cnt32k = [int(s) for s in re.findall(r'\b\d+\b', cnt32k_str)][-1]
-    device_info['cnt32k'] = cnt32k    
+    try:
+        cnt32k = [int(s) for s in re.findall(r'\b\d+\b', cnt32k_str)][-1]
+        device_info['cnt32k'] = cnt32k            
+    except:
+        device_info['cnt32k'] = None   
 
     #
     # Get the sampling frequencies

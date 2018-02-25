@@ -1179,7 +1179,7 @@ class todlDevice():
                 self._ad_table_ind_ch.append(i+1)
 
         for i in range(0,num_ltcs):
-            self._ad_table_index['ltc'].append(i + len(self._ad_table_index))
+            self._ad_table_index['ltc'].append(i + len(self._ad_table_index)-1)
             
         num_rows =  num_ltcs + len(self._ad_table_index) - 1
         
@@ -1483,7 +1483,7 @@ class todlDevice():
                         ct = data['t']
                         V = data['V']
 
-                        
+
                         # Packet number            
                         item = QtWidgets.QTableWidgetItem(str(num))
                         self._ad_table.setItem(self._ad_table_index['num'], ind_col, item)
@@ -1495,6 +1495,12 @@ class todlDevice():
                         for n,i in enumerate(self.todl.device_info['adcs']):
                             item = QtWidgets.QTableWidgetItem(str(V[n]))
                             self._ad_table.setItem(self._ad_table_index['ltc'][n], ind_col, item )
+
+                # IMU frequency
+                if(data['type']=='Lfr'):
+                    # Counter
+                    item = QtWidgets.QTableWidgetItem(str(round(data['f'],2)))
+                    self._ad_table.setItem(self._ad_table_index['freq'], 1, item)                            
 
                 # IMU data                        
                 if((data['type']=='A') and showA):
