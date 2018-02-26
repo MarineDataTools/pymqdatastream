@@ -155,6 +155,7 @@ def parse_device_info(data_str):
     for i,me in enumerate(re.finditer(r'>>>10kHz cnt:.*\n',data_str)):
         cnt10k_str = me.group()
 
+    cnt32k_str = ''        
     for i,me in enumerate(re.finditer(r'>>>32kHz cnt:.*\n',data_str)):
         cnt32k_str = me.group()
 

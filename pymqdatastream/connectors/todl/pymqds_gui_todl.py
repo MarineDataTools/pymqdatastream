@@ -301,7 +301,10 @@ class todlConfig(QtWidgets.QWidget):
         layout.addWidget(self._query_bu,6,0+1)
         layout.addWidget(self._ad_apply_bu,6,1+1)        
 
-
+        self.main_layout = layout
+        # Add the pyroscience widgets
+        self.setup_pyro_widget() # this function is also changing the layout
+        
         self.setLayout(layout)
 
         print('updating')
@@ -454,6 +457,18 @@ class todlConfig(QtWidgets.QWidget):
 
     def _close(self):
         self.close()
+
+
+    def setup_pyro_widget(self):
+        """
+        Setups widgets for the Pyroscience sensor
+        """
+        self._pyro_switch_status = ['Pyro on','Pyro off']
+        self._pyro_switch_button = QtWidgets.QPushButton(self._pyro_switch_status)
+        self._pyro_switch_button.clicked.connect(self._clicked_pyro_switch)
+
+    def _clicked_pyro_switch(self):
+        print('Clickclick')
 
 
 def _start_pymqds_plotxy(addresses):
