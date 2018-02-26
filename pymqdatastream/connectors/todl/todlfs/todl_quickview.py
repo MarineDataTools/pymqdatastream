@@ -47,21 +47,24 @@ def main():
 
     # Read in PyroScience data
     ncp = nc.groups['pyro']
-    t_p = ncp.variables['t_pyro']
+    t_p = ncp.variables['t_pyro'][:]
     time_p = netCDF4.num2date(ncp.variables['time'][:],units = ncp.variables['time'].units)
     fp = 1/(np.diff(t_p).mean())    
     phi = ncp.variables['phi'][:]
 
     # Read in IMU
     nci = nc.groups['imu']
-    t_imu = nci.variables['t_imu']
+    t_imu = nci.variables['t_imu'][:]
     fi = 1/(np.diff(t_imu).mean())    
     accx = nci.variables['accx'][:]
     accy = nci.variables['accy'][:]
     accz = nci.variables['accz'][:]
     gyrox = nci.variables['gyrox'][:]
     gyroy = nci.variables['gyroy'][:]
-    gyroz = nci.variables['gyroz'][:]        
+    gyroz = nci.variables['gyroz'][:]
+    magx = nci.variables['magx'][:]
+    magy = nci.variables['magy'][:]
+    magz = nci.variables['magz'][:]            
 
     V_ch1_pl = np.asarray(V_ch1[:])
     V_ch2_pl = np.asarray(V_ch2[:])
@@ -83,8 +86,8 @@ def main():
     pl.ylabel('U [V]')
 
     pl.subplot(2,1,2)
-    #pl.plot(t_ch2,V_ch2_pl)
-    pl.plot(time_ch2,V_ch2_pl)
+    pl.plot(t_ch2,V_ch2_pl)
+    #pl.plot(time_ch2,V_ch2_pl)
     pl.title('V_adc0_ch2; Freq:' + str(f2.round(2)))
     pl.xlabel('t [s]')
     pl.ylabel('U [V]')    
@@ -93,27 +96,34 @@ def main():
     # Plot Firesting data
     pl.figure(2)
     pl.clf()
-    #pl.plot(t_p,phi)
-    pl.plot(time_p,phi)
+    pl.plot(t_p,phi)
+    #pl.plot(time_p,phi)
     pl.title('Firesting data; Freq:' + str(fp.round(2)))
     pl.draw()
 
     # Plot IMU data
     pl.figure(3)
     pl.clf()
-    pl.subplot(2,1,1)
-    pl.plot(t_imu,accx)
-    pl.plot(t_imu,accy)
-    pl.plot(t_imu,accz)        
+    pl.subplot(3,1,1)
+    pl.plot(t_imu,accx,'o')
+    pl.plot(t_imu,accy,'o')
+    pl.plot(t_imu,accz,'o')        
     pl.title('Acceleration IMU; Freq:' + str(fi.round(2)))
     pl.legend(('x','y','z'))    
 
-    pl.subplot(2,1,2)
-    pl.plot(t_imu,gyrox)
-    pl.plot(t_imu,gyroy)
-    pl.plot(t_imu,gyroz)
+    pl.subplot(3,1,2)
+    pl.plot(t_imu,gyrox,'o')
+    pl.plot(t_imu,gyroy,'o')
+    pl.plot(t_imu,gyroz,'o')
     pl.title('Gyro IMU; Freq:' + str(fi.round(2)))
     pl.legend(('x','y','z'))
+
+    pl.subplot(3,1,3)
+    pl.plot(t_imu,magx,'o')
+    pl.plot(t_imu,magy,'o')
+    pl.plot(t_imu,magz,'o')
+    pl.title('MAG IMU; Freq:' + str(fi.round(2)))
+    pl.legend(('x','y','z'))    
     pl.draw()    
 
 
