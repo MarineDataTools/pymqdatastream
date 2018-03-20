@@ -202,10 +202,9 @@ class DataStreamAddresslist(QtWidgets.QWidget):
         
 class DataStreamSubscribeWidget(QtWidgets.QWidget):
     """ This widget allows to subscribe to remote Streams by clicking on the stream
-    hide_myself: bool, does not show the datastream
     Args:
         Datastream: datastream object
-        Hide_myself: bool, hides the own datastream object [default=False]
+        hide_myself: bool, hides the own datastream object [default=False]
         show_statistic: Showing some statistics
         update_subscribed_streams: update the subscribed streams, useful in combination with show_statistics = True
         stream_type: Types of streams to show (subscription is still only to pubstreams)
@@ -232,6 +231,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         # Check if the address of the local datastream is in the list, if yes, remove it
         if(hide_myself):
             for i,addr in enumerate(self.address_list):
+                print(self.Datastream)
                 if(addr == self.Datastream.address):
                     self.address_list.pop(i)
                     break
@@ -387,7 +387,8 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
             if(has_item):
                 continue
-            
+
+            # No item found, create one
             if(stream.stream_type == 'substream'):
                 name = str(i) + ' ' + stream.name
                 if(self.show_statistics):

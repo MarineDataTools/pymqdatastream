@@ -13,3 +13,7 @@
 	- Added Datastream.num_streams and Stream.number to uniquely number all streams (will be used as a replacement for the long uuid)
 	- Possible to subscribe Stream with an address string like this 20@tcp://127.0.0.1:18055
 
+0.7.5:	2018-03-20
+	- reworked and improved pyqtgraph_plotxy (add_graph works, xy axes choose)
+	- added frequency calculation of TODL
+
