@@ -564,7 +564,7 @@ class todlnetCDF4File():
             if(self.todl.device_info['imu_freq'] > 0):
                 m = len(self.imu_t_tmp)                
                 n = len(self.imu_t)
-                print(self.imu_accx_tmp[:])
+                #print(self.imu_accx_tmp[:])
                 self.imu_t[n:n+m]     = self.imu_t_tmp[:]
                 self.imu_temp[n:n+m]  = self.imu_temp_tmp[:]
                 self.imu_accx[n:n+m]  = self.imu_accx_tmp[:]
