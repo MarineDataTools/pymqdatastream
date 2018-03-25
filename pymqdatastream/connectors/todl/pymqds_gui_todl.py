@@ -463,18 +463,29 @@ class todlConfig(QtWidgets.QWidget):
         """
         Setups widgets for the Pyroscience sensor
         """
-        self._pyro_switch_status = ['Pyro on','Pyro off']
-        self._pyro_switch_button = QtWidgets.QPushButton(self._pyro_switch_status)
+        self._pyro_switch_status = ['Switch Pyro on','Switch Pyro off']
+        self._pyro_switch_button = QtWidgets.QPushButton(self._pyro_switch_status[1])
         self._pyro_switch_button.clicked.connect(self._clicked_pyro_switch)
+        self.main_layout.addWidget(self._pyro_switch_button,0,5)
 
     def _clicked_pyro_switch(self):
-        print('Clickclick')
-
+        if(self._pyro_switch_button.text() == self._pyro_switch_status[0]):
+            self._pyro_switch_button.setText(self._pyro_switch_status[1])
+            print('Setting Pyro frequency to ' + str(self._pyro_freq) + ' Hz')
+            self.todl.init_todllogger(pyro_freq = self._pyro_freq)            
+        else:
+            self._pyro_freq = self.todl.device_info['pyro_freq']
+            self._pyro_switch_button.setText(self._pyro_switch_status[0])
+            print('Setting Pyro frequency to 0 Hz')
+            self.todl.init_todllogger(pyro_freq =0.0)
+            
+            
 
 def _start_pymqds_plotxy(addresses):
     """
     
     Start a pymqds_plotxy session and plots the streams given in the addresses list
+    TODO: add a way to close this again! Using a queue seems to be a good idea ...
     Args:
         addresses: List of addresses of pymqdatastream Streams
     
@@ -482,7 +493,8 @@ def _start_pymqds_plotxy(addresses):
 
     logger.debug("_start_pymqds_plotxy():" + str(addresses))
 
-    logging_level = logging.DEBUG
+    #logging_level = logging.DEBUG
+    logging_level = logging.INFO
     datastreams = []
     
     for addr in addresses:
@@ -492,9 +504,11 @@ def _start_pymqds_plotxy(addresses):
         if(stream == None): # Could not subscribe
             logger.warning("_start_pymqds_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
             return False
-        
 
-        datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 10)
+        # ind_x = 0: TODL packet number 
+        # ind_x = 1: TODL time
+        # ind_x = 2: TODL first data
+        datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 1)
         datastream.plot_datastream(True)
         datastream.set_plotting_mode(mode='cont')        
         datastreams.append(datastream)
@@ -509,8 +523,10 @@ def _start_pymqds_plotxy(addresses):
 
 
     app = QtWidgets.QApplication([])
-    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0])
-    if(False):
+    # Plot the first stream found
+    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0],wtitle = "TODL ADC")
+    # Add more streams if wished
+    if(True):
         for i,datastream in enumerate(datastreams):
             if(i > 0):
                 plotxywindow.add_graph(datastream=datastream)
@@ -521,8 +537,7 @@ def _start_pymqds_plotxy(addresses):
     return plotxywindow
 
 
-
-def _start_pymqds_plotxy_test(graphs):
+def _start_pymqds_plotxy_TO2(graphs):
     """
     Start a pymqds_plotxy session and plots the streams given in the addresses list
     Args:
@@ -530,7 +545,7 @@ def _start_pymqds_plotxy_test(graphs):
     
     """
 
-    logger.debug("_start_pymqds_plotxy_test():" + str(graphs))
+    logger.debug("_start_pymqds_plotxy_TO2():" + str(graphs))
 
     logging_level = logging.DEBUG
     datastreams = []
@@ -568,7 +583,7 @@ def _start_pymqds_plotxy_test(graphs):
 
         if(n == 0):
             app = QtWidgets.QApplication([])            
-            plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0])                        
+            plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0],wtitle = "TODL T, oxy")
         else:
             plotxywindow.add_graph(datastream=datastream)            
 
@@ -635,6 +650,7 @@ class todlDevice():
         self.device_changed_function = device_changed_function
         self.ready = False
         self.all_widgets = []
+        self._plotxyprocesses = [] # A list of plotting processes        
         print('Hallo init!')
         # Create a todl object
         self.status = 0 # The status
@@ -700,21 +716,21 @@ class todlDevice():
         self._recording_status = ['Record','Stop recording']        
         self._info_record_bu = QtWidgets.QPushButton(self._recording_status[0])
         self._info_record_info = QtWidgets.QLabel('Status: Not recording')
-        self._info_plot_bu = QtWidgets.QPushButton('Plot')
+        self._info_plot_bu = QtWidgets.QPushButton('Plot ADC')
         self._info_plot_bu.setEnabled(FLAG_PLOTXY)
-        self._info_plot_bu.clicked.connect(self._plot_clicked)
+        self._info_plot_bu.clicked.connect(self._plot_clicked_adc)
         self._info_record_bu.clicked.connect(self._record_clicked)
         # Plot test
-        self._info_plot_test_bu = QtWidgets.QPushButton('Plot test')
-        self._info_plot_test_bu.clicked.connect(self._plot_test_clicked)
+        self._info_plot_TO2_bu = QtWidgets.QPushButton('Plot T, oxy')
+        self._info_plot_TO2_bu.clicked.connect(self._plot_TO2_clicked)
         self._info_plot_IMU_bu = QtWidgets.QPushButton('Plot IMU')
-        self._info_plot_IMU_bu.clicked.connect(self._plot_test_clicked)                
+        self._info_plot_IMU_bu.clicked.connect(self._plot_TO2_clicked)                
         
         info_layout.addWidget(self._info_record_bu,0,2)
         info_layout.addWidget(self._info_record_info,1,2)
         info_layout.addWidget(self._info_plot_bu,0,1)
         info_layout.addWidget(self._info_plot_IMU_bu,1,0)        
-        info_layout.addWidget(self._info_plot_test_bu,1,1)
+        info_layout.addWidget(self._info_plot_TO2_bu,1,1)
         info_layout.addWidget(self._show_data_bu,0,0)        
         
         # 
@@ -722,6 +738,7 @@ class todlDevice():
         # http://stackoverflow.com/questions/20797383/qt-fit-width-of-tableview-to-width-of-content
         # 
         self._ad_table = QtWidgets.QTableWidget()
+        self._ad_table_widgets = [] # A list for widgets to collect (statistic widgets)
         # http://stackoverflow.com/questions/14143506/resizing-table-columns-when-window-is-maximized
         #self._ad_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
         self._ad_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) #pyqt5
@@ -841,7 +858,8 @@ class todlDevice():
         # IP source
         self.text_ip = QtWidgets.QLineEdit()
         # Hack, this should be removed later
-        self.text_ip.setText('192.168.236.18:28117') # EMB DSL System, Port C
+        #self.text_ip.setText('192.168.236.18:28117') # EMB DSL System, Port C
+        self.text_ip.setText('192.168.236.18:28108') # EMB DSL System, Port ?
         #self.text_ip.setText('192.168.0.200:10002') # PCTD mobile system, Port L
         self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
         self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
@@ -1235,9 +1253,9 @@ class todlDevice():
         self._ad_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         # Add a right click menu to the table
         self._ad_table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self._ad_table.customContextMenuRequested.connect(self._table_menu)
+        self._ad_table.customContextMenuRequested.connect(self._ad_table_menu_right_click)
 
-    def _table_menu(self, event):
+    def _ad_table_menu_right_click(self, event):
         """
         Handling right click menu of the table
         """
@@ -1247,11 +1265,49 @@ class todlDevice():
         if self._ad_table.selectionModel().selection().indexes():
             for i in self._ad_table.selectionModel().selection().indexes():
                 row, column = i.row(), i.column()
-        menu = QtGui.QMenu()
+
+        for ind_row in self._ad_table_index['ltc']:
+            if((ind_row == row) and (column>0)):
+                self._menu = QtGui.QMenu()
+                statAction = self._menu.addAction("Show average/std/min/max")
+                action = self._menu.exec_(self._ad_table.mapToGlobal(event))
+                if action ==statAction:
+                    self.show_statistic(row, column)
+                #statAction.triggered.connect(self.show_statistic)
+                #self._menu.popup(QtGui.QCursor.pos())
+        #action = menu.exec_(self.mapToGlobal(pos))
         # an action for everyone
         print('HALLLLOO!',str(event),row,column)
 
+    def show_statistic(self,row,column):
+        print('Statistic here ...')
+        # Get the channel
+        for ch,col_tmp in enumerate(self._ad_table_ind_ch):
+            if(col_tmp == column):
+                break
+            
+        # get the selected cell            
+        cell = self._ad_table.item(row, column)
+        w = QtWidgets.QTableWidget()
+        w.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) #pyqt5
+        w.setColumnCount(6)
+        nltc = len(self.todl.device_info['adcs'])
+        w.setRowCount(1 + nltc)
+        w.verticalHeader().setVisible(False)        
+        w.setItem(0,1, QtWidgets.QTableWidgetItem( 'Avg' ))
+        w.setItem(0,2, QtWidgets.QTableWidgetItem( 'Std' ))
+        w.setItem(0,3, QtWidgets.QTableWidgetItem( 'Peak-Peak' ))
+        w.setItem(0,4, QtWidgets.QTableWidgetItem( 'min' ))
+        w.setItem(0,5, QtWidgets.QTableWidgetItem( 'max' ))
+        w.setWindowTitle("Statistics of TODL ADC ch" + str(ch))
+        w.show()
+        cell.stat_widget = w
+        self._ad_table_widgets.append([row,column,w])
+        # get the text inside selected cell (if any)
+        cellText = cell.text()
+        print(cellText)
 
+        
     def _ad_table_setup_1ch(self):
         self.ONECHFLAG = True
         self._ad_table.clear()
@@ -1418,9 +1474,9 @@ class todlDevice():
 
 
     def poll_serial_bytes(self):
-        self.deviceinfo.update_bytes(self.todl.bytes_read, self.todl.bytes_read_avg)
+        self.deviceinfo.update_bytes(self.todl.bytes_read, self.todl.bits_read_avg)
         #self.bytesreadlcd.display(self.todl.bytes_read)
-        #self.bytesspeed.setText(str(self.todl.bytes_read_avg))
+        #self.bytesspeed.setText(str(self.todl.bits_read_avg))
         pass        
 
 
@@ -1508,14 +1564,45 @@ class todlDevice():
                         # Update all LTC data of that channel
                         #for n,i in enumerate(self.todl.flag_adcs):
                         for n,i in enumerate(self.todl.device_info['adcs']):
-                            item = QtWidgets.QTableWidgetItem(str(V[n]))
+                            Vstr = str(round(V[n],6))
+                            item = QtWidgets.QTableWidgetItem(Vstr)
                             self._ad_table.setItem(self._ad_table_index['ltc'][n], ind_col, item )
 
-                # IMU frequency
+                # LTC2442 frequency
                 if(data['type']=='Lfr'):
                     # Counter
                     item = QtWidgets.QTableWidgetItem(str(round(data['f'],2)))
-                    self._ad_table.setItem(self._ad_table_index['freq'], 1, item)                            
+                    self._ad_table.setItem(self._ad_table_index['freq'], 1, item)
+
+                # LTC2442 frequency single channel
+                if('Lfr_ch' in data['type']):
+                    # Counter
+                    ch = data['ch']
+                    ind_col = self._ad_table_ind_ch[ch]                    
+                    item = QtWidgets.QTableWidgetItem(str(round(data['f'],2)))
+                    self._ad_table.setItem(self._ad_table_index['freq_ltc'], ind_col, item)
+                    #self._ad_table_widgets.append([row,column,w]) # The list is filled like this in right_click
+                    tmp = []
+                    for wtmp in self._ad_table_widgets: # Check if we have a statistic widget for plotting
+                        if(wtmp[2].isVisible()):
+                            tmp.append(wtmp)
+
+                    self._ad_table_widgets = tmp
+                    for wtmp in self._ad_table_widgets: # Check if we have a statistic widget for plotting
+                        if((wtmp[1] == ind_col)):
+                            print('hallo!!!')
+                            itemavg = QtWidgets.QTableWidgetItem(str(round(data['avg'],7)))
+                            itemstd = QtWidgets.QTableWidgetItem(str(round(data['std'],7)))
+                            itempp  = QtWidgets.QTableWidgetItem(str(round(data['pp'],7)))
+                            itemmin = QtWidgets.QTableWidgetItem(str(round(data['min'],7)))
+                            itemmax = QtWidgets.QTableWidgetItem(str(round(data['max'],7)))                            
+                            wtmp[2].setItem(1,1, itemavg)
+                            wtmp[2].setItem(1,2, itemstd)
+                            wtmp[2].setItem(1,3, itempp)
+                            wtmp[2].setItem(1,4, itemmin)
+                            wtmp[2].setItem(1,5, itemmax)                                                        
+
+                        
 
                 # IMU data                        
                 if((data['type']=='A') and showA):
@@ -1593,7 +1680,7 @@ class todlDevice():
 
         print(self._textdataformat)
 
-    def _plot_clicked(self):
+    def _plot_clicked_adc(self):
         """
         
         Starts a pyqtgraph plotting process
@@ -1610,10 +1697,12 @@ class todlDevice():
             if(stream.get_family() == "todl adc"):
                 addresses.append(self.todl.get_stream_address(stream))
                 
-        self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,))
-        self._plotxyprocess.start()
+        plotxyprocess= multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,))
+        self._plotxyprocesses.append(plotxyprocess)
+        plotxyprocess.daemon = True # If we are done, it will be killes as well        
+        plotxyprocess.start()
 
-    def _plot_test_clicked(self):
+    def _plot_TO2_clicked(self):
         """
         
         Starts a pyqtgraph plotting process
@@ -1686,9 +1775,10 @@ class todlDevice():
         else:
             graphs = [[dstreams[0]],[dstreams[1]],dstreams_O2]
             
-        self._plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy_test,args=(graphs,))
-        self._plotxyprocess.daemon = True
-        self._plotxyprocess.start()
+        plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy_TO2,args=(graphs,))
+        plotxyprocess.daemon = True
+        self._plotxyprocesses.append(plotxyprocess)        
+        plotxyprocess.start()                
 
         
     def _record_clicked(self):
@@ -1774,10 +1864,10 @@ class todlDevice():
         self.disp_widget.close()
         self.setup_widget.close() # Closing the TODL setup widget
 
-        try:
-            self._plotxyprocess.stop()
-        except:
-            pass
+        # Stop all plotting processes (the hardcore way, sorry for that processes ...)
+        for plotxyprocess in self._plotxyprocesses:
+            plotxyprocess.terminate()
+        
 
         
     def device_changed(self,fname):
@@ -2173,11 +2263,6 @@ class todlMainWindow(QtWidgets.QMainWindow):
         except:
             pass
 
-        try:
-            self._plotxyprocess.stop()
-        except:
-            pass            
-            
         self.close()
 
 

@@ -177,6 +177,9 @@ def parse_device_info(data_str):
     # Get the sampling frequencies
     #
     #>>>Freqs:ADCs: 100, IMU: 5
+    adcs_freq = np.NaN
+    imu_freq = np.NaN
+    pyro_freq = np.NaN    
     if(len(freq_str) > 0):
         freq_str = freq_str.replace('>>>Freqs:','')
         freq_str = freq_str.replace('\n','')
@@ -216,7 +219,9 @@ def parse_device_info(data_str):
         speed_str = me.group()                                            
 
 
-    data_format = [int(s) for s in re.findall(r'\b\d+\b', format_str)][-1]
+    data_format_tmp = [int(s) for s in re.findall(r'\b\d+\b', format_str)]
+    if(len(data_format_tmp) > 0):
+        data_format = data_format_tmp[-1]
     data_adcs = [int(s) for s in re.findall(r'\b\d+\b', adc_str)]
     data_channel_seq = [int(s) for s in re.findall(r'\b\d+\b', channel_str)]
     speed_data = [float(s) for s in re.findall(r'\d+\.\d+', speed_str)]
@@ -640,8 +645,8 @@ class todlDataStream(pymqdatastream.DataStream):
         self.serial_thread_queue_ans = queue.Queue()
 
         self.bytes_read = 0
-        self.bytes_read_avg = 0 # Average bytes received per time interval of 10 seconds
-        self.bytes_read_avg_dt = 2 # Average bytes received per time interval of 10 seconds
+        self.bits_read_avg = 0 # Average bytes received per time interval of 10 seconds
+        self.bits_read_avg_dt = 2 # Average bytes received per time interval of 10 seconds
         self.serial = None # The device to be connected to
         # Two initial queues, the first is for internal use (init logger, query_todl), the second is for the raw stream
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen),collections.deque(maxlen=self.dequelen)]
@@ -838,9 +843,9 @@ class todlDataStream(pymqdatastream.DataStream):
         while True:
             time.sleep(dt)
             tstop = time.time()
-            if((tstop-tstart) > self.bytes_read_avg_dt):
+            if((tstop-tstart) > self.bits_read_avg_dt):
                 tstart = time.time()
-                self.bytes_read_avg = bytes_read*8/self.bytes_read_avg_dt
+                self.bits_read_avg = bytes_read*8/self.bits_read_avg_dt
                 bytes_read = 0
                 
             # Distingiush here between serial data and socket data
@@ -1119,16 +1124,16 @@ class todlDataStream(pymqdatastream.DataStream):
             self.convert_raw_data = self.convert_raw_data_format4
 
 
-    def init_todllogger(self,adcs=None,data_format=None,channels=None,freq=None):
+    def init_todllogger(self,adcs=None,data_format=None,channels=None,freq=None,pyro_freq=None):
         """Function to set specific settings on the logger, all arguments
 default to None, only with a valid argument that setting will be sent to the device
 
         Args:
             flag_adcs: List of the ltc2442 channels to be send back [e.g. [0,2,7]], has to be between 0 and 7
-            format: Output format of the logger
+            data_format: Output format of the logger
             channels: channel sequence, a list with a channel sequence [e.g. [0,1,2,3,0,0]]
             freq: conversion frequency
-
+            pyro_freq: frequency of the Pyroscience optode
         """
         funcname = self.__class__.__name__ + '.init_todllogger()'
 
@@ -1178,6 +1183,12 @@ default to None, only with a valid argument that setting will be sent to the dev
                     self.send_serial_data(cmd + '\n')
                     self.logger.debug(funcname + ' sending:' + cmd)
                 time.sleep(dt_wait)
+
+            if(pyro_freq is not None):
+                # Freq
+                cmd = 'pyro_freq ' + str(freq)
+                self.send_serial_data(cmd + '\n')
+                self.logger.debug(funcname + ' sending:' + cmd)
 
 
             self.print_serial_data = False            
@@ -1952,9 +1963,27 @@ default to None, only with a valid argument that setting will be sent to the dev
         freq_packet = {'name':'Lfr'}
         freq_packet['dt_freq'] = 0.5
         freq_packet['len_t_array'] = 1000
-        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets
+        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets (all)
         freq_packet['ind'] = 0
         freq_packets['Lfrdata'] = freq_packet
+
+        # LTC2442 frequency, single channels
+        nstreams = (max(self.device_info['channel_seq']) + 1) # The maximum number of possible channels, easier for sorting
+        num_ltcs = len(self.device_info['adcs']) # The number of sampling ltcs
+        freq_packets_tmp = []
+        for nstream in range(nstreams):        
+            freq_packet = {'name':'Lfr_ch' + str(nstream)}
+            freq_packet['ch'] = nstream
+            freq_packet['dt_freq'] = 0.5            
+            freq_packet['len_t_array'] = 1000
+            freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
+            freq_packet['Vdata'] = np.zeros((freq_packet['len_t_array'],num_ltcs))
+            freq_packet['len_t_array'] = 1000
+            freq_packet['ind'] = 0
+            freq_packets_tmp.append(freq_packet)
+            
+        freq_packets['Lfr_chdata'] = freq_packets_tmp
+        
         # IMU frequency
         freq_packet = {'name':'IMUfr'}
         freq_packet['dt_freq'] = 0.5
@@ -1964,16 +1993,17 @@ default to None, only with a valid argument that setting will be sent to the dev
         freq_packets['IMUfrdata'] = freq_packet                
         # Pyroscience frequency
         freq_packet = {'name':'Ofr'}
-        freq_packet['dt_freq'] = 0.5
+        freq_packet['dt_freq'] = 2.0
         freq_packet['len_t_array'] = 1000
-        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
+        freq_packet['data']    = np.zeros((freq_packet['len_t_array'],2))
+        freq_packet['phidata'] = np.zeros((freq_packet['len_t_array'],)) # For calculation of an average
         freq_packet['ind'] = 0
         freq_packets['Ofrdata'] = freq_packet        
         
         while True:
             cnt += 1
             aux_data_stream = [[],[]]
-            nstreams = (max(self.device_info['channel_seq']) + 1)            
+            nstreams = (max(self.device_info['channel_seq']) + 1) # The maximum number of possible channels, easier for sorting
             data_stream = [[] for _ in range(nstreams) ]
             ta = []
             time.sleep(dt)
@@ -1997,6 +2027,15 @@ default to None, only with a valid argument that setting will be sent to the dev
                         #(list instead of dict)
                         data_list = [data_packet['num'],data_packet['t']] + data_packet['V']
                         data_stream[data_packet['ch']].append(data_list)
+                        ch_tmp = data_packet['ch']
+                        ind_tmp = freq_packets['Lfr_chdata'][ch_tmp]['ind']
+                        # Packet for frequency and average calculation of single channels
+                        if(ind_tmp < freq_packets['Lfr_chdata'][ch_tmp]['len_t_array']):
+                            freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,0] = ts
+                            freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,1] = data_packet['t']
+                            freq_packets['Lfr_chdata'][ch_tmp]['Vdata'][ind_tmp,:] = data_packet['V'][:]
+                            freq_packets['Lfr_chdata'][ch_tmp]['ind'] += 1
+                        
                         # Packet for frequency calculation
                         if(freq_packets['Lfrdata']['ind'] < freq_packets['Lfrdata']['len_t_array']):
                             freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],0] = ts
@@ -2016,28 +2055,47 @@ default to None, only with a valid argument that setting will be sent to the dev
                         # Packet for frequency calculation
                         if(freq_packets['Ofrdata']['ind'] < freq_packets['Ofrdata']['len_t_array']):
                             freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],0] = ts
+                            freq_packets['Ofrdata']['phidata'][freq_packets['Ofrdata']['ind']] = data_packet['phi']
                             freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],1] = data_packet['t']
                             freq_packets['Ofrdata']['ind'] += 1                        
 
 
                 # Frequency packets
                 for name_freq_pack in freq_packets:
-                    freq_pack = freq_packets[name_freq_pack]
-                    if(freq_pack['ind'] > 0):
-                        # Maximum time difference
-                        dtL = freq_pack['data'][:freq_pack['ind'],0].max() - freq_pack['data'][:freq_pack['ind'],0].min()
-                        if((freq_pack['ind'] >=
-                            freq_pack['len_t_array']) or (dtL > freq_pack['dt_freq'])):
-                            data_packet = {'type':freq_pack['name']}
+                    if(name_freq_pack == 'Lfr_chdata'):
+                        freq_packets_tmp = freq_packets[name_freq_pack]
+                    else:
+                        freq_packets_tmp = [freq_packets[name_freq_pack]]
 
-                            data_packet['dt'] = dtL
-                            dtLt = freq_pack['data'][freq_pack['ind']-1,1] - freq_pack['data'][0,1]
-                            #print(dtLt)
-                            data_packet['f'] = (freq_pack['ind']-1)/(dtLt)
-                            freq_pack['data'][:,:] = 0
-                            freq_pack['ind'] = 0                    
-                            print(data_packet)
-                            data_packets.append(data_packet)                        
+                    for freq_pack in freq_packets_tmp:
+                        if(freq_pack['ind'] > 0):
+                            # Maximum time difference
+                            dtL = freq_pack['data'][:freq_pack['ind'],0].max() - freq_pack['data'][:freq_pack['ind'],0].min()
+                            if(freq_pack['ind'] >= (freq_pack['len_t_array']) or (dtL > freq_pack['dt_freq'])):
+                                data_packet = {'type':freq_pack['name']}
+                                data_packet['dt'] = dtL
+                                dtLt = freq_pack['data'][freq_pack['ind']-1,1] - freq_pack['data'][0,1]
+                                #print(dtLt)
+                                data_packet['f'] = (freq_pack['ind']-1)/(dtLt)
+                                # Oxygen mean and standard deviation calculation
+                                if('Lfr_ch' in freq_pack['name']):
+                                    data_packet['ch'] = freq_pack['ch']                                    
+                                    data_packet['avg'] = np.mean(freq_pack['Vdata'][:freq_pack['ind']-1])
+                                    data_packet['std'] = np.std(freq_pack['Vdata'][:freq_pack['ind']-1])
+                                    data_packet['min'] = np.min(freq_pack['Vdata'][:freq_pack['ind']-1])
+                                    data_packet['max'] = np.max(freq_pack['Vdata'][:freq_pack['ind']-1])
+                                    data_packet['pp'] = data_packet['max'] - data_packet['min']
+                                    print(data_packet)
+                                if(freq_pack['name'] == 'Ofr'):
+                                    data_packet['avg'] = np.mean(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
+                                    data_packet['std'] = np.std(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
+                                    data_packet['min'] = np.min(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
+                                    data_packet['max'] = np.max(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
+                                    data_packet['pp'] = data_packet['max'] - data_packet['min']                                    
+                                    print(data_packet)
+                                data_packets.append(data_packet)
+                                freq_pack['data'][:,:] = 0
+                                freq_pack['ind'] = 0                            
 
                     
                 ta.append( time.time() )

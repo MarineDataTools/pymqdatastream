@@ -63,6 +63,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         except:                                    
             self.pyqtgraph['xrs'] = None
 
+        # Change the subscription of the streams to allow extra parameter used for plotting
         self.bufsize = bufsize # The standard bufsize of plotted streams
         self.subscribe_stream_orig = self.subscribe_stream
         self.subscribe_stream  = self.subscribe_stream_pyqtgraph
@@ -212,7 +213,8 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
 
 
     def subscribe_stream_pyqtgraph(self,*args,**kwargs):
-        """
+        """ Subscription function
+        
         """
         stream = self.subscribe_stream_orig(*args,**kwargs)
         self.init_stream_settings(stream, bufsize = self.bufsize, plot_data = True, ind_x = 0, ind_y = 1, plot_nth_point = 1)
@@ -428,14 +430,11 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         pass
 
     def handle_button_subscribed(self):
-        """
-
-        The basic subscription procedure is done in the inherited module, here
-        extra stuff special for pyqtgraph are handled. Add a check
-        state box for the subscribed streams, indicating if to plot or
-        not, choose color for plot and which data to plot against in x
-        and y.
-
+        """The basic subscription procedure is done in the inherited
+        module (DataStreamSubscribeWidget.handle_subscribe_clicked), here extra stuff special
+        for pyqtgraph are handled. Add a check state box for the
+        subscribed streams, indicating if to plot or not, choose color
+        for plot and which data to plot against in x and y.
         """
         # http://stackoverflow.com/questions/1667688/qcombobox-inside-qtreewidgetitem
         print(self.treeWidgetsub)
@@ -447,6 +446,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         root.setData(0, QtCore.Qt.UserRole, 'blab')
         root.setData(1, QtCore.Qt.UserRole, 'blab')
         column = 0
+            
         for i in range(child_count):
             childitem = root.child(i)
             childitem.setData(0, QtCore.Qt.UserRole, 'blab')
@@ -454,8 +454,19 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
             grandchild_count = childitem.childCount()
             print('grandchild',grandchild_count)
             
-            # Add plot options as grandchilds if initialized the first time
+            # Add plot options as grandchilds if initialized the first
+            # time ( done by
+            # DataStreamSubscribeWidget.populate_subscribed_with_streams
+            # called before this routine)
             if(grandchild_count == 0):
+                if self.sender() is self.button_subscribe: # Called by 'Add stream' button
+                    self._XY_stream = childitem.stream # used by handle_button_XY_clicked
+                    self._XY_stream.pyqtgraph['plot_data'] = None # Dont plot the data until the X and Y have been choosen
+                    #self._XY_stream.pyqtgraph['ind_x'] = None
+                    #self._XY_stream.pyqtgraph['ind_y'] = None                    
+                    self.handle_button_XY_clicked()
+
+                    
                 childitem.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ShowIndicator)
                 # Show bufsize
                 bsize = childitem.stream.pyqtgraph['buf_tilesize']
@@ -491,9 +502,14 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 # Create a plot option
                 check_plot = QtWidgets.QCheckBox()
                 check_plot.setText('Plot stream')
-                check_plot.setChecked(childitem.stream.pyqtgraph['plot_data'])
+                check_plot.setChecked(True)
+                if childitem.stream.pyqtgraph['plot_data'] is not True:
+                    check_plot.setChecked(False)
+                    
                 check_plot.stateChanged.connect(self.handle_check_plot_changed)
+                # This seems clumsy but so I have access to check_plot and pyqtgraph from both sides
                 check_plot.pyqtgraph = childitem.stream.pyqtgraph
+                childitem.stream.check_plot = check_plot
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, [])                
                 self.treeWidgetsub.setItemWidget(grandchilditem, 0 , check_plot)
                 # Create a plot every nth point option
@@ -505,8 +521,6 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
                 spin_nplot.setValue(childitem.stream.pyqtgraph['nth_pt'])
                 spin_nplot.valueChanged.connect(self.handle_plot_nth_point_changed)
                 spin_nplot.pyqtgraph = childitem.stream.pyqtgraph
-                
-
                 
                 grandchilditem = QtWidgets.QTreeWidgetItem(childitem, ['spin'])
                 self.treeWidgetsub.setItemWidget(grandchilditem, 0 , spin_nplot)
@@ -547,17 +561,24 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         button.setPalette(p)
 
 
+    #def handle_button_XY_clicked(self,stream=None):
     def handle_button_XY_clicked(self):
-        """
+        """Choosing the variables of the stream to be plotted, needs a stream
+        which is given either as a button.stream as an argument
 
-        Choosing the variables of the stream to be plotted
-        
         """
         print('Clicked XY')
         button = self.sender()
-        
+        # Check if we have a sender or we take the stream from the stream argument
+        try:
+            stream = button.stream
+        except:
+            stream = self._XY_stream
+            self._XY_stream = None
+
         layoutH = QtWidgets.QHBoxLayout()  # layout for the central widget
-        widget = QtWidgets.QWidget()  # central widget        
+        widget = QtWidgets.QWidget()  # central widget
+        widget.setWindowTitle("X/Y-Axes of: " + stream.name)        
         widget.setLayout(layoutH)        
         layoutX = QtWidgets.QVBoxLayout()  # layout for the central widget
         layoutY = QtWidgets.QVBoxLayout()  # layout for the central widget
@@ -573,19 +594,19 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
 
         self._number_groupX.buttonClicked[QtWidgets.QAbstractButton].connect(self.XY_group_clicked)
         self._number_groupY.buttonClicked[QtWidgets.QAbstractButton].connect(self.XY_group_clicked)
-        # To get the indices
-        self._number_groupX.pyqtgraph = button.stream.pyqtgraph
-        self._number_groupY.pyqtgraph = button.stream.pyqtgraph        
+        # To get the indices and full control over e.g. check_box
+        self._number_groupX.stream = stream
+        self._number_groupY.stream = stream
             
         labX = QtWidgets.QLabel('X-Axis')
         labY = QtWidgets.QLabel('Y-Axis')
         layoutX.addWidget(labX)
         layoutY.addWidget(labY)
-        for i,var in enumerate(button.stream.variables):
+        for i,var in enumerate(stream.variables):
             rX = QtWidgets.QRadioButton(str(i) + ': ' + var['name'])
             rX.var_ind = i
             rX.var_name = var['name']
-            if(i == self._number_groupX.pyqtgraph['ind_x']):
+            if(i == self._number_groupX.stream.pyqtgraph['ind_x']):
                 rX.toggle()
 
             self._number_groupX.addButton(rX)
@@ -594,7 +615,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
             rY = QtWidgets.QRadioButton(str(i) + ': ' + var['name'])
             rY.var_ind = i
             rY.var_name = var['name']
-            if(i == self._number_groupY.pyqtgraph['ind_y']):
+            if(i == self._number_groupY.stream.pyqtgraph['ind_y']):
                 rY.toggle()
                 
             self._number_groupY.addButton(rY)
@@ -618,36 +639,47 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         print('Hallo' + str(btn.text()),btn.var_ind)
         #if(self.sender() == self._number_groupX):
         #    print('X-Axis')
-        #    self._number_groupX.pyqtgraph['ind_x'] = btn.var_ind
+        #    self._number_groupX.stream.pyqtgraph['ind_x'] = btn.var_ind
         #if(self.sender() == self._number_groupY):
         #    print('Y-Axis')
-        #    self._number_groupY.pyqtgraph['ind_y'] = btn.var_ind            
+        #    self._number_groupY.stream.pyqtgraph['ind_y'] = btn.var_ind            
+        
         
     def handle_button_XY_appl_cancl_clicked(self):
         ind_x = self._number_groupX.checkedButton().var_ind
         ind_y = self._number_groupY.checkedButton().var_ind
-        ind_x_old = self._number_groupX.pyqtgraph['ind_x']
-        ind_y_old = self._number_groupY.pyqtgraph['ind_y']        
+        ind_x_old = self._number_groupX.stream.pyqtgraph['ind_x']
+        ind_y_old = self._number_groupY.stream.pyqtgraph['ind_y']        
         name_x = self._number_groupX.checkedButton().var_name
-        name_y = self._number_groupY.checkedButton().var_name       
+        name_y = self._number_groupY.checkedButton().var_name
+        changed = False
         print(ind_x,ind_y)
         if(self.sender() == self._button_XY_appl):
-            self._number_groupX.pyqtgraph['ind_x'] = ind_x
-            self._number_groupY.pyqtgraph['ind_y'] = ind_y
+            # if plot_data == None change to True
+            if(self._number_groupX.stream.pyqtgraph['plot_data'] == None):
+                #self._number_groupX.stream.pyqtgraph['plot_data'] = True
+                self._number_groupX.stream.check_plot.setChecked(True)
+                changed = True
+                
+            self._number_groupX.stream.pyqtgraph['ind_x'] = ind_x
+            self._number_groupY.stream.pyqtgraph['ind_y'] = ind_y
             streamx_txt = 'X Data: ' + name_x + ' (' + str(ind_x) + ')'            
-            self._number_groupY.pyqtgraph['itemX'].setText(0,streamx_txt)
+            self._number_groupY.stream.pyqtgraph['itemX'].setText(0,streamx_txt)
             streamy_txt = 'Y Data: ' + name_y + ' (' + str(ind_y) + ')'
-            self._number_groupY.pyqtgraph['itemY'].setText(0,streamy_txt)
+            self._number_groupY.stream.pyqtgraph['itemY'].setText(0,streamy_txt)
             # If something has changed, clear and set change flag
-            if((ind_x != ind_x_old) or (ind_y != ind_y_old)):
+            if((ind_x != ind_x_old) or (ind_y != ind_y_old) or changed):
                 self.handle_button_plot_clear()
+                #self.handle_check_plot_changed()
+                print('Make a flag change!')
                 self.Datastream.pyqtgraph['flag_change'] = True
                 
-            self._XY_widget.close()            
+            self._XY_widget.close()
+            
         if(self.sender() == self._button_XY_cancl):
             self._XY_widget.close()
-
-
+            
+        
         
 class pyqtgraphWidget(QtWidgets.QWidget):
     """
@@ -972,15 +1004,18 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
 
 class pyqtgraphMainWindow(QtWidgets.QMainWindow):
-    def __init__(self, datastream = None, logging_level = logging.INFO):
+    def __init__(self, datastream = None, logging_level = logging.INFO, wtitle = None):
         QtWidgets.QMainWindow.__init__(self)
         mainMenu = self.menuBar()
-        self.setWindowTitle("Python Zeromq Datastream_PlotXY")
+        if wtitle == None:
+            wtitle = "Python Zeromq Datastream_PlotXY"
+            
+        self.setWindowTitle(wtitle)
         self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
         extractActionA = QtWidgets.QAction("&Add Graph", self)
         extractActionA.setShortcut("Ctrl+A")
         extractActionA.setStatusTip('Adding a new graph')
-        extractActionA.triggered.connect(self.add_graph)
+        extractActionA.triggered.connect(self.clicked_add_graph)
         extractAction = QtWidgets.QAction("&Quit", self)
         extractAction.setShortcut("Ctrl+Q")
         extractAction.setStatusTip('Closing the program')
@@ -1007,9 +1042,21 @@ class pyqtgraphMainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(mainwidget)
         #self.show()
 
+    def clicked_add_graph(self):
+        """ Wrapper function to call self.add_graph with a newly created datastream
+        """
+        datastream = pyqtgraphDataStream(name = 'plotxy_' + str(len(self.pyqtgraphs)), logging_level=self.logging_level)
+        datastream.plot_datastream(True)
+        self.add_graph(datastream)
+
     def add_graph(self,datastream = None):
-        print('Adding graph!')
-        pyqtgraphwidget = pyqtgraphWidget( datastream = datastream, logging_level = self.logging_level )        
+        logger.debug('Adding graph')
+        #datastream_qt_service.DataStreamSubscribeWidget
+        if datastream == None:
+            logger.warning('Need a proper datastream, doing nothing')
+            return
+            
+        pyqtgraphwidget = pyqtgraphWidget( datastream = datastream, logging_level = self.logging_level)
         self.pyqtgraphs.append(pyqtgraphwidget)
         self.layout.addWidget(pyqtgraphwidget)
 
@@ -1042,7 +1089,6 @@ def main():
 
 
     logger.setLevel(logging_level)
-    
     datastream = None
     print('Hallo',args.plot_stream)
     datastream = pyqtgraphDataStream(name = 'plotxy', logging_level=logging_level)

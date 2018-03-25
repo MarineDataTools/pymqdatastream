@@ -1181,8 +1181,6 @@ def treat_address(address=None,control=True):
                 has_base_address = True
                 continue
                 
-            print('address',address)
-            print(address.find(':'))
             # Adding protocol if not existing
             # TODO: This essentially forbids to use anything but tcp
             if(not 'tcp://' in address):
@@ -1440,7 +1438,6 @@ class DataStream(object):
         #self.logger.debug(funcname + ': ' + str(address))
         
         rep_socket = zmq_socket(socket_type = 'repstream',address = address, socket_reply_function = socket_reply_function, logging_level=logging.DEBUG)
-        print(rep_socket)
         self.sockets.append(rep_socket)
 
         stream = Stream(stream_type = 'repstream',socket = rep_socket, variables = variables, name = name, statistic = statistic, logging_level = self.logging_level, number=self.num_streams)
