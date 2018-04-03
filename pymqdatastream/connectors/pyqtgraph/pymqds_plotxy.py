@@ -687,10 +687,8 @@ class pyqtgraphWidget(QtWidgets.QWidget):
     Widget to plot data
 
     """
-    def __init__(self, datastream = None, logging_level = logging.INFO):
-        """
-        
-        Args:
+    def __init__(self, datastream = None, logging_level = logging.INFO, update_time=100):
+        """Args:
 
         """
         QtWidgets.QWidget.__init__(self)
@@ -767,10 +765,11 @@ class pyqtgraphWidget(QtWidgets.QWidget):
 
 
         # update the figure once in a while
+        self.update_time = update_time
         timer = QtCore.QTimer(self)
         timer.timeout.connect(self.update_plot)
         #timer.start(25)
-        timer.start(100)
+        timer.start(update_time)
         self.update_timer = timer
         
         self.setLayout(layout)
@@ -778,14 +777,49 @@ class pyqtgraphWidget(QtWidgets.QWidget):
         
 
     def update_plot(self):
-        """
-        The main function of the module: Here all subscribed substreams are plotted
+        """The main function of the module: It is called by a QTimer
+        (self.update_timer) every self.update_time [ms]. Here data
+        from all subscribed substreams are popped and according to the
+        settings plotted
+
         """
         if(self.Datastream.pyqtgraph['plot_datastream']):
             # Load data and plot
             FLAG_CHANGED = self.Datastream.pyqtgraph['flag_change']
             for i,stream in enumerate(self.Datastream.Streams):
                 if(stream.stream_type == 'substream'):
+                    # Get the data
+                    ind_x = stream.pyqtgraph['ind_x']
+                    ind_y = stream.pyqtgraph['ind_y']
+                    while(len(stream.deque) > 0):
+                        data = stream.deque.pop()
+                        plot_data = data['data']
+                        time_plot_data = data['info']['ts']
+                        ind_start = stream.pyqtgraph_npdata['ind_start']
+                        ind_end = stream.pyqtgraph_npdata['ind_end']
+                        for n in range(len(plot_data)):
+                            stream.pyqtgraph['n_pt_recvd'] += 1                                
+                            if(( stream.pyqtgraph['n_pt_recvd'] % stream.pyqtgraph['nth_pt'] ) == 0):
+                                stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
+                                stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
+                                stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
+                                ind_end += 1
+                                if( (ind_end - ind_start ) >= stream.pyqtgraph['buf_tilesize']):
+                                    ind_start += 1
+
+                                # check for a buffer overflow
+                                if(ind_end == stream.pyqtgraph['bufsize'] ):
+                                    #logger.debug('overflow')
+                                    stream.pyqtgraph_npdata['time'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['time'][-stream.pyqtgraph['buf_tilesize']:]
+                                    stream.pyqtgraph_npdata['x'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['x'][-stream.pyqtgraph['buf_tilesize']:]
+                                    stream.pyqtgraph_npdata['y'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['y'][-stream.pyqtgraph['buf_tilesize']:]
+
+                                    ind_end = stream.pyqtgraph['buf_tilesize']
+                                    ind_start = 0
+
+                                stream.pyqtgraph_npdata['ind_start'] = ind_start
+                                stream.pyqtgraph_npdata['ind_end'] = ind_end
+                                
                     # No plotting of this stream
                     if(stream.pyqtgraph['plot_data'] == False):
                         if(not stream.pyqtgraph_line == None):
@@ -796,14 +830,8 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                             stream.pyqtgraph_npdata['ind_start'] = 0
                             FLAG_CHANGED = True
                             
-                        # Get rid of accumulated data
-                        while(len(stream.deque) > 0):
-                            data = stream.deque.pop()
-
                     # Plotting of this stream                            
                     else:
-                        ind_x = stream.pyqtgraph['ind_x']
-                        ind_y = stream.pyqtgraph['ind_y']                        
                         # Create a new line object for the stream
                         if(stream.pyqtgraph_line == None):
                             FLAG_CHANGED = True
@@ -814,23 +842,11 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                             #self.pyqtgraph_axes.clear()
 
                             
-                        # Finally get the data
-                        while(len(stream.deque) > 0):
-                            data = stream.deque.pop()
-                            plot_data = data['data']
-                            time_plot_data = data['info']['ts']
-                            ind_start = stream.pyqtgraph_npdata['ind_start']
-                            ind_end = stream.pyqtgraph_npdata['ind_end']
-                            for n in range(len(plot_data)):
-                                stream.pyqtgraph['n_pt_recvd'] += 1                                
-                                if(( stream.pyqtgraph['n_pt_recvd'] % stream.pyqtgraph['nth_pt'] ) == 0):
-                                    stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
-                                    stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
-                                    stream.pyqtgraph_npdata['y'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_y]
-                                    ind_end += 1
-                                    if( (ind_end - ind_start ) >= stream.pyqtgraph['buf_tilesize']):
-                                        ind_start += 1
-
+                        if True:
+                            if True:
+                                if True:
+                                    ind_start = stream.pyqtgraph_npdata['ind_start']
+                                    ind_end = stream.pyqtgraph_npdata['ind_end']                                    
                                     xd = stream.pyqtgraph_npdata['x'][ind_start:ind_end].copy()
                                     yd = stream.pyqtgraph_npdata['y'][ind_start:ind_end].copy()
                                     # Y valid data
@@ -895,19 +911,6 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                     #yd = yd[ind_good]                                    
                                     stream.pyqtgraph_line.setData(x=xd,y=yd, pen=stream.pyqtgraph['color'])
 
-
-                                    # check for a buffer overflow
-                                    if(ind_end == stream.pyqtgraph['bufsize'] ):
-                                        #logger.debug('overflow')
-                                        stream.pyqtgraph_npdata['time'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['time'][-stream.pyqtgraph['buf_tilesize']:]
-                                        stream.pyqtgraph_npdata['x'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['x'][-stream.pyqtgraph['buf_tilesize']:]
-                                        stream.pyqtgraph_npdata['y'][0:stream.pyqtgraph['buf_tilesize']] = stream.pyqtgraph_npdata['y'][-stream.pyqtgraph['buf_tilesize']:]
-
-                                        ind_end = stream.pyqtgraph['buf_tilesize']
-                                        ind_start = 0
-
-                                    stream.pyqtgraph_npdata['ind_start'] = ind_start
-                                    stream.pyqtgraph_npdata['ind_end'] = ind_end
             
             if(FLAG_CHANGED):
                 print('FLAG_CHANGED!!!')

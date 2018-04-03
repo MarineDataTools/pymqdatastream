@@ -12,10 +12,12 @@ A device needs the following informations:
 
  __init__(self,      device_changed_function=None)
 
-The device changed function is used to interconnect the device to each other
+The device changed function is used to interconnect the device to each
+other and to notify if possibly new information from other devices ia
+available (e.g. a todl device might be interested in gps information)
 
 
-- setup(name)     (mandatory)
+- setup(name,mainwindow)     (mandatory)
 - info      (obligatory)
 - show_data (obligatory)
 - plot_data (obligatory)
@@ -47,6 +49,7 @@ import multiprocessing
 import binascii
 import yaml
 import datetime
+import importlib
 # Import GPS/NMEA functionality
 import pymqdatastream.connectors.nmea.pymqds_nmea0183_gui as pymqds_nmea0183_gui
 
@@ -189,13 +192,102 @@ class todlInfo(QtWidgets.QWidget):
         # Widget to show the average transfer rate
         self.bytesspeed.setText('Bit/s: ' + str(bytes_read_avg))
 
-    
 
 
+#
+#
+# todlConfig v0.42
+#
+#
+class todlConfig_v0_42(QtWidgets.QWidget):
+    """Configuration widget for the todl (v0.42 used for the sensor
+    response sledge, this widget can only change the frequency
 
-class todlConfig(QtWidgets.QWidget):
     """
-    Configuration widget for the todl
+    def __init__(self,todl=None, deviceinfowidget = None):
+        self.deviceinfo = deviceinfowidget        
+        QtWidgets.QWidget.__init__(self)
+        layout = QtWidgets.QGridLayout()
+        # Conversion speed
+        #self._freq_button     = QtWidgets.QPushButton('Set frequency')
+        #self._freq_button.clicked.connect(self.clicked_set_freq)
+        self._convspeed_combo = QtWidgets.QComboBox(self)
+        self.speeds_hz     = pymqds_todl.s4lv0_42_speeds_hz
+        for i,speed in enumerate(self.speeds_hz):
+            speed_hz = 'f: ' + str(self.speeds_hz[i]) + ' Hz'
+            #speed_hz = 'f: ' + str(self.speeds_hz[i]) + \
+            #           ' Hz (f ADC:' + str(self.speeds_hz_adc[i]) + ' Hz)'
+            self._convspeed_combo.addItem(str(speed_hz))        
+
+
+        self._query_bu = QtWidgets.QPushButton('Query')
+        self._query_bu.clicked.connect(self._query)
+        self._ad_apply_bu = QtWidgets.QPushButton('Send to device')
+        self._ad_apply_bu.clicked.connect(self._setup_device)
+
+
+
+        # The main layout
+        #layout.addWidget(self._freq_button,1,0+1,1,2)
+        layout.addWidget(self._convspeed_combo,0,0+1,1,2)
+        layout.addWidget(self._query_bu,6,0+1)
+        layout.addWidget(self._ad_apply_bu,6,1+1)        
+
+        self.main_layout = layout
+        self.setLayout(layout)
+
+        print('updating')
+        # TODO do something if there is nothing
+        self.todl = todl
+        self._update_status()
+        if(self.deviceinfo is not None):
+            if(self.todl.status >= 0): # Opened serial port or converting
+                print('updateting device info')
+                self.deviceinfo.update(self.todl.device_info)
+
+
+    def _update_status(self):
+        """ Updates all the information buttons
+
+        """
+        
+        status = self.todl.device_info
+        if(self.todl.status >= 0): # Opened serial port or converting
+            print('status',status)
+
+            
+    def _setup_device(self):
+        freq_str = self._convspeed_combo.currentText()
+        ind = self._convspeed_combo.currentIndex()
+        freq_num = self.speeds_hz[ind]
+        logger.debug('_setup_device(): Setting speed to ' + str(freq_str)\
+                     + ' num:' + str(freq_num))
+
+        self.todl.init_todllogger(freq=freq_num)
+        self._update_status()
+        self.deviceinfo.update(self.todl.device_info)
+
+
+    def _query(self):
+        """ Querying the datalogger
+        """
+        self.todl.query_todllogger()
+        
+        self._update_status()
+        self.deviceinfo.update(self.todl.device_info)
+        
+
+    def _close(self):
+        self.close()
+
+
+#
+#
+# todlConfig
+#
+#
+class todlConfig(QtWidgets.QWidget):
+    """ Configuration widget for the todl
     """
     # Conversion speeds of the device
 
@@ -609,7 +701,7 @@ class gpsDevice():
         print('GPS Device')
         self.device_changed_function = device_changed_function
         
-    def setup(self,name=None):
+    def setup(self,name=None, mainwindow = None):
         self.name = name
         print('GPS Setup')
         self.w = pymqds_nmea0183_gui.nmea0183SetupWidget()
@@ -664,7 +756,8 @@ class todlDevice():
         self.todl.init_notification_functions.append(self._update_status_information)
 
         self.deviceinfo = todlInfo()            # Deviceinfo widget
-        self.todlConfig = todlConfig(todl = self.todl,deviceinfowidget = self.deviceinfo) # TODL Config widget
+        self.todlConfig = None
+        self.todlConfig = todlConfig(todl = self.todl, deviceinfowidget = self.deviceinfo) # TODL Config widget
         # A flag if only one channel is used
         self.ONECHFLAG = False
 
@@ -672,8 +765,10 @@ class todlDevice():
         self.send_le = QtWidgets.QLineEdit()
         send_bu = QtWidgets.QPushButton('send')
         send_bu.clicked.connect(self.clicked_send_bu)
-
+        
+        #
         # Show the raw data of the logger
+        #
         self._show_data_widget = QtWidgets.QWidget()
         self._show_data_layout = QtWidgets.QGridLayout(self._show_data_widget)
         self.show_textdata = QtWidgets.QPlainTextEdit()
@@ -707,10 +802,8 @@ class todlDevice():
         #self._show_data_layout.addWidget(self.show_comdata,1,1)
         
         
-        
         #
         # An information, saving, loading and plotting widget
-        #
         self._infosaveloadplot_widget = QtWidgets.QWidget()
         info_layout = QtWidgets.QGridLayout(self._infosaveloadplot_widget)
         self._recording_status = ['Record','Stop recording']        
@@ -754,6 +847,7 @@ class todlDevice():
         #self._IMU_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
         self._IMU_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) # pyqt5
         self._IMU_table_setup()
+        self._IMU_table.hide()        
         
         #
         # Add a table for the Pyro
@@ -763,8 +857,13 @@ class todlDevice():
         #self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
         self._O2_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) # pyqt5        
         self._O2_table_setup()
+        self._O2_table.hide()
 
-        # Widget to collect all information
+        #
+        #
+        # Widget to collect all information and showing the data in tables
+        #
+        #
         self.disp_widget = QtWidgets.QWidget()
         self.disp_widget_layout = QtWidgets.QGridLayout(self.disp_widget)
 
@@ -782,7 +881,7 @@ class todlDevice():
         self.dequetimer.timeout.connect(self.poll_deque)
         self.dequetimer.start()
 
-        # Updating the Voltage table
+        # Updating the show_data widget
         self.intraqueuetimer = QtCore.QTimer()
         self.intraqueuetimer.setInterval(50)
         self.intraqueuetimer.timeout.connect(self._poll_intraqueue)
@@ -795,16 +894,16 @@ class todlDevice():
         self.disp_widget_layout.addWidget(self._ad_table,4,0,2,3)
         self.disp_widget_layout.addWidget(self._IMU_table,4,3,2,2)
         self.disp_widget_layout.addWidget(self._O2_table,4,5,2,2)
-
         
-
-    def setup(self,name):
+        
+    def setup(self,name=None, mainwindow=None):
         """Setup of the device
 
         """
         self.name = name
-        print('Hallo setup!')
-                # Source
+        self.mainwindow = mainwindow        
+        logger.debug('Setup of the device')
+        # Source
         sources = ['serial','file','ip']
         
         self.setup_widget = QtWidgets.QWidget()
@@ -815,7 +914,7 @@ class todlDevice():
             self.combo_source.addItem(str(s))        
 
         # The layout of the setup widget with two rows
-        self.layout_source_v = QtWidgets.QVBoxLayout(w)
+        self.layout_source_v = QtWidgets.QVBoxLayout(w) # Main layout
         self.layout_source = QtWidgets.QHBoxLayout()
         self.layout_source_row2 = QtWidgets.QGridLayout()                
         self.layout_source_v.addLayout(self.layout_source)
@@ -871,8 +970,6 @@ class todlDevice():
         self.test_ports() # Looking for serial ports        
         self.get_source()
 
-
-        
         w.show()
 
     def get_source(self):
@@ -897,7 +994,6 @@ class todlDevice():
         self.layout_source_row2.addWidget(self.deviceinfo,0,0)
 
         # TODO: Rescale the widget after things are removed or added ....
-        
         if(data_source == 'serial'):
             whide = widgets_file + widgets_ip
             for w in whide:
@@ -908,8 +1004,9 @@ class todlDevice():
                     print(str(e))
                     pass
 
+            # Add the todlConfig widget doing all the complicated configuration
             self.layout_source_row2.addWidget(self.todlConfig,1,0)
-            self.todlConfig.show()            
+            self.todlConfig.hide()            
             for w in widgets_serial:
                 try:
                     self.layout_source.addWidget(w)
@@ -948,7 +1045,8 @@ class todlDevice():
                     w.hide()
                 except:
                     pass
-
+                
+            # Add the todlConfig widget doing all the complicated configuration
             self.layout_source_row2.addWidget(self.todlConfig,1,0)
             self.todlConfig.show()            
             for w in widgets_ip:
@@ -989,26 +1087,21 @@ class todlDevice():
                 if(self.todl.status == 0): # Succesfull opened
                     if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
-                        # Enable a settings button or if version 0.45 add a frequency combo
+                        # Enable a settings button or if version 0.42 add a frequency combo
                         vers = float(self.todl.device_info['firmware'])
-                        # The high speed 0.45 version 
-                        if(vers == 0.45):
-                            logger.debug('Opening Version 0.45 device setup')
-                            self._s4l_settings_bu.close()
-                            self._s4l_freq_combo = QtWidgets.QComboBox(self)
-                            #self._s4l_freq_combo.setEnabled(True)                            
-                            self._speeds_hz     = pymqds_todl.s4lv0_45_speeds_hz
-                            for i,speed in enumerate(self._speeds_hz):
-                                self._s4l_freq_combo.addItem(str(speed))
-
-                            self.layout.addWidget(self._s4l_freq_combo,1,3)
-                            self._ad_table.clear()                                                        
-                            self._ad_table_setup_1ch()
-                            self._s4l_freq_combo.currentIndexChanged.connect(self._freq_set_v045)
-                            # TODO Have to resize the widget to have nicer data
-                        # The general purpose 
+                        # The Sensor response sledge 0.42 version 
+                        if(vers == 0.42):
+                            logger.debug('Opening Version 0.42 device setup')
+                            self.todlConfig.close()
+                            self.todlConfig = todlConfig_v0_42(todl = self.todl, deviceinfowidget = self.deviceinfo)
+                            self.layout_source_row2.addWidget(self.todlConfig,1,0)
+                            self.todlConfig.show()
+                            #https://stackoverflow.com/questions/28202737/pyside-what-is-the-best-way-to-resize-the-main-window-if-one-widget-is-hidden
+                            self.setup_widget.adjustSize()
+                        # The general purpose version
                         elif(vers >= 0.70):
                             logger.debug('Opening Version 0.70+ device setup')
+                            self.todlConfig.show()                            
                             self._s4l_settings_bu.close()
                             if(True):
                                 self._ad_table.clear()                                                        
@@ -1097,9 +1190,6 @@ class todlDevice():
                     if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
                         self.print_serial_data = False
-                        # Update the ADC table information
-                        self._ad_table.clear()
-                        self._ad_table_setup()                        
                         time.sleep(0.1)
                         self.todl.send_serial_data('start\n')
 
@@ -1166,12 +1256,27 @@ class todlDevice():
         # Notice that the device changed 
         self.device_changed(funcname)
 
+    def disp_widget_update(self):
+        """ Update the disp widgets with the correct tables, according to the available data
+        """
+        # Update the ADC table information
+        self._ad_table.clear()
+        self._ad_table_setup()
+        vers = float(self.todl.device_info['firmware'])
+        if(not(np.isnan(self.todl.device_info['imu_freq']))):
+            self._IMU_table.show()
+
+        if(not(np.isnan(self.todl.device_info['pyro_freq']))):            
+            self._O2_table.show()            
+            
+
 
     def show_data(self):
         """
         Function to show the data
         """
         print('Show data')
+        self.disp_widget_update()
         self.disp_widget.show()
 
 
@@ -1280,6 +1385,8 @@ class todlDevice():
         print('HALLLLOO!',str(event),row,column)
 
     def show_statistic(self,row,column):
+        """ Creating a widget showing the statistics of the data
+        """
         print('Statistic here ...')
         # Get the channel
         for ch,col_tmp in enumerate(self._ad_table_ind_ch):
@@ -1289,11 +1396,11 @@ class todlDevice():
         # get the selected cell            
         cell = self._ad_table.item(row, column)
         w = QtWidgets.QTableWidget()
-        w.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) #pyqt5
         w.setColumnCount(6)
         nltc = len(self.todl.device_info['adcs'])
         w.setRowCount(1 + nltc)
-        w.verticalHeader().setVisible(False)        
+        w.verticalHeader().setVisible(False)
+        w.horizontalHeader().setVisible(False)        
         w.setItem(0,1, QtWidgets.QTableWidgetItem( 'Avg' ))
         w.setItem(0,2, QtWidgets.QTableWidgetItem( 'Std' ))
         w.setItem(0,3, QtWidgets.QTableWidgetItem( 'Peak-Peak' ))
@@ -1435,24 +1542,6 @@ class todlDevice():
         for com in self.todl.commands:
             self.show_comdata.appendPlainText(str(com))
 
-    def _freq_set_v045(self):
-        logger.debug('_freq_set_v045')
-        speed_str = self._s4l_freq_combo.currentText()
-        #self.todl.stop_converting_raw_data()
-        self.print_serial_data = True                
-        self.todl.send_serial_data('stop\n')
-        self.todl.send_serial_data('stop\n')
-        self.todl.send_serial_data('freq ' + str(speed_str) + '\n')
-        self.todl.send_serial_data('format 4\n')
-        time.sleep(0.1)        
-        if(self.todl.query_todllogger() == True):
-            self.deviceinfo.update(self.todl.device_info)
-            self.print_serial_data = False
-            time.sleep(0.1)            
-            self.todl.send_serial_data('start\n')
-            #self.todl.start_converting_raw_data()                    
-        else:
-            logger.warning('Bad, frequency changed did not work out. ')
 
     def _freq_set(self):
         logger.debug('_freq_set')
@@ -1591,16 +1680,32 @@ class todlDevice():
                     for wtmp in self._ad_table_widgets: # Check if we have a statistic widget for plotting
                         if((wtmp[1] == ind_col)):
                             print('hallo!!!')
-                            itemavg = QtWidgets.QTableWidgetItem(str(round(data['avg'],7)))
-                            itemstd = QtWidgets.QTableWidgetItem(str(round(data['std'],7)))
-                            itempp  = QtWidgets.QTableWidgetItem(str(round(data['pp'],7)))
-                            itemmin = QtWidgets.QTableWidgetItem(str(round(data['min'],7)))
-                            itemmax = QtWidgets.QTableWidgetItem(str(round(data['max'],7)))                            
+                            
+                            itemavg = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['avg'],7)))
+                            itemstd = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['std'],7)))
+                            itempp  = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['pp'],7)))
+                            itemmin = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['min'],7)))
+                            itemmax = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['max'],7)))
                             wtmp[2].setItem(1,1, itemavg)
                             wtmp[2].setItem(1,2, itemstd)
                             wtmp[2].setItem(1,3, itempp)
                             wtmp[2].setItem(1,4, itemmin)
-                            wtmp[2].setItem(1,5, itemmax)                                                        
+                            wtmp[2].setItem(1,5, itemmax)
+                            #https://stackoverflow.com/questions/38098763/pyside-pyqt-how-to-make-set-qtablewidget-column-width-as-proportion-of-the-a
+                            header = wtmp[2].horizontalHeader()
+                            header.setResizeMode(QtGui.QHeaderView.ResizeToContents)
+                            #header.setStretchLastSection(True)
+                            vwidth = wtmp[2].verticalHeader().width()
+                            hwidth = wtmp[2].horizontalHeader().length()
+                            fwidth = wtmp[2].frameWidth() * 2
+                            wtmp[2].setFixedWidth(vwidth + hwidth + fwidth)
+                            wtmp[2].setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+                            height = 0
+                            hheight = wtmp[2].horizontalHeader().height()
+                            for i in range(wtmp[2].rowCount()):
+                                height += wtmp[2].rowHeight(i)
+                                
+                            wtmp[2].setFixedHeight(height + hheight + fwidth)
 
                         
 
@@ -1861,6 +1966,9 @@ class todlDevice():
         for w in self.all_widgets:
             w.close()
 
+        for w in self._ad_table_widgets:
+            w[2].close()
+
         self.disp_widget.close()
         self.setup_widget.close() # Closing the TODL setup widget
 
@@ -1868,7 +1976,6 @@ class todlDevice():
         for plotxyprocess in self._plotxyprocesses:
             plotxyprocess.terminate()
         
-
         
     def device_changed(self,fname):
         """A function to notice a change
@@ -2038,8 +2145,9 @@ class todlMainWindow(QtWidgets.QMainWindow):
 
 
     def setup_devices(self):
-        """
-        Adding and removing functions for the device setup
+        """Adding and removing functions for the device setup,
+available/known/implemented devices are read from todl_config.yaml
+
         """
         self.device_setup_widget        = QtWidgets.QWidget()
         w = self.device_setup_widget
@@ -2056,7 +2164,7 @@ class todlMainWindow(QtWidgets.QMainWindow):
 
         self.combo_dev_add     = QtWidgets.QComboBox(w)
         self.combo_dev_rem     = QtWidgets.QComboBox(w)        
-
+        # Add the devices we know
         for d in config['devices']:
             devname = list(d)[0]
             self.combo_dev_add.addItem(devname)
@@ -2073,28 +2181,33 @@ class todlMainWindow(QtWidgets.QMainWindow):
 
         
     def add_devices(self):
-        """
-
-        Looks in the configuration for devices and initializing that
-        device object with the appropriate functions
-
+        """ Looks in the configuration for devices and initializing that
+        device object with the appropriate functions 
         """
         dev = str( self.combo_dev_add.currentText() )
         print('Hallo add: ' + dev)
         for d in config['devices']: # Search for the config entry
             devname = list(d)[0]
             if(devname == dev):
-                print('Found device ... with object name ' + str(d[devname]['object']))
-                obj = str(d[devname]['object'])
-                #tmp = getattr(globals(),'todlDevice')
+                logger.debug('Found device ... with object name ' + str(d[devname]['object']))
+                obj = str(d[devname]['object'])                
+                # Try to import the module in which the device is located
+                try:
+                    mod_name = d[devname]['object_module']
+                    logger.debug('Loading the module needed for the device' + mod_name)
+                    import_mod = importlib.import_module(mod_name)
+                    deviceobj_class = getattr(import_mod,obj) 
+                except:
+                    deviceobj_class = globals()[obj]
 
+                #tmp = getattr(globals(),'todlDevice')
                 # Call the object of the device and give the
                 # device_changed function to allow this gui to be
                 # notified whenever the device has been changed
-                # (added, removed opened)
-                deviceobj = globals()[obj](self.device_changed)
+                # (added, removed, opened)
+                deviceobj = deviceobj_class(self.device_changed)
                 devicename = self.combo_dev_add.currentText()
-                deviceobj.setup(name = devicename)
+                deviceobj.setup(name = devicename, mainwindow = self)
 
                 self.devices.append(deviceobj)
                 

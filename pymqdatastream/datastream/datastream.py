@@ -94,7 +94,7 @@ class zmq_socket(object):
 
 
     """
-    def __init__(self,socket_type, address = '', deque = None, socket_reply_function = None, filter_uuid = '', connect = True, remote = False, statistic = False, logging_level='INFO'):
+    def __init__(self, socket_type, address = '', deque = None, socket_reply_function = None, filter_uuid = '', connect = True, remote = False, statistic = False, logging_level='INFO'):
         """
         """
         funcname = '__init__()'
@@ -106,7 +106,7 @@ class zmq_socket(object):
             self.logger.setLevel(logging.INFO)            
         else:
             self.logger.setLevel(logging.CRITICAL)
-            
+
         self.logger.debug(funcname + ': socket_type:' + socket_type)
         
         self.context = Context
@@ -261,7 +261,7 @@ class zmq_socket(object):
 
 
         for addr in address:
-            self.logger.debug(funcname + ': Trying to bind to address:' + addr)
+            #self.logger.debug(funcname + ': Trying to bind to address:' + addr)
             try:
                 self.logger.debug(funcname + ': Binding to address: ' + addr)
                 # A socket to receive incoming requests about status etc.
@@ -272,8 +272,8 @@ class zmq_socket(object):
                 self.connected = True
                 return True
             except Exception as e :
-                self.logger.debug(funcname + ': Exception:' + str(e))    
-                self.logger.debug(funcname + ': Couldnt bind zmq on address: ' + addr)
+                #self.logger.debug(funcname + ': Exception:' + str(e))    
+                #self.logger.debug(funcname + ': Couldnt bind zmq on address: ' + addr)
                 self.connected = False
 
         self.logger.debug(funcname + ': Couldnt bind zmq to any address, failed ')
@@ -281,30 +281,30 @@ class zmq_socket(object):
 
     
     def connect_socket(self,filter_uuid = ''):
-        '''
-
-        connecting the socket to a remote zmq socket with address
+        ''' Creating a socket and connecting it socket to a remote zmq socket with address of this zmq_socket
 
         '''
         funcname = 'connect_socket()'
         address = self.address
         zmq_socket_type = self.zmq_socket_type
-        self.logger.debug(funcname + ': Connecting to address: ' + str(address))
+        #self.logger.debug(funcname + ': Connecting to address: ' + str(address) + ' Type:' + str(zmq_socket_type))
         try:
-            self.logger.debug(funcname + ': Connecting to address: ' + str(address))
-            # Finally lets connect a socket
+            #self.logger.debug(funcname + ': Connecting to address: ' + str(address))
+            # Lets create a socket
             self.zmq_socket       = self.context.socket(zmq_socket_type)
             if(zmq_socket_type == zmq.SUB):
-                self.logger.debug(funcname + ': Using filter_uuid: ' + filter_uuid)
+                #self.logger.debug(funcname + ': Using filter_uuid: ' + filter_uuid)
                 self.zmq_socket.setsockopt(zmq.SUBSCRIBE, filter_uuid.encode('utf-8')) # subscribe uuid
+
+            # And connect it
             self.zmq_socket.connect(address)
             #self.zmq_socket.linger = 50
-            self.logger.debug(funcname + ': Connecting to address: ' + str(address) + ' done')
+            #self.logger.debug(funcname + ': Connecting to address: ' + str(address) + ' done')
             self.connected = True
             return True
         except Exception as e :
             self.logger.warning(funcname + ': Exception:' + str(e))    
-            self.logger.warning(funcname + ': Couldnt connect zmq to address: ' + str(address))
+            self.logger.warning(funcname + ': Couldnt connect zmq to address: ' + str(address) + ' Type:' + str(zmq_socket_type))
             self.connected = False
             return False
 
@@ -683,10 +683,12 @@ class Stream(object):
        family
        data_type:
        number: The number of the Stream, defaults to -1, will be set by the Parental Datastream object
+       logging_level:
+       logging_level_socket: The logging level of the zmq_socket, this can give a lot of information
     Returns:
        None
     """
-    def __init__(self,stream_type, address = None, socket = None, variables = None, data_format = 'py_json', queuelen = 1000,statistic = False, remote = False, name = 'Stream', family = 'NA', data_type = 'continous', number = '-1', logging_level= 'INFO'):
+    def __init__(self,stream_type, address = None, socket = None, variables = None, data_format = 'py_json', queuelen = 1000,statistic = False, remote = False, name = 'Stream', family = 'NA', data_type = 'continous', number = '-1', logging_level= 'INFO', logging_level_socket= 'INFO'):
         funcname = '__init__()'
 
         self.number = number
@@ -705,6 +707,7 @@ class Stream(object):
 
         self.logger = logging.getLogger(self.__class__.__name__ + '(' + self.uuid + ')')
         self.logging_level = logging_level
+        self.logging_level_socket = logging_level_socket
 
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
@@ -907,7 +910,7 @@ class Stream(object):
                     self.variables = stream.variables
                     self.name      = stream.name
                     self.family    = stream.family
-                    self.socket    = zmq_socket(socket_type = self.stream_type,address = stream.socket[0].address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level)
+                    self.socket    = zmq_socket(socket_type = self.stream_type,address = stream.socket[0].address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level_socket)
                 else:
                     raise Exception(funcname + "no socket available for subscription")
 
@@ -924,7 +927,7 @@ class Stream(object):
                     self.variables = stream.variables
                     self.name      = stream.name
                     self.family    = stream.family                    
-                    self.socket    = zmq_socket(socket_type = self.stream_type,address = stream.socket.address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level)
+                    self.socket    = zmq_socket(socket_type = self.stream_type,address = stream.socket.address,deque = self.deque,filter_uuid = stream.uuid,statistic = statistic, logging_level = self.logging_level_socket)
             else:
                 self.logger.warning(funcname + \
                                     ': cannot connect, stream type is not of type reqstream. Type connect stream:'\
@@ -1272,11 +1275,12 @@ class DataStream(object):
        logging_level: The logging level of the logger object (logging.DEBUG, logging.INFO, logging.CRITICAL)
 
     """
-    def __init__(self,address = None, remote = False, name = 'datastream',logging_level = 'INFO'):
+    def __init__(self,address = None, remote = False, name = 'datastream',logging_level = 'INFO', logging_level_socket= 'INFO'):
         funcname = '.__init__()'
         # Init a logger
         self.logger = logging.getLogger(self.__class__.__name__ + '(' + name + ')')
         self.logging_level = logging_level
+        self.logging_level_socket = logging_level_socket
         if((logging_level == 'DEBUG') | (logging_level == logging.DEBUG)):
             self.logger.setLevel(logging.DEBUG)
         elif((logging_level == 'INFO') | (logging_level == logging.INFO)):
@@ -1299,13 +1303,13 @@ class DataStream(object):
 
 
             # Create control socket
-            control_socket = zmq_socket(socket_type = 'control', address = addresses, socket_reply_function = self.control_socket_reply,logging_level = self.logging_level)
+            control_socket = zmq_socket(socket_type = 'control', address = addresses, socket_reply_function = self.control_socket_reply,logging_level = self.logging_level_socket)
             self.address = control_socket.address
             self.ip = get_ip_from_address(self.address)
             self.sockets.append(control_socket)
 
             # Create control stream
-            self.control_stream = Stream(name = 'Control Stream',stream_type = 'control', socket = control_socket,logging_level = self.logging_level,number=self.num_streams)
+            self.control_stream = Stream(name = 'Control Stream',stream_type = 'control', socket = control_socket, logging_level = self.logging_level,logging_level_socket = self.logging_level_socket,number=self.num_streams)
             self.num_streams += 1
             self.Streams.append(self.control_stream)
 
@@ -1316,13 +1320,13 @@ class DataStream(object):
         """
         funcname = 'get_datastream_info()'
         try:
-            socket = zmq_socket(socket_type = 'remote_control', address = address,logging_level = self.logging_level)
+            socket = zmq_socket(socket_type = 'remote_control', address = address,logging_level = self.logging_level_socket)
         except Exception as e :
             self.logger.debug('Datastream.get_datastream_info(): Exception:' + str(e))
             return [False,None]
 
         # First ping the datastream object, to get a packet speed idea
-        self.logger.debug(funcname + ': ping')
+        #self.logger.debug(funcname + ': ping')
         tping = time.time()
         request = {'ping':'','uuid':self.uuid,'tping':tping}
         socket.send_req(request)
@@ -1333,7 +1337,7 @@ class DataStream(object):
             reply_dict = reply_data
             self.logger.debug(funcname + ':Got data: '+ str(reply))
         else:
-            self.logger.debug(funcname + ': Timeout processing auth request to REQ at: ' + address)
+            #self.logger.debug(funcname + ': Timeout processing auth request to REQ at: ' + address)
             return [False,None]
 
         # It worked lets calculate the delay
@@ -1398,7 +1402,7 @@ class DataStream(object):
 
         """
         if(socket.socket_type == 'pubstream'): # Check for correct socket type
-            stream = Stream(stream_type = 'pubstream',socket = socket, variables = variables, name = name, family = family, statistic = statistic, logging_level = self.logging_level, number = self.num_streams)
+            stream = Stream(stream_type = 'pubstream',socket = socket, variables = variables, name = name, family = family, statistic = statistic, logging_level = self.logging_level,logging_level_socket = self.logging_level_socket, number = self.num_streams)
             self.num_streams += 1
             self.Streams.append(stream)
             return stream
@@ -1437,10 +1441,10 @@ class DataStream(object):
 
         #self.logger.debug(funcname + ': ' + str(address))
         
-        rep_socket = zmq_socket(socket_type = 'repstream',address = address, socket_reply_function = socket_reply_function, logging_level=logging.DEBUG)
+        rep_socket = zmq_socket(socket_type = 'repstream',address = address, socket_reply_function = socket_reply_function, logging_level=self.logging_level_socket)
         self.sockets.append(rep_socket)
 
-        stream = Stream(stream_type = 'repstream',socket = rep_socket, variables = variables, name = name, statistic = statistic, logging_level = self.logging_level, number=self.num_streams)
+        stream = Stream(stream_type = 'repstream',socket = rep_socket, variables = variables, name = name, statistic = statistic, logging_level = self.logging_level,logging_level_socket = self.logging_level_socket, number=self.num_streams)
         
         self.num_streams += 1
         self.Streams.append(stream)
@@ -1645,19 +1649,19 @@ class DataStream(object):
             datastreams: A list of remote datastreams found
         """
         funcname = 'query_datastreams()'
-        self.logger.debug(funcname)
+        #self.logger.debug(funcname)
         list_status = []
         datastreams_remote = []
         addresses = treat_address(addresses)
 
-        self.logger.debug(funcname + ': Addresses' + str(addresses))
+        #self.logger.debug(funcname + ': Addresses' + str(addresses))
 
         for address in addresses:
             if(address != self.address):
-                self.logger.debug(funcname + ': Address:' + address)
+                #self.logger.debug(funcname + ': Address:' + address)
                 [ret,reply_dict] = self.get_datastream_info(address,dt_wait=0.01)
                 #self.logger.setLevel(logging.DEBUG)                
-                self.logger.debug(funcname + ': Reply_dict:' + str(reply_dict))
+                #self.logger.debug(funcname + ': Reply_dict:' + str(reply_dict))
                 if(ret):
                     datastream_remote = create_datastream_from_info_dict(reply_dict)
                     try:
@@ -1665,8 +1669,9 @@ class DataStream(object):
                         datastreams_remote.append(datastream_remote)
                         self.logger.debug(funcname + ": Reply:" + str(datastream_remote))
                     except Exception as e :
-                        self.logger.debug(funcname + ": Exception:" + str(e))       
-                        self.logger.debug(funcname + ": Could not decode reply:" + str(reply_dict))
+                        #self.logger.debug(funcname + ": Exception:" + str(e))       
+                        #self.logger.debug(funcname + ": Could not decode reply:" + str(reply_dict))
+                        pass
 
 
         # If we have a queue put the result to the queue, this is for the threaded query
@@ -1677,10 +1682,10 @@ class DataStream(object):
 
     
     def query_datastreams_fast(self,addresses):
-        """
-
-        Querying datastreams by creating several threads trying to connect to the list of :param addresses:
-        The function will create a temporary datastream for each address and will query the given ports of that address
+        """Querying datastreams by creating several threads trying to connect
+        to the list of :param addresses: The function will create a
+        temporary datastream for each address and will query the given
+        ports of that address
 
         Args:
             addresses: String or list of addresses

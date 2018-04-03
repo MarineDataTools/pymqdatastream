@@ -41,7 +41,7 @@ for i,speed in enumerate(s4lv0_4_speeds):
     s4lv0_4_speeds_hz.append(s4lv0_4_tfreq/s4lv0_4_speeds_td[i])
 
 
-
+s4lv0_42_speeds_hz    = [1250, 2000]
 s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]
 s4lv0_46_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 250, 333, 400, 500, 625, 1000, 1250, 2000]
 s4lv0_75_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 400, 500, 625, 1000, 1250, 2000]
@@ -139,7 +139,9 @@ def parse_device_info(data_str):
         device_info['time'] = None
         
     freq_str = ''
+    HAS_FREQ_STR = False
     for i,me in enumerate(re.finditer(r'>>>Freqs:.*\n',data_str)):
+        HAS_FREQ_STR = True
         freq_str = me.group()
 
     #
@@ -231,6 +233,11 @@ def parse_device_info(data_str):
     #print('Speed data:' + str(speed_data))
     if(len(speed_data) == 0):
         speed_data = [-9999]
+
+
+    # Some versions dont have a freq string (e.g. v0.42)
+    if HAS_FREQ_STR == False:
+        freq_str = str(speed_data[-1])
         
     device_info['info_str'] = data_str
     device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
@@ -2085,14 +2092,14 @@ default to None, only with a valid argument that setting will be sent to the dev
                                     data_packet['min'] = np.min(freq_pack['Vdata'][:freq_pack['ind']-1])
                                     data_packet['max'] = np.max(freq_pack['Vdata'][:freq_pack['ind']-1])
                                     data_packet['pp'] = data_packet['max'] - data_packet['min']
-                                    print(data_packet)
+                                    #print(data_packet)
                                 if(freq_pack['name'] == 'Ofr'):
                                     data_packet['avg'] = np.mean(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
                                     data_packet['std'] = np.std(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
                                     data_packet['min'] = np.min(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
                                     data_packet['max'] = np.max(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
                                     data_packet['pp'] = data_packet['max'] - data_packet['min']                                    
-                                    print(data_packet)
+                                    #print(data_packet)
                                 data_packets.append(data_packet)
                                 freq_pack['data'][:,:] = 0
                                 freq_pack['ind'] = 0                            

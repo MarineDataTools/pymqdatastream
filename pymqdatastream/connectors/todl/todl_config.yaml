@@ -7,27 +7,27 @@ devices:
         name: serial
         device: /dev/ttyUSB0
         baud: 921600
-        options:
-          - serial:
-              name: serial
-              device: /dev/ttyUSB0
-              baud: 921600
-          - file:
-              filename: filename
-          - ip:
-              address: 192.168.178.1:18000
-          - pymqdatastream:
-              address: 192.168.178.1:18000
+        #options:
+        #  - serial:
+        #      name: serial
+        #      device: /dev/ttyUSB0
+        #      baud: 921600
+        #  - file:
+        #      filename: filename
+        #  - ip:
+        #      address: 192.168.178.1:18000
+        #  - pymqdatastream:
+        #      address: 192.168.178.1:18000
       object: todlDevice # The device object to be used for handling
   - gps:
       source:
         name: serial
         device: /dev/ttyACM0
         baud: 4800
-        options:
-          - serial
-          - ip
-          - pymqdatastream
+        #options:
+        #  - serial
+        #  - ip
+        #  - pymqdatastream
       object: gpsDevice # The device object to be used for handling
         
 widgets:
