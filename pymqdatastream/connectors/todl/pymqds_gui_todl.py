@@ -531,11 +531,11 @@ class todlConfig(QtWidgets.QWidget):
         self.todl.init_todllogger(data_format=data_format)
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)
-
+        
         
     def clicked_set_time(self):
         self.todl.set_time(datetime.datetime.now(datetime.timezone.utc))
-        pass                
+        pass
 
 
     def _query(self):
@@ -710,7 +710,7 @@ class gpsDevice():
         # Connect the device changed function
         self.nmea0183logger.signal_functions.append(self.device_changed)
         self.w.show()
-
+        
         
     def close(self):
         """
@@ -1088,7 +1088,11 @@ class todlDevice():
                     if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
                         # Enable a settings button or if version 0.42 add a frequency combo
-                        vers = float(self.todl.device_info['firmware'])
+                        try:
+                            vers = float(self.todl.device_info['firmware'])
+                        except: # No float, probably a string
+                            vers = -9999
+                            #vers = self.todl.device_info['firmware']
                         # The Sensor response sledge 0.42 version 
                         if(vers == 0.42):
                             logger.debug('Opening Version 0.42 device setup')
@@ -1189,6 +1193,8 @@ class todlDevice():
                     time.sleep(0.2)                            
                     if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
+                        # Here clock information for the time widget should appear
+                        self.todlConfig.timeWidget.add_
                         self.print_serial_data = False
                         time.sleep(0.1)
                         self.todl.send_serial_data('start\n')
@@ -1994,14 +2000,15 @@ class todlDevice():
 #
 #
 class timeWidget(QtWidgets.QWidget):
-    """A time widget showing system time as well as additional clocks as e.g. GPS Time
+    """ A time widget showing system time as well as additional clocks as e.g. GPS Time and TODL
 
     """
     def __init__(self):
         
         QtWidgets.QWidget.__init__(self)
         self.nmea0183logger = None
-        self.lab_nmea0183logger = [] # Time labels for the nmealogger        
+        self.todl           = None        
+        self.lab_devices = [] # Time labels for extra devices
         self.time_widget_layout = QtWidgets.QGridLayout(self)
         self.lab_time_system = QtWidgets.QLabel('Systemtime (UTC): ')
         self.lab_showtime_system = QtWidgets.QLabel('')
@@ -2031,12 +2038,17 @@ class timeWidget(QtWidgets.QWidget):
         time_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
         time_str = time_str[:-5]
         self.lab_showtime_system_local.setText(time_str)
+        # GPS time
         if(self.nmea0183logger != None):
             for i,s in enumerate(self.nmea0183logger.serial):
                 if('datetime' in s['parsed_data'].keys()):
-                    lab2 = self.lab_nmea0183logger[i*2+1] # Get the right label
+                    lab2 = self.lab_devices[i*2+1] # Get the right label
                     time_str = s['parsed_data']['datetime'].strftime('%Y-%m-%d %H:%M:%S')
                     lab2.setText(time_str)
+
+        # TODL time
+        if(self.todl != None):
+            pass
 
                     
     def add_nmea0183logger(self,nmea0183logger):
@@ -2048,8 +2060,8 @@ class timeWidget(QtWidgets.QWidget):
             print(s)
             lab1 = QtWidgets.QLabel(s['device_name'])
             lab2 = QtWidgets.QLabel('XXX')
-            self.lab_nmea0183logger.append(lab1)
-            self.lab_nmea0183logger.append(lab2)            
+            self.lab_devices.append(lab1)
+            self.lab_devices.append(lab2)            
             self.time_widget_layout.addWidget(lab1,self.ind_gps,0)
             self.time_widget_layout.addWidget(lab2,self.ind_gps+1,0)            
             self.ind_gps +=2
@@ -2060,17 +2072,51 @@ class timeWidget(QtWidgets.QWidget):
         
 
     def rem_nmea0183logger(self):
-        """Removes the nmealogger from the time Widget
+        """Removes all nmealogger from the time Widget
 
         """
         print('rem nmea0183logger()')
         self.nmea0183logger = None
-        for w in self.lab_nmea0183logger:
+        for w in self.lab_devices:
+            self.time_widget_layout.removeWidget(w)
+            w.deleteLater()
+            self.ind_gps -= 2            
+
+        self.lab_devices = []
+
+
+        
+    def add_todl(self,todl_device_info):
+        """Adds a TODL
+
+        """
+        logger.debug('time widget add todl()')        
+        print(s)
+        lab1 = QtWidgets.QLabel(s['device_name'])
+        lab2 = QtWidgets.QLabel('XXX')
+        self.lab_devices.append(lab1)
+        self.lab_devices.append(lab2)            
+        self.time_widget_layout.addWidget(lab1,self.ind_gps,0)
+        self.time_widget_layout.addWidget(lab2,self.ind_gps+1,0)            
+        self.ind_gps +=2
+            #QtWidgets.QLabel('Systemtime (UTC): ')
+
+        # Do this in the end otherwise the QTimer could call the update function already
+        self.nmea0183logger = nmea0183logger
+        
+
+    def rem_todl(self):
+        """Removes a TODL
+
+        """
+        logger.debug('time widget rem todl()')                
+        self.nmea0183logger = None
+        for w in self.lab_devices:
             self.time_widget_layout.removeWidget(w)
             w.deleteLater()
 
-        self.lab_nmea0183logger = []
-        self.ind_gps = 4
+        self.lab_devices = []
+        self.ind_gps = 4        
 
 
 

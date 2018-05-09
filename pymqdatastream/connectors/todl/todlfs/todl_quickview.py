@@ -69,11 +69,11 @@ def main():
     V_ch1_pl = np.asarray(V_ch1[:])
     V_ch2_pl = np.asarray(V_ch2[:])
 
-    ind_bad1 = (V_ch1_pl < 0.0) | (V_ch1_pl > 5.0)
-    V_ch1_pl = np.ma.masked_where(ind_bad1,V_ch1_pl)
+    #ind_bad1 = (V_ch1_pl < 0.0) | (V_ch1_pl > 5.0)
+    #V_ch1_pl = np.ma.masked_where(ind_bad1,V_ch1_pl)
 
-    ind_bad2 = (V_ch2_pl < 0.0) | (V_ch2_pl > 5.0)
-    V_ch2_pl = np.ma.masked_where(ind_bad2,V_ch2_pl)    
+    #ind_bad2 = (V_ch2_pl < 0.0) | (V_ch2_pl > 5.0)
+    #V_ch2_pl = np.ma.masked_where(ind_bad2,V_ch2_pl)    
 
     # Plot ADC data
     pl.figure(1)

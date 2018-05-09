@@ -10,8 +10,10 @@ import threading
 import serial
 import socket
 import datetime
+import pytz
 import collections
 import time
+import numpy as np
 import argparse
 import pynmea2
 try:
@@ -55,8 +57,12 @@ def sort_parsed_data_in_dict(data,data_dict):
     """
     Sorts data parsed with pynmea2 into a dictionary
     """
+    
+    #data_dict['time'] = None
+    data_dict['timestamp'] = None
     if(not(data == None)):
         if('GGA' in data.identifier()):
+            data_dict['id'] = 'GGA'
             if(not(data.timestamp == None)):
                 data_dict['time'] = data.timestamp
             if(len(data.lat) > 0):
@@ -67,10 +73,15 @@ def sort_parsed_data_in_dict(data,data_dict):
                 data_dict['num_sat'] = data.num_sats
             if(len(data.horizontal_dil) > 0):
                 data_dict['horizontal_dil'] = data.horizontal_dil
-
+                
         elif('RMC' in data.identifier()):
-            data_dict['datetime'] = datetime.datetime.combine(data.datestamp,data.timestamp)
-
+            data_dict['id'] = 'RMC'
+            print(type(data.datestamp),type(data.timestamp))
+            #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
+            data_dict['datetime'] = data.datetime.replace(tzinfo=pytz.UTC)
+            #datetime.datetime.combine(data.datestamp,data.timestamp)
+            data_dict['timestamp'] = datetime.datetime.timestamp(data_dict['datetime'])
+            
     
 
 class nmea0183logger(object):
@@ -120,7 +131,7 @@ class nmea0183logger(object):
             serial_dict['port']           = port
             serial_dict['device']         = serial.Serial(port,baud)
             serial_dict['thread_queue']   = queue.Queue()
-            serial_dict['parsed_data']    = {} # Dict of parsed data            
+            serial_dict['parsed_data']    = {} # Dict of parsed data
             serial_dict['data_queues']    = []
             serial_dict['data_signals']   = []
             serial_dict['streams']        = [] # pymqdatastream Streams
@@ -157,7 +168,7 @@ class nmea0183logger(object):
         nmea_sentence = ''
         got_dollar = False                            
         while True:
-            time.sleep(0.05)
+            time.sleep(0.02)
             while(serial_device.inWaiting()):
                 # TODO, this could be made much faster ... 
                 try:
@@ -198,6 +209,8 @@ class nmea0183logger(object):
                         # Parse the data
                         parsed_data = parse(nmea_sentence)
                         sort_parsed_data_in_dict(parsed_data,serial_dict['parsed_data'])
+                        
+                        # TODO 
 
                         # Call signal functions for new data
                         for s in serial_dict['data_signals']:
@@ -245,6 +258,12 @@ class nmea0183logger(object):
             serial_dict['port']           = port
             serial_dict['device_name']    = address + ':' + str(port)
             serial_dict['parsed_data']    = {} # Dict of parsed data
+            serial_dict['time_info']      = {} # Dict of information about the time, difference to the local clock and jitter
+            serial_dict['time_info']['dt_mean']     = np.NaN
+            serial_dict['time_info']['dt_std']      = np.NaN            
+            serial_dict['time_info']['ind']         = 0
+            serial_dict['time_info']['len_t_array'] = 100
+            serial_dict['time_info']['data']        = np.zeros((serial_dict['time_info']['len_t_array'],2))            
             serial_dict['data_queues']    = []
             serial_dict['data_signals']   = []            
             serial_dict['streams']        = [] # pymqdatastream Streams
@@ -337,7 +356,35 @@ class nmea0183logger(object):
 
                         # Parse the data
                         parsed_data = parse(nmea_sentence)
-                        sort_parsed_data_in_dict(parsed_data,serial_dict['parsed_data'])                            
+                        sort_parsed_data_in_dict(parsed_data,serial_dict['parsed_data'])
+
+                        # Make statistics of time difference between nmea and local clock
+                        if(serial_dict['parsed_data']['timestamp'] is not None):
+                            print(serial_dict['parsed_data']['id'])
+                            print(serial_dict['parsed_data']['datetime'])
+                            print('Time:' + str(serial_dict['parsed_data']['timestamp']) + ' ' +  str(ti))
+                            dt = serial_dict['parsed_data']['timestamp'] - ti
+                            ind_tmp = serial_dict['time_info']['ind']
+                            if(ind_tmp < serial_dict['time_info']['len_t_array']):
+                                pass
+                            else:
+                                serial_dict['time_info']['ind'] = 0
+
+                            serial_dict['time_info']['ind'] += 1
+                            serial_dict['time_info']['data'][ind_tmp,0] = ti
+                            serial_dict['time_info']['data'][ind_tmp,1] = serial_dict['parsed_data']['timestamp']                            
+                            ind_tmp += 1
+                            serial_dict['time_info']['dt_mean'] = np.mean(np.diff(serial_dict['time_info']['data'][0:ind_tmp,:],1))
+                            serial_dict['time_info']['dt_std'] = np.std(np.diff(serial_dict['time_info']['data'][0:ind_tmp,:],1))                            
+
+                            if(ind_tmp > 0):
+                                print('diff:' + str(dt))
+                                print(datetime.datetime.utcfromtimestamp(ti))
+                                print(np.diff(serial_dict['time_info']['data'][0:ind_tmp,:],1))
+                                print(serial_dict['time_info']['dt_mean'])
+                                print(serial_dict['time_info']['dt_std'])
+                                #serial_dict['time_info']
+
 
                         # Call signal functions for new data
                         for s in serial_dict['data_signals']:

@@ -158,7 +158,7 @@ def decode_format4(data_str,device_info):
 
     Maximum packet size: 17 + 8 * 3 = 41 Byte
 
-    FLAG LTC: Every bit is dedicted to one of the eight physically
+    FLAG LTC: Every bit is dedicated to one of the eight physically
     available LTC2442 and is set to one if activated
 
     Args:
@@ -273,10 +273,13 @@ def decode_format4(data_str,device_info):
 
                     elif(packet_ident == 0x53): # Status string packet 'S'
                         data_utf8       = data_decobs.decode(encoding='utf-8')
-                        data_split = data_utf8.split(';')                        
+                        data_split = data_utf8.split(';')
                         data_packet = {'type':'Stat'}
                         tstr = data_split[1]
-                        data_packet['date']   = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
+                        td_tmp                = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
+                        #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
+                        data_packet['date']     = td_tmp.replace(tzinfo = device_info['timezone'])    
+                        data_packet['timestamp'] = datetime.datetime.timestamp(data_packet['date'])
                         data_packet['date_str']   = tstr
                         data_packet['format'] = int(data_split[2].split(':')[1])
                         data_packet['t']      = float(data_split[3])/device_info['counterfreq']
@@ -357,7 +360,7 @@ def decode_format4(data_str,device_info):
             except Exception as e:
                 cobs_err_packet += 1
                 # Peter temporary
-                logger.debug(funcname + ': Error:' + str(e))
+                #logger.debug(funcname + ': Error:' + str(e))
                 pass
 
     packet_err = {'type':'format4_log','num_err':err_packet,'num_cobs_err':cobs_err_packet,'num_good':good_packet,'ind_bad':ind_bad}

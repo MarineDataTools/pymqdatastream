@@ -6,6 +6,7 @@
 # File: 
 #
 import sys
+import os
 import argparse
 import logging
 
@@ -35,7 +36,8 @@ def main():
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('todlfs', help= 'The filename of the todlfs file')
     parser.add_argument('data_folder',help='The folder in which the splitted files will be saved')
-    parser.add_argument('deployment',help='The name of the deployment')        
+    parser.add_argument('index',help='Which files to be extracted',nargs='?')
+    #parser.add_argument('deployment',help='The name of the deployment')        
     parser.add_argument('--verbose', '-v', action='count')
 
     args = parser.parse_args()
@@ -44,10 +46,21 @@ def main():
         parser.print_help()
         sys.exit(1)
         
-    todl_fname = args.deployment
+    #todl_fname = args.deployment
     todl_data_full  = args.todlfs
-    todl_data_split = args.data_folder
+    todl_data_folder = args.data_folder
 
+    if args.index == None:
+        pass
+
+    # Creating a data folder
+    if not os.path.exists(todl_data_folder):
+        print('Folder:' + todl_data_folder + ' does not exist, creating it')
+        os.makedirs(todl_data_folder)
+    else:
+        print('Folder:' + todl_data_folder + ' exists, exiting')
+        exit()
+        
     if(args.verbose == None):
         loglevel = logging.CRITICAL
     elif(args.verbose == 1):
@@ -102,20 +115,23 @@ def main():
         file_info = file_info.decode("utf-8")
         print('File info:' + file_info)
         file_name = file_info.split('@@F:')[1]
+        file_index = int(file_name.split('_')[0])
+        
         #file_name = file_info.rsplit(':')[0]
         print('Filename:' + file_name)
-        file_name_full = todl_data_split + todl_fname + '__' + '{:04d}'.format(num_file) + '_' + file_name
+        file_name_full = todl_data_folder + '/' + file_name
         print('Filename full:' + file_name_full)
         # Write data to file
-        fsplit = open(file_name_full,'bw')
-        fsplit.write(str(filesize).encode('utf-8'))
-        fsplit.write(b'@@@')    
-        fsplit.write(file_info.encode('utf-8'))
-        fsplit.write(b'\n')
-        fsplit.write(file_data)
-        fsplit.close()
-        cur_sector = last_file_sector + 1
-        num_file += 1
+        if args.index == None:        
+            fsplit = open(file_name_full,'bw')
+            fsplit.write(str(filesize).encode('utf-8'))
+            fsplit.write(b'@@@')    
+            fsplit.write(file_info.encode('utf-8'))
+            fsplit.write(b'\n')
+            fsplit.write(file_data)
+            fsplit.close()
+            cur_sector = last_file_sector + 1
+            num_file += 1
     
 
 

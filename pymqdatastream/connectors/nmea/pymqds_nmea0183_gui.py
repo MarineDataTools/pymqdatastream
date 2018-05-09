@@ -504,7 +504,8 @@ class tcpWidget(QWidget):
         # IP source
         self.text_ip = QLineEdit()
         # Hack, this should be removed later
-        self.text_ip.setText('192.168.178.34:9001')
+        #self.text_ip.setText('192.168.178.34:9001') # EMB
+        self.text_ip.setText('192.168.160.60:5013') # Heincke
         self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
         self.button_open_socket = QPushButton('Open')
         self.button_open_socket.clicked.connect(self.clicked_open_socket)

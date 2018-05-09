@@ -21,6 +21,7 @@ import re
 from cobs import cobs
 import numpy as np
 import datetime
+import pytz
 import netCDF4 # For loading and saving files
 import argparse
 import traceback # For debugging purposes
@@ -71,6 +72,8 @@ def parse_device_info(data_str):
     
     boardversion = '??'
     firmwareversion = '??'
+    # If we dont have a time zone, its UTC
+    device_info['timezone'] = pytz.UTC
     print(data_str)
     for line in data_str.split('\n'):
         if( ' board version:' in line ):
@@ -134,6 +137,7 @@ def parse_device_info(data_str):
         
     try:
         device_info['time']   = datetime.datetime.strptime(time_str, '>>>Time: %Y.%m.%d %H:%M:%S')
+        device_info['time'] = device_info['time'].replace(tzinfo = device_info['timezone'])                    
     except Exception as e:
         logger.debug(funcname + ':' + str(e))
         device_info['time'] = None
@@ -340,19 +344,27 @@ class todlnetCDF4File():
         sgrp             = rootgrp.createGroup('stat')
         dimname          = 't'
         t_dim            = sgrp.createDimension(dimname, None)
+        self.fill_value  = -9e9
         self.stat_tvar        = sgrp.createVariable(dimname, "f8", (dimname,))
         self.stat_tvar_tmp    = []
-        self.stat_tvar.units  = 'time in seconds since device power on'
-        self.stat_timevar     = sgrp.createVariable("time", "f8", (dimname,))
+        self.stat_tvar.units  = 'time in seconds since device power on (10kHz counter)'
+        self.stat_timevar     = sgrp.createVariable("time", "f8", (dimname,), fill_value=self.fill_value)
         self.stat_timevar_tmp = []
-        
+
+        # The time base is the beginning of the day the TODL was started
         if(self.todl.device_info['time'] == None):
             time_unit    = "0000.01.01 00:00:00"
         else:
             time_unit    = self.todl.device_info['time'].strftime('%Y-%m-%d 00:00:00')
             
         self.time_base = datetime.datetime.strptime(time_unit,"%Y-%m-%d %H:%M:%S")
+        #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
+        self.time_base = self.time_base.replace(tzinfo = self.todl.device_info['timezone'])
         self.stat_timevar.units = 'seconds since ' + time_unit
+        
+        # Add the time information from the device info, this is earlier to every measurement
+        self.stat_tvar[0] = self.todl.device_info['cnt10k']/self.todl.device_info['counterfreq']
+        self.stat_timevar[0] = (self.todl.device_info['time'] - self.time_base).total_seconds()
         
         # Test if we have adcs
         if(self.todl.device_info['adcs'] is not None):
@@ -440,12 +452,13 @@ class todlnetCDF4File():
             self.pyro_umol_tmp = []
             
             
-    def to_ncfile_fast(self,fname, num_bytes = 1000000):
+    def to_ncfile_fast(self,fname, num_bytes = 1000000, num_bytes_packages=-1):
         """ Reads the data in fname, converts and puts it into a ncfile
 
         Args:
            fname: Filename
            num_bytes: num_bytes to read per conversion step
+           num_bytes_packages: The number of byte packages to read, defaults to -1, reading the whole file
         """
         funcname = 'to_ncfile_fast()'
         # First create a netCDF4 File
@@ -455,20 +468,22 @@ class todlnetCDF4File():
         self.todl.device_info['format']
         bytes_read = 0
         cnt = 0
+        #num_bytes_packages = 50
         data_str = b''
-        tmpcnt = 1
-        #while(tmpcnt):
         while(True):
-            tmpcnt -= 1
+            num_bytes_packages -= 1
             raw_data = self.todl.data_file.read(num_bytes)
             bytes_read += len(raw_data)
             # If we have the end of file
-            if(len(raw_data) == 0):
+            if((len(raw_data) == 0) or (num_bytes_packages == 0)):
                 self.file_status = 2
-                # create interpolated time variables using Stat
+                # create interpolated time variables using Stat and the 10k (t) counter saved in all variables
                 if(len(self.stat_tvar) > 0):
                     t    = self.stat_tvar[:]
                     time = self.stat_timevar[:]
+                    ind_bad = time.mask == True
+                    t    = t[~ind_bad]
+                    time = time[~ind_bad]
                     
                     # PyroScience
                     if(self.todl.device_info['pyro_freq'] > 0):
@@ -506,7 +521,7 @@ class todlnetCDF4File():
             # This is the only crucial part where we should check what format we have
             data_str += raw_data
             if(len(data_str) > 17):
-                print('len',len(data_str))
+                #print('len',len(data_str))
                 [data_packets,data_str] = data_packages.decode_format4(data_str,self.todl.device_info)
                 err_packet = data_packets[-1]
                 num_good += err_packet['num_good']
@@ -515,13 +530,27 @@ class todlnetCDF4File():
             # Read the data into temporary buffer
             for data in data_packets:
                 cnt += 1
-                if(np.mod(cnt,1000) == 0):
-                    print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' bytes read',num_good,num_err,err_packet)
+                if(np.mod(cnt,10000) == 0):
+                    print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' bytes read Num good: ' + str(num_good) + ' Num err: ' + str(num_err))
 
                 if(data['type'] == 'Stat'): # Status packet
                     self.stat_tvar_tmp.append(data['t'])
-                    dt = data['date'] - self.time_base
-                    self.stat_timevar_tmp.append(dt.total_seconds())
+                    ts_info = self.todl.device_info['cnt10k']/self.todl.device_info['counterfreq']
+                    dts_cnt = data['t'] - ts_info # Calculate the counter difference
+                    dt = data['date'] -  self.todl.device_info['time'] # Calculate the time difference
+                    dts = dt.total_seconds()
+                    dts_timevar = (data['date'] - self.time_base).total_seconds()                    
+                    if(dts < 0): # Negative number should not appear!
+                        print('Bad count:', dts,dts_cnt,data['date'])                        
+                        dts_timevar = -9e9
+                    elif(abs(dts - dts_cnt)>2.0): # If difference is too large, discard
+                        print('Bad count', dts,dts_cnt,data['date'])                        
+                        dts_timevar = -9e9
+                    else:
+                        pass
+                        #print('Good time data', dts,dts_cnt,data['date'])
+
+                    self.stat_timevar_tmp.append(dts_timevar)
 
                 elif(data['type'] == 'L'): # ADC data
                     try:
@@ -1224,7 +1253,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         self.send_serial_data(cmd)
         self.send_serial_data('start\n')
         time.sleep(0.1)                        
-
+        
             
     def query_todllogger(self):
         """Queries the logger and sets the important parameters to the values read
@@ -2064,8 +2093,11 @@ default to None, only with a valid argument that setting will be sent to the dev
                             freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],0] = ts
                             freq_packets['Ofrdata']['phidata'][freq_packets['Ofrdata']['ind']] = data_packet['phi']
                             freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],1] = data_packet['t']
-                            freq_packets['Ofrdata']['ind'] += 1                        
+                            freq_packets['Ofrdata']['ind'] += 1
 
+                    elif(data_packet['type'] == 'Stat'): # Status packet, here the time difference between TODL and PC is calculated
+                        print('stat',data_packet['timestamp'], ta[-1])
+                        print('dt',data_packet['timestamp'] -  ta[-1])
 
                 # Frequency packets
                 for name_freq_pack in freq_packets:

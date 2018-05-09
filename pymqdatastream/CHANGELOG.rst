@@ -19,4 +19,12 @@
 	2018-04-03
 	- added logging_level_socket for finer logging control
 	- changed pymqs_plotxy such that data is always saved, regardless if plotted or not
+	2018-05-02
+	- added timezone awareness (at the moment UTC)
+
+0.7.6:	2018-05-09
+        - made netCDF4 date computation aware of invalid data (checks
+          if difference between increment of 10kHz counter and date in
+          Stat packet is within range of 2 seconds, this is rough but
+          good enough to remove the worst values)
 
