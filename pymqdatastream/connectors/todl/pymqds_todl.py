@@ -481,10 +481,12 @@ class todlnetCDF4File():
                 if(len(self.stat_tvar) > 0):
                     t    = self.stat_tvar[:]
                     time = self.stat_timevar[:]
-                    ind_bad = time.mask == True
-                    t    = t[~ind_bad]
-                    time = time[~ind_bad]
-                    
+                    # If we have bad data
+                    if(np.ma.isMaskedArray(time)):
+                        ind_bad = time.mask == True
+                        t    = t[~ind_bad]
+                        time = time[~ind_bad]
+                        
                     # PyroScience
                     if(self.todl.device_info['pyro_freq'] > 0):
                         print('Creating timevariable for Pyroscience Firesting')
@@ -519,6 +521,7 @@ class todlnetCDF4File():
                 return True            
 
             # This is the only crucial part where we should check what format we have
+            # This is not done yet
             data_str += raw_data
             if(len(data_str) > 17):
                 #print('len',len(data_str))

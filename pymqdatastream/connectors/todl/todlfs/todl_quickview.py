@@ -46,25 +46,37 @@ def main():
     V_ch2 = nca.variables['V_adc0_ch2'][:]
 
     # Read in PyroScience data
-    ncp = nc.groups['pyro']
-    t_p = ncp.variables['t_pyro'][:]
-    time_p = netCDF4.num2date(ncp.variables['time'][:],units = ncp.variables['time'].units)
-    fp = 1/(np.diff(t_p).mean())    
-    phi = ncp.variables['phi'][:]
+    try:
+        ncp = nc.groups['pyro']
+        t_p = ncp.variables['t_pyro'][:]
+        time_p = netCDF4.num2date(ncp.variables['time'][:],units = ncp.variables['time'].units)
+        fp = 1/(np.diff(t_p).mean())    
+        phi = ncp.variables['phi'][:]
+        FLAG_PYRO=True
+    except:
+        FLAG_PYRO=False
+        
 
     # Read in IMU
-    nci = nc.groups['imu']
-    t_imu = nci.variables['t_imu'][:]
-    fi = 1/(np.diff(t_imu).mean())    
-    accx = nci.variables['accx'][:]
-    accy = nci.variables['accy'][:]
-    accz = nci.variables['accz'][:]
-    gyrox = nci.variables['gyrox'][:]
-    gyroy = nci.variables['gyroy'][:]
-    gyroz = nci.variables['gyroz'][:]
-    magx = nci.variables['magx'][:]
-    magy = nci.variables['magy'][:]
-    magz = nci.variables['magz'][:]            
+    try:
+        FLAG_IMU = True        
+        nci = nc.groups['imu']
+        t_imu = nci.variables['t_imu'][:]
+        fi = 1/(np.diff(t_imu).mean())    
+        accx = nci.variables['accx'][:]
+        accy = nci.variables['accy'][:]
+        accz = nci.variables['accz'][:]
+        gyrox = nci.variables['gyrox'][:]
+        gyroy = nci.variables['gyroy'][:]
+        gyroz = nci.variables['gyroz'][:]
+        magx = nci.variables['magx'][:]
+        magy = nci.variables['magy'][:]
+        magz = nci.variables['magz'][:]
+    except:
+        FLAG_IMU = False
+
+
+
 
     V_ch1_pl = np.asarray(V_ch1[:])
     V_ch2_pl = np.asarray(V_ch2[:])
@@ -94,37 +106,39 @@ def main():
     pl.draw()
 
     # Plot Firesting data
-    pl.figure(2)
-    pl.clf()
-    pl.plot(t_p,phi)
-    #pl.plot(time_p,phi)
-    pl.title('Firesting data; Freq:' + str(fp.round(2)))
-    pl.draw()
+    if FLAG_PYRO:
+        pl.figure(2)
+        pl.clf()
+        pl.plot(t_p,phi)
+        #pl.plot(time_p,phi)
+        pl.title('Firesting data; Freq:' + str(fp.round(2)))
+        pl.draw()
 
     # Plot IMU data
-    pl.figure(3)
-    pl.clf()
-    pl.subplot(3,1,1)
-    pl.plot(t_imu,accx,'o')
-    pl.plot(t_imu,accy,'o')
-    pl.plot(t_imu,accz,'o')        
-    pl.title('Acceleration IMU; Freq:' + str(fi.round(2)))
-    pl.legend(('x','y','z'))    
+    if FLAG_IMU:
+        pl.figure(3)
+        pl.clf()
+        pl.subplot(3,1,1)
+        pl.plot(t_imu,accx,'o')
+        pl.plot(t_imu,accy,'o')
+        pl.plot(t_imu,accz,'o')        
+        pl.title('Acceleration IMU; Freq:' + str(fi.round(2)))
+        pl.legend(('x','y','z'))    
 
-    pl.subplot(3,1,2)
-    pl.plot(t_imu,gyrox,'o')
-    pl.plot(t_imu,gyroy,'o')
-    pl.plot(t_imu,gyroz,'o')
-    pl.title('Gyro IMU; Freq:' + str(fi.round(2)))
-    pl.legend(('x','y','z'))
-
-    pl.subplot(3,1,3)
-    pl.plot(t_imu,magx,'o')
-    pl.plot(t_imu,magy,'o')
-    pl.plot(t_imu,magz,'o')
-    pl.title('MAG IMU; Freq:' + str(fi.round(2)))
-    pl.legend(('x','y','z'))    
-    pl.draw()    
+        pl.subplot(3,1,2)
+        pl.plot(t_imu,gyrox,'o')
+        pl.plot(t_imu,gyroy,'o')
+        pl.plot(t_imu,gyroz,'o')
+        pl.title('Gyro IMU; Freq:' + str(fi.round(2)))
+        pl.legend(('x','y','z'))
+    
+        pl.subplot(3,1,3)
+        pl.plot(t_imu,magx,'o')
+        pl.plot(t_imu,magy,'o')
+        pl.plot(t_imu,magz,'o')
+        pl.title('MAG IMU; Freq:' + str(fi.round(2)))
+        pl.legend(('x','y','z'))    
+        pl.draw()    
 
 
     

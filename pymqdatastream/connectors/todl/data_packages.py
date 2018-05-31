@@ -265,8 +265,9 @@ def decode_format4(data_str,device_info):
                             good_packet += 1
                         else:
                             # Peter temporary
-                            #logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
+                            logger.debug(funcname + ': Wrong packet size, is:' + str(len(data_cobs)) + ' should: ' + str(packet_size) )
                             err_packet += 1
+                            #input('fds')
                             ind_bad.append(ind_bad0)
                             #print('data_cobs:',data_cobs)
                             #print('data_decobs:',data_decobs)
@@ -360,7 +361,9 @@ def decode_format4(data_str,device_info):
             except Exception as e:
                 cobs_err_packet += 1
                 # Peter temporary
-                #logger.debug(funcname + ': Error:' + str(e))
+                logger.debug(funcname + ': Error:' + str(e))
+                #print('data_cobs:',data_cobs)
+                #input('Fds')
                 pass
 
     packet_err = {'type':'format4_log','num_err':err_packet,'num_cobs_err':cobs_err_packet,'num_good':good_packet,'ind_bad':ind_bad}
