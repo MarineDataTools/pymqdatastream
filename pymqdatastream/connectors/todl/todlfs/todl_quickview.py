@@ -4,10 +4,12 @@ import numpy as np
 import pylab as pl
 import netCDF4
 import logging
+import pymqdatastream.connectors.todl.todl_data_processing as todl_data_processing
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('todl_quickview')
 logger.setLevel(logging.DEBUG)
+
 
 def main():
     usage_str = 'todl_quikview todldata.nc'
@@ -35,15 +37,34 @@ def main():
 
         
     nc = netCDF4.Dataset(fname)
-    nca = nc.groups['adc']
-    t_ch1 = nca.variables['t_ch1'][:]
-    t_ch2 = nca.variables['t_ch2'][:]
-    time_ch1 = nca.variables['time_ch1'][:]
-    time_ch2 = nca.variables['time_ch2'][:]
-    f1 = 1/(np.diff(t_ch1).mean())
-    f2 = 1/(np.diff(t_ch2).mean())    
-    V_ch1 = nca.variables['V_adc0_ch1'][:]
-    V_ch2 = nca.variables['V_adc0_ch2'][:]
+    # Try to read ADC data
+    try:    
+        nca = nc.groups['adc']
+    except:
+        nca = None
+        pass
+
+    if(nca is not None):
+        try:
+            t_ch1 = nca.variables['t_ch1'][:]
+            time_ch1 = netCDF4.num2date(nca.variables['time_ch1'][:],units=nca.variables['time_ch1'].units)
+            f1 = 1/(np.diff(t_ch1).mean())
+            V_ch1 = nca.variables['V_adc0_ch1'][:]
+            FLAG_CH1=True
+            print('Found ch1 ADC data')            
+        except:
+            pass
+
+        try:     
+            t_ch2 = nca.variables['t_ch2'][:]
+            time_ch2 = netCDF4.num2date(nca.variables['time_ch2'][:],units=nca.variables['time_ch2'].units)
+            f2 = 1/(np.diff(t_ch2).mean())    
+            V_ch2 = nca.variables['V_adc0_ch2'][:]
+            FLAG_CH2=True
+            print('Found ch2 ADC data')
+        except:
+            FLAG_CH2=False            
+            pass            
 
     # Read in PyroScience data
     try:
@@ -53,6 +74,7 @@ def main():
         fp = 1/(np.diff(t_p).mean())    
         phi = ncp.variables['phi'][:]
         FLAG_PYRO=True
+        print('Found Pyro data')        
     except:
         FLAG_PYRO=False
         
@@ -62,6 +84,7 @@ def main():
         FLAG_IMU = True        
         nci = nc.groups['imu']
         t_imu = nci.variables['t_imu'][:]
+        time_imu = netCDF4.num2date(nci.variables['time'][:],units=nci.variables['time'].units)        
         fi = 1/(np.diff(t_imu).mean())    
         accx = nci.variables['accx'][:]
         accy = nci.variables['accy'][:]
@@ -72,14 +95,44 @@ def main():
         magx = nci.variables['magx'][:]
         magy = nci.variables['magy'][:]
         magz = nci.variables['magz'][:]
-    except:
+        print('Found IMU data')                
+    except Exception as e:
+        print(e)
         FLAG_IMU = False
 
 
 
+        
+    if FLAG_CH1:
+        V_ch1_pl = np.asarray(V_ch1[:])
+        print('Despiking ch1')
+        spikes_ch1 = todl_data_processing.findspikes(t_ch1,V_ch1_pl,.1)
+        V_ch1_pl = np.ma.masked_where(spikes_ch1 == 1,V_ch1_pl)
+        print('Plotting ADC ch 1')
+        pl.figure(1)
+        pl.clf()
+        pl.subplot(1,1,1)
+        #pl.plot(t_ch1,V_ch1_pl)
+        pl.plot(time_ch1,V_ch1_pl)
+        pl.title('V_adc0_ch1; Freq:' + str(f1.round(2)))
+        pl.xlabel('t [s]')
+        pl.ylabel('U [V]')        
 
-    V_ch1_pl = np.asarray(V_ch1[:])
-    V_ch2_pl = np.asarray(V_ch2[:])
+    if FLAG_CH2:        
+        V_ch2_pl = np.asarray(V_ch2[:])
+        print('Despiking ch2')
+        spikes_ch2 = todl_data_processing.findspikes(t_ch2,V_ch2_pl,.1)
+        V_ch2_pl = np.ma.masked_where(spikes_ch2 == 1,V_ch2_pl)
+
+        pl.figure(2)
+        pl.clf()
+        pl.subplot(1,1,1)
+        pl.plot(t_ch2,V_ch2_pl)
+        #pl.plot(time_ch2,V_ch2_pl)
+        pl.title('V_adc0_ch2; Freq:' + str(f2.round(2)))
+        pl.xlabel('t [s]')
+        pl.ylabel('U [V]')    
+        pl.draw()
 
     #ind_bad1 = (V_ch1_pl < 0.0) | (V_ch1_pl > 5.0)
     #V_ch1_pl = np.ma.masked_where(ind_bad1,V_ch1_pl)
@@ -87,41 +140,25 @@ def main():
     #ind_bad2 = (V_ch2_pl < 0.0) | (V_ch2_pl > 5.0)
     #V_ch2_pl = np.ma.masked_where(ind_bad2,V_ch2_pl)    
 
-    # Plot ADC data
-    pl.figure(1)
-    pl.clf()
-    pl.subplot(2,1,1)
-    pl.plot(t_ch1,V_ch1_pl)
-    #pl.plot(time_ch1,V_ch1_pl)
-    pl.title('V_adc0_ch1; Freq:' + str(f1.round(2)))
-    pl.xlabel('t [s]')
-    pl.ylabel('U [V]')
-
-    pl.subplot(2,1,2)
-    pl.plot(t_ch2,V_ch2_pl)
-    #pl.plot(time_ch2,V_ch2_pl)
-    pl.title('V_adc0_ch2; Freq:' + str(f2.round(2)))
-    pl.xlabel('t [s]')
-    pl.ylabel('U [V]')    
-    pl.draw()
-
     # Plot Firesting data
     if FLAG_PYRO:
-        pl.figure(2)
+        print('Plotting Pyro')
+        pl.figure(3)
         pl.clf()
-        pl.plot(t_p,phi)
-        #pl.plot(time_p,phi)
+        #pl.plot(t_p,phi)
+        pl.plot(time_p,phi)
         pl.title('Firesting data; Freq:' + str(fp.round(2)))
         pl.draw()
 
     # Plot IMU data
     if FLAG_IMU:
-        pl.figure(3)
+        print('Plotting IMU')
+        pl.figure(4)
         pl.clf()
         pl.subplot(3,1,1)
-        pl.plot(t_imu,accx,'o')
-        pl.plot(t_imu,accy,'o')
-        pl.plot(t_imu,accz,'o')        
+        pl.plot(time_imu,accx,'o')
+        pl.plot(time_imu,accy,'o')
+        pl.plot(time_imu,accz,'o')        
         pl.title('Acceleration IMU; Freq:' + str(fi.round(2)))
         pl.legend(('x','y','z'))    
 

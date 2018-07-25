@@ -29,3 +29,6 @@
           good enough to remove the worst values)
 	- todlfs_get_files can now extract a specific file, and not all at once
 
+0.7.7:	2018-06-01
+        - Added findspikes and todl_data_processing.py
+
