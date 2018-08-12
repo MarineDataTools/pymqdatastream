@@ -861,6 +861,10 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                                     if self.Datastream.pyqtgraph['ymode'] == 'ra': # Check for running average
                                         ylm = ydv.mean()
                                         ylstd = ydv.std()
+                                        if(np.bisnan(ylm)):
+                                            ylm = 1.0
+                                            ylstd = 1.0
+                                            
                                         yl0 = ylm - 2 * ylstd
                                         yl1 = ylm + 2 * ylstd
                                         self.pyqtgraph_axes.setYRange(yl0,yl1)                                    

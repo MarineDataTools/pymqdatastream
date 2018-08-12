@@ -45,7 +45,7 @@ for i,speed in enumerate(s4lv0_4_speeds):
 s4lv0_42_speeds_hz    = [1250, 2000]
 s4lv0_45_speeds_hz    = [10, 25, 50, 100, 200, 400, 715, 1250, 2000, 3300]
 s4lv0_46_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 250, 333, 400, 500, 625, 1000, 1250, 2000]
-s4lv0_75_speeds_hz    = [2, 5, 10, 25, 50, 100, 200, 400, 500, 625, 1000, 1250, 2000]
+s4lv0_75_speeds_hz    = [0, 2, 5, 10, 25, 50, 100, 200, 400, 500, 501,625, 1000, 1250, 2000]
 
 file_header_valid = b'\n>>>'
 file_header_start_todl = b'>>> -- HELLO! This is the Turbulent Ocean Data Logger (TODL) -- <<<'
@@ -1351,10 +1351,12 @@ default to None, only with a valid argument that setting will be sent to the dev
         data_str = tlocalstr
         while(len(deque) > 0):
             data = deque.pop()
-            data_str += data.decode(encoding='utf-8')
-            #data_str += data
+            try:
+                data_str += data.decode(encoding='utf-8')
+            except Exception as e:
+                print('Could not decode to utf-8' + str(data))
 
-        print(data_str)
+        print('Data str:' + str(data_str))
         self.device_info = parse_device_info(data_str)
         self.channel_streams = [None] * (max(self.device_info['channel_seq']) + 1)        
 

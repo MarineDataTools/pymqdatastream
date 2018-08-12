@@ -53,6 +53,7 @@ def main():
             FLAG_CH1=True
             print('Found ch1 ADC data')            
         except:
+            FLAG_CH1=False            
             pass
 
         try:     

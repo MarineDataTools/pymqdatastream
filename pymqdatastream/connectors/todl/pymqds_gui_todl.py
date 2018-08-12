@@ -130,17 +130,17 @@ class todlInfo(QtWidgets.QWidget):
         layout.addWidget(self.adcs,0,2)
         layout.addWidget(self.ch_seq,0,3)
         layout.addWidget(self.data_format,0,4)
-        layout.addWidget(self.freq,0,5)
-        layout.addWidget(self.status_date,1,0)
-        layout.addWidget(self.status_t,1,1)
-        layout.addWidget(self.status_t32,1,2)
-        layout.addWidget(self.status_start,1,3)
-        layout.addWidget(self.status_show,1,4)
-        layout.addWidget(self.status_log,1,5)
-        layout.addWidget(self.status_sd,1,6)
-        layout.addWidget(self.status_fname,1,7)
-        layout.addWidget(self.bytesread,2,0)
-        layout.addWidget(self.bytesspeed,2,1)
+        layout.addWidget(self.freq,1,0,1,5)
+        layout.addWidget(self.status_date,2,0)
+        layout.addWidget(self.status_t,2,1)
+        layout.addWidget(self.status_t32,2,2)
+        layout.addWidget(self.status_start,2,3)
+        layout.addWidget(self.status_show,2,4)
+        layout.addWidget(self.status_log,2,5)
+        layout.addWidget(self.status_sd,3,0)
+        layout.addWidget(self.status_fname,3,1)
+        layout.addWidget(self.bytesread,4,0)
+        layout.addWidget(self.bytesspeed,4,1)
 
         self.setLayout(layout)        
 
@@ -299,7 +299,11 @@ class todlConfig(QtWidgets.QWidget):
 
         self.set_time     = QtWidgets.QPushButton('Set time')
         self.set_time.clicked.connect(self.clicked_set_time)
-        self.timeWidget   = timeWidget()        
+        self.timeWidget   = timeWidget()
+
+        # Start/Stop buttons
+        self._start_button    = QtWidgets.QPushButton('Start')
+        self._stop_button     = QtWidgets.QPushButton('Stop')        
 
         # Conversion speed
         self._freq_button     = QtWidgets.QPushButton('Set frequency')
@@ -375,23 +379,27 @@ class todlConfig(QtWidgets.QWidget):
 
 
         # The main layout
-        layout.addWidget(self.timeWidget,0,0,5,1)
-        layout.addWidget(self.set_time,6,0)
+        layout.addWidget(self._start_button,0,0)
+        layout.addWidget(self._stop_button,1,0)        
+
         
-        layout.addWidget(self._freq_button,1,0+1,1,2)
-        layout.addWidget(self._convspeed_combo,0,0+1,1,2)
+        layout.addWidget(self.timeWidget,0,1,5,1)
+        layout.addWidget(self.set_time,6,1)
         
-        layout.addWidget(self._set_format_button,1,2+1,1,2)
-        layout.addWidget(self._dataformat_combo,0,2+1,1,2)
+        layout.addWidget(self._freq_button,1,0+2,1,2)
+        layout.addWidget(self._convspeed_combo,0,0+2,1,2)
         
-        layout.addWidget(self._ad_set_button,3,0+1,1,4)
-        layout.addWidget(self._ad_widget_check,2,0+1,1,4)
+        layout.addWidget(self._set_format_button,1,2+2,1,2)
+        layout.addWidget(self._dataformat_combo,0,2+2,1,2)
         
-        layout.addWidget(self._channels_set_button,5,0+1,1,4)
-        layout.addWidget(self._ad_seq_check,4,0+1,1,4)
+        layout.addWidget(self._ad_set_button,3,0+2,1,4)
+        layout.addWidget(self._ad_widget_check,2,0+2,1,4)
         
-        layout.addWidget(self._query_bu,6,0+1)
-        layout.addWidget(self._ad_apply_bu,6,1+1)        
+        layout.addWidget(self._channels_set_button,5,0+2,1,4)
+        layout.addWidget(self._ad_seq_check,4,0+2,1,4)
+        
+        layout.addWidget(self._query_bu,6,0+2)
+        layout.addWidget(self._ad_apply_bu,6,1+2)        
 
         self.main_layout = layout
         # Add the pyroscience widgets
@@ -426,7 +434,6 @@ class todlConfig(QtWidgets.QWidget):
             for i in range(i+1,8):
                 self._seq_combo[i].setCurrentIndex(4)
 
-
             #
             # ADCS
             #
@@ -436,6 +443,25 @@ class todlConfig(QtWidgets.QWidget):
             for i,adc in enumerate(status['adcs']):            
                 self._ad_check[adc].setChecked(True)
 
+
+
+            
+            # Format
+            for i,dformat in enumerate(self.formats):
+                print(dformat, status['format'])
+                if(dformat == status['format']):
+                    self._dataformat_combo.setCurrentIndex(i)
+                    print('Found correct format')
+
+            # Conversion speed
+            for i,speed in enumerate(self.speeds_hz):
+                print(speed, status['adcs_freq'])
+                if(speed == status['adcs_freq']):
+                    self._convspeed_combo.setCurrentIndex(i)
+                    print('Found correct frequency')
+
+            #status['imu_freq']
+            #status['pyro_freq']
             
     def _setup_device(self):
         freq_str = self._convspeed_combo.currentText()
@@ -558,7 +584,7 @@ class todlConfig(QtWidgets.QWidget):
         self._pyro_switch_status = ['Switch Pyro on','Switch Pyro off']
         self._pyro_switch_button = QtWidgets.QPushButton(self._pyro_switch_status[1])
         self._pyro_switch_button.clicked.connect(self._clicked_pyro_switch)
-        self.main_layout.addWidget(self._pyro_switch_button,0,5)
+        self.main_layout.addWidget(self._pyro_switch_button,2,0)
 
     def _clicked_pyro_switch(self):
         if(self._pyro_switch_button.text() == self._pyro_switch_status[0]):
@@ -705,6 +731,7 @@ class gpsDevice():
         self.name = name
         print('GPS Setup')
         self.w = pymqds_nmea0183_gui.nmea0183SetupWidget()
+        self.device_widget = self.w
         # Copy the nmea0183logger
         self.nmea0183logger = self.w.nmea0183logger
         # Connect the device changed function
@@ -906,8 +933,8 @@ class todlDevice():
         # Source
         sources = ['serial','file','ip']
         
-        self.setup_widget = QtWidgets.QWidget()
-        w = self.setup_widget
+        self.device_widget = QtWidgets.QWidget()
+        w = self.device_widget
         w.setWindowTitle('todl setup')
         self.combo_source = QtWidgets.QComboBox(w)
         for s in sources:
@@ -970,7 +997,7 @@ class todlDevice():
         self.test_ports() # Looking for serial ports        
         self.get_source()
 
-        w.show()
+        #w.show()
 
     def get_source(self):
         """
@@ -1056,7 +1083,7 @@ class todlDevice():
                 except:
                     pass
 
-        self.setup_widget.adjustSize()
+        self.device_widget.adjustSize()
 
     def test_ports(self):
         """
@@ -1107,9 +1134,12 @@ class todlDevice():
                             logger.debug('Opening Version 0.70+ device setup')
                             self.todlConfig.show()                            
                             self._s4l_settings_bu.close()
+                            self.todlConfig._update_status()
+                            self.todlConfig.adjustSize()
                             if(True):
                                 self._ad_table.clear()                                                        
                                 self._ad_table_setup()
+
                         else:
                             self._s4l_settings_bu.setEnabled(True)
                             self._ad_table.clear()                            
@@ -1884,7 +1914,12 @@ class todlDevice():
         if(plot_IMU):
             graphs = [[dstreams_IMU[0]],[dstreams_IMU[1]],[dstreams_IMU[2]]]
         else:
-            graphs = [[dstreams[0]],[dstreams[1]],dstreams_O2]
+            graphs = []
+            for dstream_tmp in dstreams:
+                graphs.append([dstream_tmp])
+
+            graphs.append(dstreams_O2)
+            #graphs = [[dstreams[0]],[dstreams[1]],dstreams_O2]
             
         plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy_TO2,args=(graphs,))
         plotxyprocess.daemon = True
@@ -2158,6 +2193,13 @@ class todlMainWindow(QtWidgets.QMainWindow):
         # Create the show widget                
         self.show_devices()
 
+        # A scrollable widget all devices are put
+
+        self._devices_widget_scroll =  QtWidgets.QScrollArea()
+        self._devices_widget_scroll.setWidgetResizable(True)
+        self._devices_widget = QtWidgets.QFrame(self._devices_widget_scroll)
+        self._devices_widget.setLayout(QtWidgets.QVBoxLayout())
+        self._devices_widget_scroll.setWidget(self._devices_widget)
         # Main tasks for the main layout
         self.tasks = []
         self.tasks.append({'name':'Time','widget':self.time_widget})        
@@ -2173,10 +2215,16 @@ class todlMainWindow(QtWidgets.QMainWindow):
         for i,task in enumerate(self.tasks):
             self.layout.addWidget(task['widget'],i,3)
             
-        
+        # Add the table
+        self.layout.addWidget(self._devices_widget_scroll,0,4,5,1)
         self.setCentralWidget(self.mainwidget)
-        
+        self._devices_widget_scroll.show()
         self.show()
+
+        self.width_orig = self.frameGeometry().width()
+        self.height_orig = self.frameGeometry().height()
+        self.width_main = self.width_orig
+        self.height_main = self.height_orig
 
 
     def setup_time(self):
@@ -2187,8 +2235,6 @@ class todlMainWindow(QtWidgets.QMainWindow):
         w = self.time_widget
         self.all_widgets.append(w)
         
-
-
 
     def setup_devices(self):
         """Adding and removing functions for the device setup,
@@ -2255,10 +2301,21 @@ available/known/implemented devices are read from todl_config.yaml
                 devicename = self.combo_dev_add.currentText()
                 deviceobj.setup(name = devicename, mainwindow = self)
 
-                self.devices.append(deviceobj)
-                
-        #type
-        #SubClass = type('SubClass', (BaseClass,), {'set_x': set_x})
+
+                # Add the device to the devices widget
+                self._devices_widget.layout().addWidget(deviceobj.device_widget)
+                self._devices_widget.layout().addStretch(1)                
+                deviceobj.device_widget.show()
+                self._devices_widget_scroll.show()
+
+                # resize the widget
+                width = deviceobj.device_widget.frameGeometry().width()
+                height = deviceobj.device_widget.frameGeometry().height()
+                width_main = self.width_orig + width
+                height_main = self.height_orig + height
+                print(width,height,width_main,height_main)                
+                if(width_main > self.width_main):
+                    self.resize(width_main,self.height_main)
 
 
     def device_changed(self,fname=None):
