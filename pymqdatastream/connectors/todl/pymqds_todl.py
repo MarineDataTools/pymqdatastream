@@ -695,6 +695,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self.conversion_thread_queue_ans = queue.Queue()
 
         # Two queues to start/stop the raw_data datastream thread
+        self.raw_stream = None # The stream for raw data
         self._raw_data_thread_queue = queue.Queue()
         self._raw_data_thread_queue_ans = queue.Queue()        
         # List of conversion streams
@@ -979,8 +980,10 @@ class todlDataStream(pymqdatastream.DataStream):
             serial_lock_file(port,remove=True)
         elif(self.serial_type[1] == 1): # Socket
             self.serial.close()
-            
+
+
         self.status = -1
+        self.logger.debug(funcname + ': TODL status:' + str(self.status))        
 
         
     def log_serial_data(self,filename):
@@ -1073,11 +1076,16 @@ class todlDataStream(pymqdatastream.DataStream):
         """
 
         funcname = self.__class__.__name__ + '.rem_raw_data_stream()'
-        self.logger.debug(funcname + ': Stopping conversion thread')
-        self._raw_data_thread_queue.put('stop')
-        data = self._raw_data_thread_queue_ans.get()
-        self.logger.debug(funcname + ': Got data from conversion thread, thread stopped')
-        self.rem_stream(self.raw_stream)
+        if(self.raw_stream == None):
+            self.logger.debug(funcname + ': No raw data stream, doing nothing')
+            return
+        else:
+            self.logger.debug(funcname + ': Stopping conversion thread')
+            self._raw_data_thread_queue.put('stop')
+            data = self._raw_data_thread_queue_ans.get()
+            self.logger.debug(funcname + ': Got data from conversion thread, thread stopped')
+            self.rem_stream(self.raw_stream)
+            self.raw_stream = None
         
         
     def push_raw_stream_data(self,stream,dt = 0.1):
@@ -1282,6 +1290,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         # Send stop and info to check if we got some data which is a todl
         #
         FLAG_IS_TODL = False
+        self.FLAG_IS_TODL = False
         self.send_serial_data('stop\n')
         time.sleep(0.1+dt)
 
@@ -1301,6 +1310,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         # Parse the received data for a valid reply
         if( ('>>>stop' in data_str) or ('><<stop' in data_str) ):
             FLAG_IS_TODL=True
+            self.FLAG_IS_TODL = True
             boardversion = '??'
             firmwareversion = '??'
             self.logger.debug(funcname + ': Found a valid stop reply')
@@ -1484,7 +1494,8 @@ default to None, only with a valid argument that setting will be sent to the dev
         self.conv_streams = []
         # A list with Nones or the streams dedicated for the channels
         self.packets_converted = 0
-        self.status = 0
+        if(self.status > 0):
+            self.status = 0
 
 
     # Warning, this does not work anymore (at the moment) due to new streams!

@@ -443,22 +443,15 @@ class todlConfig(QtWidgets.QWidget):
             for i,adc in enumerate(status['adcs']):            
                 self._ad_check[adc].setChecked(True)
 
-
-
-            
             # Format
             for i,dformat in enumerate(self.formats):
-                print(dformat, status['format'])
                 if(dformat == status['format']):
                     self._dataformat_combo.setCurrentIndex(i)
-                    print('Found correct format')
 
             # Conversion speed
             for i,speed in enumerate(self.speeds_hz):
-                print(speed, status['adcs_freq'])
                 if(speed == status['adcs_freq']):
                     self._convspeed_combo.setCurrentIndex(i)
-                    print('Found correct frequency')
 
             #status['imu_freq']
             #status['pyro_freq']
@@ -568,7 +561,6 @@ class todlConfig(QtWidgets.QWidget):
         """ Querying the datalogger
         """
         self.todl.query_todllogger()
-        
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)
         
@@ -957,11 +949,14 @@ class todlDevice():
         
         self.setup_close_bu = QtWidgets.QPushButton('Close')
         self.setup_close_bu.clicked.connect(w.close)
-        self.serial_open_bu = QtWidgets.QPushButton('Search TODL')
+        self.serial_open_bu = QtWidgets.QPushButton('Open')
         self.serial_open_bu.clicked.connect(self.clicked_serial_open_bu)
+        self.serial_open_bu.setEnabled(False)        
 
         self.serial_test_bu = QtWidgets.QPushButton('Test ports')
-        self.serial_test_bu.clicked.connect(self.test_ports)        
+        self.serial_test_bu.clicked.connect(self.test_ports)
+        self.serial_query_bu = QtWidgets.QPushButton('Query TODL')
+        self.serial_query_bu.clicked.connect(self.clicked_serial_query_bu)
 
         self._s4l_settings_bu = QtWidgets.QPushButton('Device Setup')
         self._s4l_settings_bu.setEnabled(False)
@@ -1005,7 +1000,7 @@ class todlDevice():
         """
         # The source data layout (serial, files)
         widgets_serial = [ self.setup_close_bu, self.combo_source, self.serial_test_bu, self.combo_serial,
-                           self.combo_baud, self.serial_open_bu ]
+                           self.combo_baud, self.serial_query_bu, self.serial_open_bu ]
         widgets_file   = [ self.setup_close_bu,
                            self.combo_source,self.button_open_file,
                            self.button_startstopread_file,self.label_nbytes,
@@ -1033,7 +1028,7 @@ class todlDevice():
 
             # Add the todlConfig widget doing all the complicated configuration
             self.layout_source_row2.addWidget(self.todlConfig,1,0)
-            self.todlConfig.hide()            
+            #self.todlConfig.hide()
             for w in widgets_serial:
                 try:
                     self.layout_source.addWidget(w)
@@ -1099,6 +1094,29 @@ class todlDevice():
         for port in ports_good:
             self.combo_serial.addItem(str(port))
 
+
+    def clicked_serial_query_bu(self):
+        """ Querying the datalogger
+        """
+        ser = str(self.combo_serial.currentText())
+        b = int(self.combo_baud.currentText())
+        no_serial=False
+        logger.debug('TODL status:' + str(self.todl.status))
+        if(self.todl.status < 0): # No serial port open
+            no_serial=True
+            print('Opening port' + ser + ' with baudrate ' + str(b))
+            self.todl.add_serial_device(ser,baud=b)
+            
+        if(self.todl.status >= 0): # Succesfull opened
+            self.todlConfig._query()
+            if(self.todl.FLAG_IS_TODL):
+                # Enable open button
+                self.serial_open_bu.setEnabled(True)
+
+        if no_serial:
+            self.todl.stop_serial_data()
+
+
     def clicked_serial_open_bu(self):
         """Function to open a serial device
         """
@@ -1106,7 +1124,7 @@ class todlDevice():
         t = self.serial_open_bu.text()
         print('Click ' + str(t))
         if True:
-            if(t == 'Search TODL'):
+            if(t == 'Open'):
                 ser = str(self.combo_serial.currentText())
                 b = int(self.combo_baud.currentText())
                 print('Opening port' + ser + ' with baudrate ' + str(b))
@@ -1146,11 +1164,11 @@ class todlDevice():
                             self._ad_table_setup()                                            
                         #                            
                         #
-                        self.serial_open_bu.setText('Open')
+                        self.serial_open_bu.setText('Close')
                 else:
                     logger.warning('Could not open port:' + str(ser))
                     
-            elif(t == 'Open'):
+            #elif(t == 'Open'):
                 #ser = str(self.combo_serial.currentText())
                 #b = int(self.combo_baud.currentText())
                 self.serial_open_bu.setText('Close')
@@ -1160,7 +1178,7 @@ class todlDevice():
                 #self.todl.add_serial_device(ser,baud=b)
                 self.todl.add_raw_data_stream()
                 time.sleep(0.2)
-                self.todl.query_todllogger()
+                #self.todl.query_todllogger()
                 #self.todl.init_todllogger(adcs = [0,2,4])
                 time.sleep(0.2)                
                 self.todl.start_converting_raw_data()
@@ -1170,12 +1188,13 @@ class todlDevice():
                 # Call the device changed function to notice the gui
                 # that the serial device is open
                 self.device_changed(funcname)
-            else:
-                self.todl.stop_serial_data()
+            else: # Close
                 self.todl.stop_converting_raw_data()
-                self.serial_open_bu.setText('Search TODL')
+                self.todl.stop_serial_data()
+                self.serial_open_bu.setText('Open')
                 self.combo_serial.setEnabled(True)
-                self.combo_baud.setEnabled(True)                                
+                self.combo_baud.setEnabled(True)
+                self.serial_open_bu.setEnabled(False)                
                 self.status = 0
 
         else:
@@ -2011,7 +2030,7 @@ class todlDevice():
             w[2].close()
 
         self.disp_widget.close()
-        self.setup_widget.close() # Closing the TODL setup widget
+        self.device_widget.close() # Closing the TODL setup widget
 
         # Stop all plotting processes (the hardcore way, sorry for that processes ...)
         for plotxyprocess in self._plotxyprocesses:
@@ -2300,7 +2319,7 @@ available/known/implemented devices are read from todl_config.yaml
                 deviceobj = deviceobj_class(self.device_changed)
                 devicename = self.combo_dev_add.currentText()
                 deviceobj.setup(name = devicename, mainwindow = self)
-
+                self.devices.append(deviceobj)
 
                 # Add the device to the devices widget
                 self._devices_widget.layout().addWidget(deviceobj.device_widget)
@@ -2308,12 +2327,11 @@ available/known/implemented devices are read from todl_config.yaml
                 deviceobj.device_widget.show()
                 self._devices_widget_scroll.show()
 
-                # resize the widget
+                # resize the widget horizontally
                 width = deviceobj.device_widget.frameGeometry().width()
                 height = deviceobj.device_widget.frameGeometry().height()
                 width_main = self.width_orig + width
                 height_main = self.height_orig + height
-                print(width,height,width_main,height_main)                
                 if(width_main > self.width_main):
                     self.resize(width_main,self.height_main)
 
