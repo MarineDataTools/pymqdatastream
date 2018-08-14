@@ -1462,7 +1462,9 @@ default to None, only with a valid argument that setting will be sent to the dev
             self.logger.debug(funcname + ': Starting thread')
             # Analyse data format, choose the right conversion functions and start a conversion thread
             self.init_data_format_functions()
+            # Some statistics
             self.packets_converted = 0
+            self.bytes_converted = 0            
             kw = {'ondemand':ondemand}
             if(dt is not None):
                 kw['dt'] = dt
@@ -2013,10 +2015,12 @@ default to None, only with a valid argument that setting will be sent to the dev
         freq_packets = {}
         # LTC2442 frequency        
         freq_packet = {'name':'Lfr'}
-        freq_packet['dt_freq'] = 0.5
+        #freq_packet['dt_freq'] = 0.5
+        freq_packet['dt_freq'] = 2.0
         freq_packet['len_t_array'] = 1000
         freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets (all)
         freq_packet['ind'] = 0
+        freq_packet['nbad'] = 0 # Sum up number of bad readings        
         freq_packets['Lfrdata'] = freq_packet
 
         # LTC2442 frequency, single channels
@@ -2050,7 +2054,10 @@ default to None, only with a valid argument that setting will be sent to the dev
         freq_packet['data']    = np.zeros((freq_packet['len_t_array'],2))
         freq_packet['phidata'] = np.zeros((freq_packet['len_t_array'],)) # For calculation of an average
         freq_packet['ind'] = 0
-        freq_packets['Ofrdata'] = freq_packet        
+        freq_packets['Ofrdata'] = freq_packet
+
+        # Packet statistics
+        packet_statistics = {'name':'packet_statistics','num_err':0,'num_cobs_err':0,'num_good':0}
         
         while True:
             cnt += 1
@@ -2067,10 +2074,12 @@ default to None, only with a valid argument that setting will be sent to the dev
 
             if(len(data_str) > 17):
                 ta.append( time.time() )
-                #print('len',len(data_str))                
+                #print('len',len(data_str))
+                lold = len(data_str)
                 [data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
                 self.packets_converted += len(data_packets)
-
+                self.bytes_converted += lold - len(data_str)
+                
                 # Sort the data and put into lists for datastream
                 # distribution as well as frequency calculations
                 for data_packet in data_packets:
@@ -2092,7 +2101,11 @@ default to None, only with a valid argument that setting will be sent to the dev
                         if(freq_packets['Lfrdata']['ind'] < freq_packets['Lfrdata']['len_t_array']):
                             freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],0] = ts
                             freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],1] = data_packet['t']
-                            freq_packets['Lfrdata']['ind'] += 1                        
+                            freq_packets['Lfrdata']['ind'] += 1
+                            # Caculating number of bad data
+                            data_tmp = np.asarray(data_packet['V'][:])
+                            nbad = sum((data_tmp < 0) & (data_tmp > 5))
+                            freq_packets['Lfrdata']['nbad'] += nbad                            
 
                     elif(data_packet['type'] == 'A'): # IMU packet
                         aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
@@ -2112,10 +2125,17 @@ default to None, only with a valid argument that setting will be sent to the dev
                             freq_packets['Ofrdata']['ind'] += 1
 
                     elif(data_packet['type'] == 'Stat'): # Status packet, here the time difference between TODL and PC is calculated
-                        print('stat',data_packet['timestamp'], ta[-1])
-                        print('dt',data_packet['timestamp'] -  ta[-1])
+                        pass
+                        #print('stat',data_packet['timestamp'], ta[-1])
+                        #print('dt',data_packet['timestamp'] -  ta[-1])
 
-                # Frequency packets
+                    elif(data_packet['type'] == 'format4_log'): # Packet statistics
+                        packet_statistics['num_err'] += data_packet['num_err']
+                        packet_statistics['num_cobs_err'] += data_packet['num_cobs_err']
+                        packet_statistics['num_good'] += data_packet['num_good']
+                        
+
+                # Frequency packets, calculate in time intervals
                 for name_freq_pack in freq_packets:
                     if(name_freq_pack == 'Lfr_chdata'):
                         freq_packets_tmp = freq_packets[name_freq_pack]
@@ -2132,6 +2152,12 @@ default to None, only with a valid argument that setting will be sent to the dev
                                 dtLt = freq_pack['data'][freq_pack['ind']-1,1] - freq_pack['data'][0,1]
                                 #print(dtLt)
                                 data_packet['f'] = (freq_pack['ind']-1)/(dtLt)
+                                # Print number of bad packets
+                                if(freq_pack['name'] == 'Lfr'):
+                                    print('Number of out of range or bad LTC2442 readings:' + str(freq_pack['nbad']))
+                                    # Also print packet statistics, this is a HACK and should be done somewhere else (in the gui, not in console)
+                                    print(packet_statistics)
+                                    print('Bytes read:' + str(self.bytes_read) + ' converted:' + str(self.bytes_converted ))
                                 # Oxygen mean and standard deviation calculation
                                 if('Lfr_ch' in freq_pack['name']):
                                     data_packet['ch'] = freq_pack['ch']                                    

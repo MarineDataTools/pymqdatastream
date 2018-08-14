@@ -303,7 +303,20 @@ class todlConfig(QtWidgets.QWidget):
 
         # Start/Stop buttons
         self._start_button    = QtWidgets.QPushButton('Start')
-        self._stop_button     = QtWidgets.QPushButton('Stop')        
+        self._start_button.clicked.connect(self._clicked_start)
+        self._stop_button     = QtWidgets.QPushButton('Stop')
+        self._stop_button.clicked.connect(self._clicked_stop)
+
+        self._mount_button     = QtWidgets.QPushButton('Mount SD')
+        self._mount_button.clicked.connect(self._clicked_todlfs)
+
+        self._logstart_button     = QtWidgets.QPushButton('Log start')
+        self._logstart_button.clicked.connect(self._clicked_todlfs)
+        self._logstop_button     = QtWidgets.QPushButton('Log stop')
+        self._logstop_button.clicked.connect(self._clicked_todlfs)
+
+        self._comdta_button    = QtWidgets.QPushButton('Show data/Send command')
+        self._comdta_button.clicked.connect(self._clicked_comdta)        
 
         # Conversion speed
         self._freq_button     = QtWidgets.QPushButton('Set frequency')
@@ -381,7 +394,10 @@ class todlConfig(QtWidgets.QWidget):
         # The main layout
         layout.addWidget(self._start_button,0,0)
         layout.addWidget(self._stop_button,1,0)        
-
+        layout.addWidget(self._mount_button,3,0)
+        layout.addWidget(self._logstart_button,4,0)
+        layout.addWidget(self._logstop_button,5,0)
+        layout.addWidget(self._comdta_button,6,0)                
         
         layout.addWidget(self.timeWidget,0,1,5,1)
         layout.addWidget(self.set_time,6,1)
@@ -487,7 +503,68 @@ class todlConfig(QtWidgets.QWidget):
         self._update_status()
         self.deviceinfo.update(self.todl.device_info)
 
+    def _clicked_comdta(self):
+        """ Opens a window for showing data and sending commands
+        """
+        sender = self.sender()
+        t = sender.text()
+        print(sender.text())
+        if(t == 'Show data/Send command'):
+            print('Command')
+            self._show_data_widget = QtWidgets.QWidget()
+            self._show_data_layout = QtWidgets.QGridLayout(self._show_data_widget)
+            self.show_textdata = QtWidgets.QPlainTextEdit()
+            self.show_textdata.setReadOnly(True)
+            self.show_textdata.setMaximumBlockCount(10000)
+            self.show_textdata.appendPlainText("TODL rawdata ...\n ")
+            self._show_data_close = QtWidgets.QPushButton('Close')
+            #self._show_data_close.clicked.connect(self._clicked_show_data_bu)
+            # Textdataformat of the show_textdata widget 0 str, 1 hex
+            self._textdataformat = 0 
+            self.combo_format = QtWidgets.QComboBox()
+            self.combo_format.addItem('utf-8')
+            self.combo_format.addItem('hex')        
+            #self.combo_format.activated.connect(self._combo_format)
+            self.show_comdata = QtWidgets.QPlainTextEdit()
+            self.show_comdata.setReadOnly(True)
+            self._show_data_layout.addWidget(self._show_data_close)
+            self._show_data_layout.addWidget(QtWidgets.QLabel('Command'),1,0) # Command
+            #self._show_data_layout.addWidget(self.send_le,1,1,1,2) # Command
+            #self._show_data_layout.addWidget(send_bu,1,3) # Command
+            #self._show_data_layout.addWidget(QtWidgets.QLabel('Format'),2,0) # Command        
+            #self._show_data_layout.addWidget(self.combo_format,2,1)
+            self._show_data_layout.addWidget(self.show_textdata,3,0,1,4)            
+            self._show_data_widget.show()
+        elif(t == 'Close data/Send command'):
+            print('Closing')
+        
+        
 
+    def _clicked_todlfs(self):
+        sender = self.sender()
+        t = sender.text()
+        print(sender.text())
+        if(t == 'Mount SD'):
+            if(self.todl.status >= 0):
+                self.todl.send_serial_data('mount\n')
+        elif(t == 'Log start'):
+            if(self.todl.status >= 0):
+                self.todl.send_serial_data('log start\n')
+        elif(t == 'Log stop'):
+            if(self.todl.status >= 0):
+                self.todl.send_serial_data('log stop\n')
+        
+        
+    def _clicked_start(self):
+        if(self.todl.status >= 0):     
+            self.todl.send_serial_data('start\n')
+        
+        
+    def _clicked_stop(self):
+        if(self.todl.status >= 0):        
+            self.todl.send_serial_data('stop\n')
+        
+        
     def clicked_set_freq(self):
         """ Sets the frequency of the datalogger
         """
@@ -798,7 +875,7 @@ class todlDevice():
         
         self._show_data_bu = QtWidgets.QPushButton('Show data')
         self._show_data_bu.clicked.connect(self._clicked_show_data_bu)
-        self.show_textdata.appendPlainText("Here comes the logger rawdata ...\n ")
+        self.show_textdata.appendPlainText("TODL rawdata ...\n ")
         self._show_data_close = QtWidgets.QPushButton('Close')
         self._show_data_close.clicked.connect(self._clicked_show_data_bu)
         # Textdataformat of the show_textdata widget 0 str, 1 hex
