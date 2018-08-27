@@ -483,15 +483,20 @@ class todlnetCDF4File():
                     time = self.stat_timevar[:]
                     # If we have bad data
                     if(np.ma.isMaskedArray(time)):
-                        ind_bad = time.mask == True
-                        t    = t[~ind_bad]
-                        time = time[~ind_bad]
+                        if(time.mask == False): # If there is only a False, do nothing
+                            pass
+                        else:
+                            ind_bad = time.mask == True
+                            t    = t[~ind_bad]
+                            time = time[~ind_bad]
                         
                     # PyroScience
                     if(self.todl.device_info['pyro_freq'] > 0):
                         print('Creating timevariable for Pyroscience Firesting')
                         self.pyro_time        = self.pyrogrp.createVariable('time', "f8", ('t_pyro',))
                         self.pyro_time.units  = self.stat_timevar.units
+                        print(np.shape(self.stat_tvar[:]))
+                        print(np.shape(self.pyro_t[:]),np.shape(t),np.shape(time))
                         self.pyro_time[:]     = np.interp(self.pyro_t[:],t,time)
 
                     # ADC
