@@ -17,6 +17,8 @@ def main():
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('filename', help= 'The filename of the todl netcdf file')
     parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--count', '-c', action='store_true')    
+
 
     args = parser.parse_args()
     # Print help and exit when no arguments are given
@@ -26,7 +28,11 @@ def main():
 
 
     fname  = args.filename
-
+    if(args.count == False):
+        timeax = True
+    else:
+        timeax = False
+        
     if(args.verbose == None):
         loglevel = logging.CRITICAL
     elif(args.verbose == 1):
@@ -101,9 +107,6 @@ def main():
         print(e)
         FLAG_IMU = False
 
-
-
-        
     if FLAG_CH1:
         V_ch1_pl = np.asarray(V_ch1[:])
         print('Despiking ch1')
@@ -113,8 +116,12 @@ def main():
         pl.figure(1)
         pl.clf()
         pl.subplot(1,1,1)
-        #pl.plot(t_ch1,V_ch1_pl)
-        pl.plot(time_ch1,V_ch1_pl)
+        if(timeax):
+            x_ch1 = time_ch1
+        else:
+            x_ch1 = t_ch1
+            
+        pl.plot(x_ch1,V_ch1_pl)
         pl.title('V_adc0_ch1; Freq:' + str(f1.round(2)))
         pl.xlabel('t [s]')
         pl.ylabel('U [V]')        
@@ -128,8 +135,11 @@ def main():
         pl.figure(2)
         pl.clf()
         pl.subplot(1,1,1)
-        pl.plot(t_ch2,V_ch2_pl)
-        #pl.plot(time_ch2,V_ch2_pl)
+        if(timeax):
+            x_ch2 = time_ch2
+        else:
+            x_ch2 = t_ch2
+        pl.plot(x_ch2,V_ch2_pl)
         pl.title('V_adc0_ch2; Freq:' + str(f2.round(2)))
         pl.xlabel('t [s]')
         pl.ylabel('U [V]')    
@@ -146,8 +156,13 @@ def main():
         print('Plotting Pyro')
         pl.figure(3)
         pl.clf()
-        #pl.plot(t_p,phi)
-        pl.plot(time_p,phi)
+        if(timeax):
+            x_pyro = time_p
+        else:
+            x_pyro = t_p
+
+        pl.plot(x_pyro,phi)
+
         pl.title('Firesting data; Freq:' + str(fp.round(2)))
         pl.draw()
 
@@ -157,23 +172,27 @@ def main():
         pl.figure(4)
         pl.clf()
         pl.subplot(3,1,1)
-        pl.plot(time_imu,accx,'o')
-        pl.plot(time_imu,accy,'o')
-        pl.plot(time_imu,accz,'o')        
+        if(timeax):
+            x_imu = time_imu
+        else:
+            x_imu = t_imu   
+        pl.plot(x_imu,accx,'o')
+        pl.plot(x_imu,accy,'o')
+        pl.plot(x_imu,accz,'o')        
         pl.title('Acceleration IMU; Freq:' + str(fi.round(2)))
         pl.legend(('x','y','z'))    
 
         pl.subplot(3,1,2)
-        pl.plot(t_imu,gyrox,'o')
-        pl.plot(t_imu,gyroy,'o')
-        pl.plot(t_imu,gyroz,'o')
+        pl.plot(x_imu,gyrox,'o')
+        pl.plot(x_imu,gyroy,'o')
+        pl.plot(x_imu,gyroz,'o')
         pl.title('Gyro IMU; Freq:' + str(fi.round(2)))
         pl.legend(('x','y','z'))
     
         pl.subplot(3,1,3)
-        pl.plot(t_imu,magx,'o')
-        pl.plot(t_imu,magy,'o')
-        pl.plot(t_imu,magz,'o')
+        pl.plot(x_imu,magx,'o')
+        pl.plot(x_imu,magy,'o')
+        pl.plot(x_imu,magz,'o')
         pl.title('MAG IMU; Freq:' + str(fi.round(2)))
         pl.legend(('x','y','z'))    
         pl.draw()    

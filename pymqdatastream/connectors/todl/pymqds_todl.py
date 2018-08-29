@@ -280,6 +280,13 @@ def find_todl_header(data_file):
 
         b = data_file.read(1)
         data += b
+        # Try to decode the header
+        try:
+            data_str_tmp = b.decode('utf-8')
+        except:
+            logger.debug(funcname + ': Stop of header due to error in decoding to utf-8')
+            break
+        
         if(VALID_HEADER):
             header += b            
             # Check if we have a \n, if yes check the next three bytes for >>>
@@ -483,7 +490,7 @@ class todlnetCDF4File():
                     time = self.stat_timevar[:]
                     # If we have bad data
                     if(np.ma.isMaskedArray(time)):
-                        if(time.mask == False): # If there is only a False, do nothing
+                        if(np.all(time.mask) == False): # If there is only a False, do nothing
                             pass
                         else:
                             ind_bad = time.mask == True
@@ -727,7 +734,6 @@ class todlDataStream(pymqdatastream.DataStream):
         self.bytes_read = 0
         self.data_file = open(filename,'rb')
         [VALID_HEADER,data] = find_todl_header(self.data_file)
-
 
         if(VALID_HEADER):
             data_str = data.decode('utf-8')
