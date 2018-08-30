@@ -52,9 +52,9 @@ def main():
 
     if(nca is not None):
         try:
-            t_ch1 = nca.variables['t_ch1'][:]
+            cnt10ks_ch1 = nca.variables['cnt10ks_ch1'][:]
             time_ch1 = netCDF4.num2date(nca.variables['time_ch1'][:],units=nca.variables['time_ch1'].units)
-            f1 = 1/(np.diff(t_ch1).mean())
+            f1 = 1/(np.diff(cnt10ks_ch1).mean())
             V_ch1 = nca.variables['V_adc0_ch1'][:]
             FLAG_CH1=True
             print('Found ch1 ADC data')            
@@ -63,9 +63,9 @@ def main():
             pass
 
         try:     
-            t_ch2 = nca.variables['t_ch2'][:]
+            cnt10ks_ch2 = nca.variables['cnt10ks_ch2'][:]
             time_ch2 = netCDF4.num2date(nca.variables['time_ch2'][:],units=nca.variables['time_ch2'].units)
-            f2 = 1/(np.diff(t_ch2).mean())    
+            f2 = 1/(np.diff(cnt10ks_ch2).mean())    
             V_ch2 = nca.variables['V_adc0_ch2'][:]
             FLAG_CH2=True
             print('Found ch2 ADC data')
@@ -76,9 +76,9 @@ def main():
     # Read in PyroScience data
     try:
         ncp = nc.groups['pyro']
-        t_p = ncp.variables['t_pyro'][:]
+        cnt10ks_p = ncp.variables['cnt10ks_pyro'][:]
         time_p = netCDF4.num2date(ncp.variables['time'][:],units = ncp.variables['time'].units)
-        fp = 1/(np.diff(t_p).mean())    
+        fp = 1/(np.diff(cnt10ks_p).mean())    
         phi = ncp.variables['phi'][:]
         FLAG_PYRO=True
         print('Found Pyro data')        
@@ -90,9 +90,9 @@ def main():
     try:
         FLAG_IMU = True        
         nci = nc.groups['imu']
-        t_imu = nci.variables['t_imu'][:]
+        cnt10ks_imu = nci.variables['cnt10ks_imu'][:]
         time_imu = netCDF4.num2date(nci.variables['time'][:],units=nci.variables['time'].units)        
-        fi = 1/(np.diff(t_imu).mean())    
+        fi = 1/(np.diff(cnt10ks_imu).mean())    
         accx = nci.variables['accx'][:]
         accy = nci.variables['accy'][:]
         accz = nci.variables['accz'][:]
@@ -110,7 +110,7 @@ def main():
     if FLAG_CH1:
         V_ch1_pl = np.asarray(V_ch1[:])
         print('Despiking ch1')
-        spikes_ch1 = todl_data_processing.findspikes(t_ch1,V_ch1_pl,.1)
+        spikes_ch1 = todl_data_processing.findspikes(cnt10ks_ch1,V_ch1_pl,.1)
         V_ch1_pl = np.ma.masked_where(spikes_ch1 == 1,V_ch1_pl)
         print('Plotting ADC ch 1')
         pl.figure(1)
@@ -119,7 +119,7 @@ def main():
         if(timeax):
             x_ch1 = time_ch1
         else:
-            x_ch1 = t_ch1
+            x_ch1 = cnt10ks_ch1
             
         pl.plot(x_ch1,V_ch1_pl)
         pl.title('V_adc0_ch1; Freq:' + str(f1.round(2)))
@@ -129,7 +129,7 @@ def main():
     if FLAG_CH2:        
         V_ch2_pl = np.asarray(V_ch2[:])
         print('Despiking ch2')
-        spikes_ch2 = todl_data_processing.findspikes(t_ch2,V_ch2_pl,.1)
+        spikes_ch2 = todl_data_processing.findspikes(cnt10ks_ch2,V_ch2_pl,.1)
         V_ch2_pl = np.ma.masked_where(spikes_ch2 == 1,V_ch2_pl)
 
         pl.figure(2)
@@ -138,7 +138,7 @@ def main():
         if(timeax):
             x_ch2 = time_ch2
         else:
-            x_ch2 = t_ch2
+            x_ch2 = cnt10ks_ch2
         pl.plot(x_ch2,V_ch2_pl)
         pl.title('V_adc0_ch2; Freq:' + str(f2.round(2)))
         pl.xlabel('t [s]')
@@ -159,7 +159,7 @@ def main():
         if(timeax):
             x_pyro = time_p
         else:
-            x_pyro = t_p
+            x_pyro = cnt10ks_p
 
         pl.plot(x_pyro,phi)
 
@@ -175,7 +175,7 @@ def main():
         if(timeax):
             x_imu = time_imu
         else:
-            x_imu = t_imu   
+            x_imu = cnt10ks_imu   
         pl.plot(x_imu,accx,'o')
         pl.plot(x_imu,accy,'o')
         pl.plot(x_imu,accz,'o')        

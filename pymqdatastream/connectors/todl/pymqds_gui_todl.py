@@ -112,7 +112,7 @@ class todlInfo(QtWidgets.QWidget):
         # Status packet labels
         self.status_date  = QtWidgets.QLabel('Date: ?')
         self.status_t     = QtWidgets.QLabel('t: ?')
-        self.status_t32   = QtWidgets.QLabel('t32: ?')
+        self.status_cnt32k   = QtWidgets.QLabel('cnt32k: ?')
         self.status_start = QtWidgets.QLabel('start: ?')
         self.status_show  = QtWidgets.QLabel('show: ?')
         self.status_log   = QtWidgets.QLabel('log: ?')
@@ -133,7 +133,7 @@ class todlInfo(QtWidgets.QWidget):
         layout.addWidget(self.freq,1,0,1,5)
         layout.addWidget(self.status_date,2,0)
         layout.addWidget(self.status_t,2,1)
-        layout.addWidget(self.status_t32,2,2)
+        layout.addWidget(self.status_cnt32k,2,2)
         layout.addWidget(self.status_start,2,3)
         layout.addWidget(self.status_show,2,4)
         layout.addWidget(self.status_log,2,5)
@@ -175,8 +175,8 @@ class todlInfo(QtWidgets.QWidget):
         """
         
         self.status_date.setText('Date:' + status_packet['date_str'])
-        self.status_t.setText('t: ' + str(status_packet['t']))        
-        self.status_t32.setText('t32: ' + str(status_packet['t32']))
+        self.status_t.setText('cnt10ks: ' + str(status_packet['cnt10ks']))        
+        self.status_cnt32k.setText('cnt32k: ' + str(status_packet['cnt32k']))
         self.status_start.setText('Start: ' + str(status_packet['start']))
         self.status_show.setText('Show: ' + str(status_packet['show']))
         self.status_log.setText('Log: ' + str(status_packet['log']))
@@ -950,8 +950,16 @@ class todlDevice():
         # PH: This is a hack TODO, make this clean
         #
         self._O2_table = QtWidgets.QTableWidget()
+        self._O2_table_widgets = [] # A list for widgets to collect for oxygen(statistic widgets)        
         #self._O2_table.horizontalHeader().setResizeMode(QtWidgets.QHeaderView.Stretch)
-        self._O2_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) # pyqt5        
+        self._O2_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch) # pyqt5
+        # Only select one item
+        self._O2_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        # Add a right click menu to the table
+        self._O2_table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self._O2_table.customContextMenuRequested.connect(self._O2_table_menu_right_click)
+
+        
         self._O2_table_setup()
         self._O2_table.hide()
 
@@ -1510,11 +1518,26 @@ class todlDevice():
                 action = self._menu.exec_(self._ad_table.mapToGlobal(event))
                 if action ==statAction:
                     self.show_statistic(row, column)
-                #statAction.triggered.connect(self.show_statistic)
-                #self._menu.popup(QtGui.QCursor.pos())
-        #action = menu.exec_(self.mapToGlobal(pos))
-        # an action for everyone
-        print('HALLLLOO!',str(event),row,column)
+
+
+
+    def _O2_table_menu_right_click(self, event):
+        """
+        Handling right click menu of the oxygen table menu
+        """
+        # From here https://stackoverflow.com/questions/20930764/how-to-add-a-right-click-menu-to-each-cell-of-qtableview-in-pyqt
+        # and here https://stackoverflow.com/questions/7782071/how-can-i-get-right-click-context-menus-for-clicks-in-qtableview-header
+        #index = self.indexAt(event.pos())
+        if self._O2_table.selectionModel().selection().indexes():
+            for i in self._O2_table.selectionModel().selection().indexes():
+                row, column = i.row(), i.column()
+
+        self._menu_O2 = QtGui.QMenu()
+        statAction = self._menu_O2.addAction("Show average/std/min/max")
+        action = self._menu_O2.exec_(self._O2_table.mapToGlobal(event))
+        if action == statAction:
+            self.show_statistic_O2(row, column)                    
+
 
     def show_statistic(self,row,column):
         """ Creating a widget showing the statistics of the data
@@ -1529,8 +1552,13 @@ class todlDevice():
         cell = self._ad_table.item(row, column)
         w = QtWidgets.QTableWidget()
         w.setColumnCount(6)
-        nltc = len(self.todl.device_info['adcs'])
-        w.setRowCount(1 + nltc)
+        # wtmp[0] is the row, lets get the LTC index from it
+        for ind_LTC,ind_tmp in enumerate(self._ad_table_index['ltc']):
+            if(ind_tmp == row):
+                break
+
+        num_ADC = self.todl.device_info['adcs'][ind_LTC]            
+        w.setRowCount(2)
         w.verticalHeader().setVisible(False)
         w.horizontalHeader().setVisible(False)        
         w.setItem(0,1, QtWidgets.QTableWidgetItem( 'Avg' ))
@@ -1538,13 +1566,34 @@ class todlDevice():
         w.setItem(0,3, QtWidgets.QTableWidgetItem( 'Peak-Peak' ))
         w.setItem(0,4, QtWidgets.QTableWidgetItem( 'min' ))
         w.setItem(0,5, QtWidgets.QTableWidgetItem( 'max' ))
-        w.setWindowTitle("Statistics of TODL ADC ch" + str(ch))
+        w.setWindowTitle("Statistics of TODL ADC" + str(num_ADC) + " ch" + str(ch))
         w.show()
+
         cell.stat_widget = w
+        # Widget is updated in _poll_intraqueue
         self._ad_table_widgets.append([row,column,w])
         # get the text inside selected cell (if any)
         cellText = cell.text()
-        print(cellText)
+
+
+    def show_statistic_O2(self,row,column):
+        """ Creating a widget showing the statistics of the data
+        """
+        print('Statistic O2 here ...')
+        w = QtWidgets.QTableWidget()
+        w.setColumnCount(6)
+        w.setRowCount(2)
+        w.verticalHeader().setVisible(False)
+        w.horizontalHeader().setVisible(False)        
+        w.setItem(0,1, QtWidgets.QTableWidgetItem( 'Avg' ))
+        w.setItem(0,2, QtWidgets.QTableWidgetItem( 'Std' ))
+        w.setItem(0,3, QtWidgets.QTableWidgetItem( 'Peak-Peak' ))
+        w.setItem(0,4, QtWidgets.QTableWidgetItem( 'min' ))
+        w.setItem(0,5, QtWidgets.QTableWidgetItem( 'max' ))
+        w.setWindowTitle("Statistics of Pyro Science Firesting")
+        w.show()
+        # Widget is updated in _poll_intraqueue
+        self._O2_table_widgets.append([row,column,w])
 
         
     def _ad_table_setup_1ch(self):
@@ -1641,14 +1690,17 @@ class todlDevice():
 
     def _O2_table_setup(self):
         self._O2_table.setColumnCount(2)
-        self._O2_table.setRowCount(5)
+        self._O2_table.setRowCount(8)
         self._O2_table.verticalHeader().setVisible(False)
         self._O2_table_index = {}
         #self._O2_table_index['num'] = 0
         self._O2_table_index['counter'] = 0
         self._O2_table_index['freq'] = 1
         self._O2_table_index['dphi'] = 2
-        self._O2_table_index['umol'] = 3        
+        self._O2_table_index['umol'] = 3
+        self._O2_table_index['int_temp'] = 4
+        self._O2_table_index['sgn_int'] = 5
+        self._O2_table_index['sgn_amb_light'] = 6        
         self._O2_table.setItem(self._O2_table_index['counter'],
                                0, QtWidgets.QTableWidgetItem( ' Counter' ))
         
@@ -1659,7 +1711,16 @@ class todlDevice():
                                0, QtWidgets.QTableWidgetItem( ' dphi' ))
 
         self._O2_table.setItem(self._O2_table_index['umol'],
-                               0, QtWidgets.QTableWidgetItem( ' umol' ))                
+                               0, QtWidgets.QTableWidgetItem( ' umol' ))
+
+        self._O2_table.setItem(self._O2_table_index['int_temp'],
+                               0, QtWidgets.QTableWidgetItem( ' Internal temp.' ))
+
+        self._O2_table.setItem(self._O2_table_index['sgn_int'],
+                               0, QtWidgets.QTableWidgetItem( ' Signal intens.' ))
+
+        self._O2_table.setItem(self._O2_table_index['sgn_amb_light'],
+                               0, QtWidgets.QTableWidgetItem( ' Signal amb. light' ))                
 
         self._O2_table.setHorizontalHeaderLabels(['Name','O2 0'])
 
@@ -1772,7 +1833,7 @@ class todlDevice():
                         if(self.ONECHFLAG):
                             ch = 0
                         num = data['num']
-                        ct = data['t']
+                        ct = data['cnt10ks']
                         V = data['V']
 
 
@@ -1811,13 +1872,16 @@ class todlDevice():
                     self._ad_table_widgets = tmp
                     for wtmp in self._ad_table_widgets: # Check if we have a statistic widget for plotting
                         if((wtmp[1] == ind_col)):
-                            print('hallo!!!')
-                            
-                            itemavg = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['avg'],7)))
-                            itemstd = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['std'],7)))
-                            itempp  = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['pp'],7)))
-                            itemmin = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['min'],7)))
-                            itemmax = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['max'],7)))
+                            # wtmp[0] is the row, lets get the LTC index from it
+                            for ind_LTC,ind_tmp in enumerate(self._ad_table_index['ltc']):
+                                if(ind_tmp == wtmp[0]):
+                                    break
+                                
+                            itemavg = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['avg'][ind_LTC],7)))
+                            itemstd = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['std'][ind_LTC],7)))
+                            itempp  = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['pp'][ind_LTC],7)))
+                            itemmin = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['min'][ind_LTC],7)))
+                            itemmax = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['max'][ind_LTC],7)))
                             wtmp[2].setItem(1,1, itemavg)
                             wtmp[2].setItem(1,2, itemstd)
                             wtmp[2].setItem(1,3, itempp)
@@ -1845,7 +1909,7 @@ class todlDevice():
                 if((data['type']=='A') and showA):
                     showA = False
                     num = data['num']
-                    ct = data['t']
+                    ct = data['cnt10ks']
                     # Packet number            
                     item = QtWidgets.QTableWidgetItem(str(num))
                     self._IMU_table.setItem(self._IMU_table_index['num'], 1, item)
@@ -1880,7 +1944,14 @@ class todlDevice():
                     showO = False
                     #data_packet['phi']  = data_dphi 
                     #data_packet['umol'] = data_umol
-                    ct = data['t']
+                    #self._O2_table_index['counter'] = 0
+                    #self._O2_table_index['freq'] = 1
+                    #self._O2_table_index['dphi'] = 2
+                    #self._O2_table_index['umol'] = 3
+                    #self._O2_table_index['int_temp'] = 4
+                    #self._O2_table_index['sgn_int'] = 5
+                    #self._O2_table_index['sgn_amb_light'] = 6                            
+                    ct = data['cnt10ks']
                     # Packet number            
                     item = QtWidgets.QTableWidgetItem(str(ct))
                     self._O2_table.setItem(self._O2_table_index['counter'], 1, item)
@@ -1890,14 +1961,49 @@ class todlDevice():
                     tabdata = data['umol']
                     item = QtWidgets.QTableWidgetItem(str(tabdata))                    
                     self._O2_table.setItem(self._O2_table_index['umol'], 1, item)
-
+                    tabdata = data['int_temp']
+                    item = QtWidgets.QTableWidgetItem(str(tabdata))  
+                    self._O2_table.setItem(self._O2_table_index['int_temp'], 1, item)
+                    tabdata = data['sgn_int']
+                    item = QtWidgets.QTableWidgetItem(str(tabdata))  
+                    self._O2_table.setItem(self._O2_table_index['sgn_int'], 1, item)
+                    tabdata = data['sgn_amb_light']
+                    item = QtWidgets.QTableWidgetItem(str(tabdata))  
+                    self._O2_table.setItem(self._O2_table_index['sgn_amb_light'], 1, item)                    
+                    
                 # Oxygen frequency
                 if(data['type']=='Ofr'):
                     # Counter
                     item = QtWidgets.QTableWidgetItem(str(round(data['f'],2)))
                     self._O2_table.setItem(self._O2_table_index['freq'], 1, item)
+                    if(len(self._O2_table_widgets) > 0): # Check if we have a statistic widget for plotting
+                        wtmp = self._O2_table_widgets[0]
+                        itemavg = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['avg'],7)))
+                        itemstd = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['std'],7)))
+                        itempp  = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['pp'],7)))
+                        itemmin = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['min'],7)))
+                        itemmax = QtWidgets.QTableWidgetItem('{:10.7f}'.format(round(data['max'],7)))
+                        wtmp[2].setItem(1,1, itemavg)
+                        wtmp[2].setItem(1,2, itemstd)
+                        wtmp[2].setItem(1,3, itempp)
+                        wtmp[2].setItem(1,4, itemmin)
+                        wtmp[2].setItem(1,5, itemmax)
+                        header = wtmp[2].horizontalHeader()
+                        header.setResizeMode(QtGui.QHeaderView.ResizeToContents)
+                        #header.setStretchLastSection(True)
+                        vwidth = wtmp[2].verticalHeader().width()
+                        hwidth = wtmp[2].horizontalHeader().length()
+                        fwidth = wtmp[2].frameWidth() * 2
+                        wtmp[2].setFixedWidth(vwidth + hwidth + fwidth)
+                        wtmp[2].setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+                        height = 0
+                        hheight = wtmp[2].horizontalHeader().height()
+                        for i in range(wtmp[2].rowCount()):
+                            height += wtmp[2].rowHeight(i)
+                            
+                        wtmp[2].setFixedHeight(height + hheight + fwidth)                        
+                        
                     
-
         # Update the recording file status as well (addding file size)
         t = self._info_record_bu.text()
         if(t == self._recording_status[1]):
@@ -2105,6 +2211,9 @@ class todlDevice():
 
         for w in self._ad_table_widgets:
             w[2].close()
+
+        for w in self._O2_table_widgets:
+            w[2].close()            
 
         self.disp_widget.close()
         self.device_widget.close() # Closing the TODL setup widget

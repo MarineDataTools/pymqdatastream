@@ -74,7 +74,8 @@ def parse_device_info(data_str):
     firmwareversion = '??'
     # If we dont have a time zone, its UTC
     device_info['timezone'] = pytz.UTC
-    print(data_str)
+    logger.debug(funcname + ': data_str: \n' + str(data_str))    
+    #print(data_str)
     for line in data_str.split('\n'):
         if( ' board version:' in line ):
             # Expecting a string like this:
@@ -269,25 +270,33 @@ def find_todl_header(data_file):
     VALID_HEADER = False
     # Reading the first part of the file and looking for known patterns
     maxbytes = 10000 # should be larger as len(file_header_len)
+    maxstartbytes = 500 # header beginning should be in the first maxstartbytes range
     bytes_read = 0
     data = b''
     header = b'' # The header information data
     while True:
         bytes_read += 1
+
+        if((bytes_read >= maxstartbytes) and (VALID_HEADER == False)):
+            logger.warning(funcname + ': Could not find header in the first ' + str(maxstartbytes) + ' bytes, aborting')
+            break
+        
         if(bytes_read >= maxbytes):
             logger.warning(funcname + ': Could not read file')
             break
 
+        pos = data_file.tell()
         b = data_file.read(1)
         data += b
-        # Try to decode the header
-        try:
-            data_str_tmp = b.decode('utf-8')
-        except:
-            logger.debug(funcname + ': Stop of header due to error in decoding to utf-8')
-            break
         
         if(VALID_HEADER):
+            # Check for the end of header, either a not utf-8 decodable value or a missing >>> after a newline
+            # Try to decode the header
+            try:
+                data_str_tmp = b.decode('utf-8')
+            except:
+                logger.debug(funcname + ': Stop of header due to error in decoding to utf-8 at position: ' + str(pos))
+                break
             header += b            
             # Check if we have a \n, if yes check the next three bytes for >>>
             if(b == b'\n'):
@@ -321,7 +330,7 @@ def find_todl_header(data_file):
 #
 #
 class todlnetCDF4File():
-    """ A turbulent ocean data logger (TODL) netCDF4 file object. This object can open, read and convert files. TOD: In the bright future it should also stream data to a todl datastream ... 
+    """ A turbulent ocean data logger (TODL) netCDF4 file object. This object can open, read and convert files. TODO: In the bright future it should also stream data to a todl datastream ... 
     """
 
     def __init__(self,fname):
@@ -329,17 +338,22 @@ class todlnetCDF4File():
         self.logger = logger
         self.todl = todlDataStream()
         # This can also 
-        self.todl.load_file(fname,start_read = False)
+        TODL_FILE = self.todl.load_file(fname,start_read = False)
+        print('TODL_FILE',TODL_FILE)
+        if(TODL_FILE == False):
+            raise TypeError
         # We have a device info now, lets create the netCDF4 groups
         print(self.todl.device_info)
 
         
-    def create_ncfile(self,fname):
+    def create_ncfile(self,fname,zlib=True,complevel=4):
         """Creates a new netCDF4 File based on the device_info information of
         the available data
 
         Args:
            fname: Filename of the netcdffile to be created
+           zlib: Compression of the variables, see also https://unidata.github.io/netcdf4-python/,  Section 9:Efficient compression of netCDF variables
+           complevel: Compression level of the variables
 
         """
         funcname = self.__class__.__name__ + '.create_ncfile()'
@@ -349,20 +363,22 @@ class todlnetCDF4File():
         rootgrp.version  = pymqdatastream.__version__
         # Creating group for status information
         sgrp             = rootgrp.createGroup('stat')
-        dimname          = 't'
-        t_dim            = sgrp.createDimension(dimname, None)
+        dimname          = 'cnt10ks'
+        cnt10ks_dim            = sgrp.createDimension(dimname, None)
+        self.sgrp        = sgrp
         self.fill_value  = -9e9
         self.stat_tvar        = sgrp.createVariable(dimname, "f8", (dimname,))
         self.stat_tvar_tmp    = []
         self.stat_tvar.units  = 'time in seconds since device power on (10kHz counter)'
-        self.stat_timevar     = sgrp.createVariable("time", "f8", (dimname,), fill_value=self.fill_value)
+        self.stat_timevar     = sgrp.createVariable("time", "f8", (dimname,), fill_value=self.fill_value,zlib=zlib,complevel=complevel)
         self.stat_timevar_tmp = []
 
-        # The time base is the beginning of the day the TODL was started
+        # The time base is UNIX time
         if(self.todl.device_info['time'] == None):
-            time_unit    = "0000.01.01 00:00:00"
+            time_unit    = "0000-01-01 00:00:00"
         else:
-            time_unit    = self.todl.device_info['time'].strftime('%Y-%m-%d 00:00:00')
+            #time_unit    = self.todl.device_info['time'].strftime('%Y-%m-%d 00:00:00') # was up to 0.7.8
+            time_unit    = "1970-01-01 00:00:00"
             
         self.time_base = datetime.datetime.strptime(time_unit,"%Y-%m-%d %H:%M:%S")
         #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
@@ -390,12 +406,12 @@ class todlnetCDF4File():
             ch_seq = np.unique(np.asarray(self.todl.device_info['channel_seq']))
             self.ch_seq = ch_seq
             for nch,ch in enumerate(ch_seq):
-                dimname = 't_ch' + str(ch)
+                dimname = 'cnt10ks_ch' + str(ch)
                 print(dimname)
                 ch_dim = adcgrp.createDimension(dimname, None)
                 ch_dim
                 ch_dims.append(ch_dim)
-                adc_tvar = adcgrp.createVariable(dimname, "f8", (dimname,))
+                adc_tvar = adcgrp.createVariable(dimname, "f8", (dimname,),zlib=zlib,complevel=complevel)
                 adc_tvar.units = 'time in seconds since device power on'
                 self.adc_tvars.append(adc_tvar)
                 self.adc_vars.append([])
@@ -406,7 +422,7 @@ class todlnetCDF4File():
                 # Creating variables
                 for adc in self.todl.device_info['adcs']:
                     varname = 'V_adc' + str(adc) + '_ch' + str(ch)
-                    adc_var = adcgrp.createVariable(varname, "f4", (dimname,))
+                    adc_var = adcgrp.createVariable(varname, "f4", (dimname,),zlib=zlib,complevel=complevel)
                     self.adc_vars[nch].append(adc_var)
                     self.adc_vars_tmp[nch].append([])
 
@@ -416,21 +432,21 @@ class todlnetCDF4File():
             self.logger.debug(funcname + ': Creating imu group')
             imugrp     = rootgrp.createGroup('imu')
             self.imugrp = imugrp
-            dimname = 't_imu'
+            dimname = 'cnt10ks_imu'
             imu_dim = imugrp.createDimension(dimname, None)
-            self.imu_t    = imugrp.createVariable('t_imu', "f8", (dimname,))
-            self.imu_t.units = 'time in seconds since device power on'
-            self.imu_temp = imugrp.createVariable('temp', "f8", (dimname,))            
-            self.imu_accx = imugrp.createVariable('accx', "f8", (dimname,))
-            self.imu_accy = imugrp.createVariable('accy', "f8", (dimname,))
-            self.imu_accz = imugrp.createVariable('accz', "f8", (dimname,))
-            self.imu_gyrox = imugrp.createVariable('gyrox', "f8", (dimname,))
-            self.imu_gyroy = imugrp.createVariable('gyroy', "f8", (dimname,))
-            self.imu_gyroz = imugrp.createVariable('gyroz', "f8", (dimname,))
-            self.imu_magx = imugrp.createVariable('magx', "f8", (dimname,))
-            self.imu_magy = imugrp.createVariable('magy', "f8", (dimname,))
-            self.imu_magz = imugrp.createVariable('magz', "f8", (dimname,))
-            self.imu_t_tmp     = []
+            self.imu_cnt10ks    = imugrp.createVariable('cnt10ks_imu', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_cnt10ks.units = 'time in seconds since device power on'
+            self.imu_temp = imugrp.createVariable('temp', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_accx = imugrp.createVariable('accx', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_accy = imugrp.createVariable('accy', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_accz = imugrp.createVariable('accz', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_gyrox = imugrp.createVariable('gyrox', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_gyroy = imugrp.createVariable('gyroy', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_gyroz = imugrp.createVariable('gyroz', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_magx = imugrp.createVariable('magx', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_magy = imugrp.createVariable('magy', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_magz = imugrp.createVariable('magz', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_cnt10ks_tmp     = []
             self.imu_temp_tmp  = []            
             self.imu_accx_tmp  = []
             self.imu_accy_tmp  = []
@@ -448,24 +464,26 @@ class todlnetCDF4File():
             self.logger.debug(funcname + ': Creating pyro group')
             pyrogrp     = rootgrp.createGroup('pyro')
             self.pyrogrp = pyrogrp
-            dimname = 't_pyro'
+            dimname = 'cnt10ks_pyro'
             pyro_dim = pyrogrp.createDimension(dimname, None)
-            self.pyro_t        =  pyrogrp.createVariable('t_pyro', "f8", (dimname,))
-            self.pyro_t.units = 'time in seconds since device power on'            
-            self.pyro_t_tmp    = []
-            self.pyro_phi      =  pyrogrp.createVariable('phi',    "f8", (dimname,))
+            self.pyro_cnt10ks        =  pyrogrp.createVariable('cnt10ks_pyro', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.pyro_cnt10ks.units = 'time in seconds since device power on'            
+            self.pyro_cnt10ks_tmp    = []
+            self.pyro_phi      =  pyrogrp.createVariable('phi',    "f8", (dimname,),zlib=zlib,complevel=complevel)
             self.pyro_phi_tmp  = []
-            self.pyro_umol     =  pyrogrp.createVariable('umol',   "f8", (dimname,))
+            self.pyro_umol     =  pyrogrp.createVariable('umol',   "f8", (dimname,),zlib=zlib,complevel=complevel)
             self.pyro_umol_tmp = []
             
             
-    def to_ncfile_fast(self,fname, num_bytes = 1000000, num_bytes_packages=-1):
+    def to_ncfile_fast(self,fname, num_bytes = 1000000, num_bytes_packages=-1,zlib=True,complevel=4):
         """ Reads the data in fname, converts and puts it into a ncfile
 
         Args:
            fname: Filename
            num_bytes: num_bytes to read per conversion step
            num_bytes_packages: The number of byte packages to read, defaults to -1, reading the whole file
+           zlib: Compression of the variables, see also https://unidata.github.io/netcdf4-python/,  Section 9:Efficient compression of netCDF variables
+           complevel: Compression level of the variables
         """
         funcname = 'to_ncfile_fast()'
         # First create a netCDF4 File
@@ -477,6 +495,7 @@ class todlnetCDF4File():
         cnt = 0
         #num_bytes_packages = 50
         data_str = b''
+        file_size = os.path.getsize(self.todl.data_file.name)
         while(True):
             num_bytes_packages -= 1
             raw_data = self.todl.data_file.read(num_bytes)
@@ -484,46 +503,53 @@ class todlnetCDF4File():
             # If we have the end of file
             if((len(raw_data) == 0) or (num_bytes_packages == 0)):
                 self.file_status = 2
-                # create interpolated time variables using Stat and the 10k (t) counter saved in all variables
+                # create interpolated time variables using Stat and the 10k (cnt10ks) counter saved in all variables
                 if(len(self.stat_tvar) > 0):
-                    t    = self.stat_tvar[:]
-                    time = self.stat_timevar[:]
-                    # If we have bad data
-                    if(np.ma.isMaskedArray(time)):
-                        if(np.all(time.mask) == False): # If there is only a False, do nothing
-                            pass
-                        else:
-                            ind_bad = time.mask == True
-                            t    = t[~ind_bad]
-                            time = time[~ind_bad]
+                    cnt10ks    = self.stat_tvar[:]
+                    time       = self.stat_timevar[:]
+                    ind_good   = time >= 0
+                    if(sum(ind_good) == 0):
+                        print('Very bad, we dont have any good time data ...')
+
+                    time_poly = np.polyfit(cnt10ks[ind_good],time[ind_good],1)
+                    self.sgrp.time_poly = time_poly
+                    ## If we have bad data
+                    #if(np.ma.isMaskedArray(time)):
+                    #    if(np.all(time.mask) == False): # If there is only a False, do nothing
+                    #        pass
+                    #    else:
+                    #        ind_bad    = time.mask == True
+                    #        cnt10ks    = cnt10ks[~ind_bad]
+                    #        time       = time[~ind_bad]
                         
                     # PyroScience
                     if(self.todl.device_info['pyro_freq'] > 0):
                         print('Creating timevariable for Pyroscience Firesting')
-                        self.pyro_time        = self.pyrogrp.createVariable('time', "f8", ('t_pyro',))
+                        self.pyro_time        = self.pyrogrp.createVariable('time', "f8", ('cnt10ks_pyro',),zlib=zlib,complevel=complevel)
                         self.pyro_time.units  = self.stat_timevar.units
-                        print(np.shape(self.stat_tvar[:]))
-                        print(np.shape(self.pyro_t[:]),np.shape(t),np.shape(time))
-                        self.pyro_time[:]     = np.interp(self.pyro_t[:],t,time)
+                        #self.pyro_time[:]     = np.interp(self.pyro_cnt10ks[:],cnt10ks,time)
+                        self.pyro_time[:]     = np.polyval(time_poly,self.pyro_cnt10ks[:])
 
                     # ADC
                     if(self.todl.device_info['adcs'] is not None):
                         for nch,ch in enumerate(self.ch_seq):
                             print('Creating a timevariable for channel:' + str(ch))
                             varname = 'time_ch' + str(ch)
-                            dimname = 't_ch' + str(ch)                        
-                            adc_timevar = self.adcgrp.createVariable(varname, "f8", (dimname,))
+                            dimname = 'cnt10ks_ch' + str(ch)                        
+                            adc_timevar = self.adcgrp.createVariable(varname, "f8", (dimname,),zlib=zlib,complevel=complevel)
                             adc_timevar.units  = self.stat_timevar.units
-                            adc_timevar[:]     = np.interp(self.adc_tvars[nch][:],t,time)
+                            #adc_timevar[:]     = np.interp(self.adc_tvars[nch][:],cnt10ks,time)
+                            adc_timevar[:]     = np.polyval(time_poly,self.adc_tvars[nch][:])
                             
                     # IMU
                     if(self.todl.device_info['imu_freq'] > 0):
                         print('Creating a timevariable for IMU')
-                        dimname = 't_imu'
+                        dimname = 'cnt10ks_imu'
                         varname = 'time'
-                        imu_time    = self.imugrp.createVariable(varname, "f8", (dimname,))
+                        imu_time    = self.imugrp.createVariable(varname, "f8", (dimname,),zlib=zlib,complevel=complevel)
                         imu_time.units = self.stat_timevar.units
-                        imu_time[:] = np.interp(self.imu_t[:],t,time)
+                        #imu_time[:] = np.interp(self.imu_cnt10ks[:],cnt10ks,time)
+                        imu_time[:] = np.polyval(time_poly,self.imu_cnt10ks[:])
                         
                         
                         
@@ -546,31 +572,35 @@ class todlnetCDF4File():
             for data in data_packets:
                 cnt += 1
                 if(np.mod(cnt,10000) == 0):
-                    print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' bytes read Num good: ' + str(num_good) + ' Num err: ' + str(num_err))
+                    print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' from '
+                          + str(file_size) + ' bytes read (' + str(round(bytes_read/file_size * 100,2))
+                          + '%). Num good: ' + str(num_good) + ' Num err: ' + str(num_err))
 
                 if(data['type'] == 'Stat'): # Status packet
-                    self.stat_tvar_tmp.append(data['t'])
-                    ts_info = self.todl.device_info['cnt10k']/self.todl.device_info['counterfreq']
-                    dts_cnt = data['t'] - ts_info # Calculate the counter difference
+                    self.stat_tvar_tmp.append(data['cnt10ks'])
+                    # Check if we are in a acceptable range of time shift between the 10k counter and the RTC time
+                    cnt10ks_info = self.todl.device_info['cnt10k']/self.todl.device_info['counterfreq']
+                    dts_cnt = data['cnt10ks'] - cnt10ks_info # Calculate the counter difference
                     dt = data['date'] -  self.todl.device_info['time'] # Calculate the time difference
                     dts = dt.total_seconds()
                     dts_timevar = (data['date'] - self.time_base).total_seconds()                    
                     if(dts < 0): # Negative number should not appear!
-                        print('Bad count:', dts,dts_cnt,data['date'])                        
+                        print('Bad count (too small):', dts,dts_cnt,data['date'])
                         dts_timevar = -9e9
                     elif(abs(dts - dts_cnt)>2.0): # If difference is too large, discard
-                        print('Bad count', dts,dts_cnt,data['date'])                        
+                        print('Bad count (too large)', dts,dts_cnt,data['date'])                        
                         dts_timevar = -9e9
                     else:
                         pass
                         #print('Good time data', dts,dts_cnt,data['date'])
 
+                    
                     self.stat_timevar_tmp.append(dts_timevar)
 
                 elif(data['type'] == 'L'): # ADC data
                     try:
                         ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
-                        self.adc_tvars_tmp[ind].append(data['t'])
+                        self.adc_tvars_tmp[ind].append(data['cnt10ks'])
                         # Put the voltage data into the variable
                         for nadc,adc in enumerate(self.todl.device_info['adcs']):
                             self.adc_vars_tmp[ind][nadc].append(data['V'][nadc])
@@ -579,7 +609,7 @@ class todlnetCDF4File():
                         self.logger.debug(funcname + ':Exception:' + str(e))                            
                         
                 elif(data['type'] == 'A'): # IMU data
-                    self.imu_t_tmp.append(data['t'])
+                    self.imu_cnt10ks_tmp.append(data['cnt10ks'])
                     self.imu_temp_tmp.append(data['T'])                    
                     self.imu_accx_tmp.append(data['acc'][0])
                     self.imu_accy_tmp.append(data['acc'][1])
@@ -592,7 +622,7 @@ class todlnetCDF4File():
                     self.imu_magz_tmp.append(data['mag'][2])
 
                 elif(data['type'] == 'O'): # Pyro Firesting data
-                    self.pyro_t_tmp.append(data['t'])
+                    self.pyro_cnt10ks_tmp.append(data['cnt10ks'])
                     self.pyro_phi_tmp.append(data['phi'])
                     self.pyro_umol_tmp.append(data['umol'])       
                     
@@ -618,10 +648,10 @@ class todlnetCDF4File():
 
                     
             if(self.todl.device_info['imu_freq'] > 0):
-                m = len(self.imu_t_tmp)                
-                n = len(self.imu_t)
+                m = len(self.imu_cnt10ks_tmp)                
+                n = len(self.imu_cnt10ks)
                 #print(self.imu_accx_tmp[:])
-                self.imu_t[n:n+m]     = self.imu_t_tmp[:]
+                self.imu_cnt10ks[n:n+m]     = self.imu_cnt10ks_tmp[:]
                 self.imu_temp[n:n+m]  = self.imu_temp_tmp[:]
                 self.imu_accx[n:n+m]  = self.imu_accx_tmp[:]
                 self.imu_accy[n:n+m]  = self.imu_accy_tmp[:]
@@ -633,7 +663,7 @@ class todlnetCDF4File():
                 self.imu_magy[n:n+m] = self.imu_magy_tmp[:]
                 self.imu_magz[n:n+m] = self.imu_magz_tmp[:]
                 # Clear the lists                
-                self.imu_t_tmp = []
+                self.imu_cnt10ks_tmp = []
                 self.imu_temp_tmp = []
                 self.imu_accx_tmp = []
                 self.imu_accy_tmp = []
@@ -646,13 +676,13 @@ class todlnetCDF4File():
                 self.imu_magz_tmp = []
 
             if(self.todl.device_info['pyro_freq'] > 0):
-                m = len(self.pyro_t_tmp)                
-                n = len(self.pyro_t)                
-                self.pyro_t[n:n+m]        = self.pyro_t_tmp[:]
+                m = len(self.pyro_cnt10ks_tmp)                
+                n = len(self.pyro_cnt10ks)                
+                self.pyro_cnt10ks[n:n+m]        = self.pyro_cnt10ks_tmp[:]
                 self.pyro_phi[n:n+m]      = self.pyro_phi_tmp[:]
                 self.pyro_umol[n:n+m]     = self.pyro_umol_tmp[:]
                 # Clear the lists
-                self.pyro_t_tmp    = [] 
+                self.pyro_cnt10ks_tmp    = [] 
                 self.pyro_phi_tmp  = []
                 self.pyro_umol_tmp = []
                 
@@ -1710,7 +1740,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                                     packet_time_bin  = data_decobs[ind:ind+8]
                                     packet_time     = int(packet_time_bin.hex(), 16)/self.device_info['counterfreq']
                                     data_list = [packet_num,packet_time]
-                                    data_packet = {'num':packet_num,'t':packet_time}
+                                    data_packet = {'num':packet_num,'cnt10ks':packet_time}
                                     data_packet['type'] = 'L'                                    
                                     data_packet['spd'] = speed
                                     data_packet['ch'] = channel
@@ -1804,7 +1834,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                             # Fill the data list
                             data_list = [packet_num,packet_time]                    
                             # Fill the data packet dictionary
-                            data_packet = {'num':packet_num,'t':packet_time}
+                            data_packet = {'num':packet_num,'cnt10ks':packet_time}
                             data_packet['type'] = 'L'                            
                             data_packet['ch'] = channel
                             data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
@@ -1910,19 +1940,19 @@ default to None, only with a valid argument that setting will be sent to the dev
             # distribution as well as frequency calculations
             for data_packet in data_packets:
                 if(data_packet['type'] == 'L'): # LTC2442 packet
-                    data_list = [data_packet['num'],data_packet['t']] + data_packet['V']
+                    data_list = [data_packet['num'],data_packet['cnt10ks']] + data_packet['V']
                     data_stream[data_packet['ch']].append(data_list)
                     # Packet for frequency calculation
                     if(Lpacket_t_ind < len_t_array):
                         Lpacket_t[Lpacket_t_ind,0] = ts
-                        Lpacket_t[Lpacket_t_ind,1] = data_packet['t']
+                        Lpacket_t[Lpacket_t_ind,1] = data_packet['cnt10ks']
                         Lpacket_t_ind += 1
 
                 elif(data_packet['type'] == 'A'): # IMU packet
                     #data_packet['mag']
-                    aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
+                    aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
                 elif(data_packet['type'] == 'O'): # Firesting packet         
-                    aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
+                    aux_data_stream[1].append([data_packet['num'],data_packet['cnt10ks'],data_packet['phi'],data_packet['umol']])
 
 
             # Frequency packets
@@ -2097,21 +2127,21 @@ default to None, only with a valid argument that setting will be sent to the dev
                     if(data_packet['type'] == 'L'): # LTC2442 packet
                         #repack it for a datastream compatible format
                         #(list instead of dict)
-                        data_list = [data_packet['num'],data_packet['t']] + data_packet['V']
+                        data_list = [data_packet['num'],data_packet['cnt10ks']] + data_packet['V']
                         data_stream[data_packet['ch']].append(data_list)
                         ch_tmp = data_packet['ch']
                         ind_tmp = freq_packets['Lfr_chdata'][ch_tmp]['ind']
                         # Packet for frequency and average calculation of single channels
                         if(ind_tmp < freq_packets['Lfr_chdata'][ch_tmp]['len_t_array']):
                             freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,0] = ts
-                            freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,1] = data_packet['t']
+                            freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,1] = data_packet['cnt10ks']
                             freq_packets['Lfr_chdata'][ch_tmp]['Vdata'][ind_tmp,:] = data_packet['V'][:]
                             freq_packets['Lfr_chdata'][ch_tmp]['ind'] += 1
                         
                         # Packet for frequency calculation
                         if(freq_packets['Lfrdata']['ind'] < freq_packets['Lfrdata']['len_t_array']):
                             freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],0] = ts
-                            freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],1] = data_packet['t']
+                            freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],1] = data_packet['cnt10ks']
                             freq_packets['Lfrdata']['ind'] += 1
                             # Caculating number of bad data
                             data_tmp = np.asarray(data_packet['V'][:])
@@ -2119,20 +2149,20 @@ default to None, only with a valid argument that setting will be sent to the dev
                             freq_packets['Lfrdata']['nbad'] += nbad                            
 
                     elif(data_packet['type'] == 'A'): # IMU packet
-                        aux_data_stream[0].append([data_packet['num'],data_packet['t'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
+                        aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
                         # Packet for frequency calculation
                         if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
                             freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
-                            freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['t']
+                            freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['cnt10ks']
                             freq_packets['IMUfrdata']['ind'] += 1
                             
                     elif(data_packet['type'] == 'O'): # Firesting packet         
-                        aux_data_stream[1].append([data_packet['num'],data_packet['t'],data_packet['phi'],data_packet['umol']])
+                        aux_data_stream[1].append([data_packet['num'],data_packet['cnt10ks'],data_packet['phi'],data_packet['umol']])
                         # Packet for frequency calculation
                         if(freq_packets['Ofrdata']['ind'] < freq_packets['Ofrdata']['len_t_array']):
                             freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],0] = ts
                             freq_packets['Ofrdata']['phidata'][freq_packets['Ofrdata']['ind']] = data_packet['phi']
-                            freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],1] = data_packet['t']
+                            freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],1] = data_packet['cnt10ks']
                             freq_packets['Ofrdata']['ind'] += 1
 
                     elif(data_packet['type'] == 'Stat'): # Status packet, here the time difference between TODL and PC is calculated
@@ -2169,15 +2199,23 @@ default to None, only with a valid argument that setting will be sent to the dev
                                     # Also print packet statistics, this is a HACK and should be done somewhere else (in the gui, not in console)
                                     print(packet_statistics)
                                     print('Bytes read:' + str(self.bytes_read) + ' converted:' + str(self.bytes_converted ))
-                                # Oxygen mean and standard deviation calculation
+                                # Voltage mean and standard deviation calculation
                                 if('Lfr_ch' in freq_pack['name']):
-                                    data_packet['ch'] = freq_pack['ch']                                    
-                                    data_packet['avg'] = np.mean(freq_pack['Vdata'][:freq_pack['ind']-1])
-                                    data_packet['std'] = np.std(freq_pack['Vdata'][:freq_pack['ind']-1])
-                                    data_packet['min'] = np.min(freq_pack['Vdata'][:freq_pack['ind']-1])
-                                    data_packet['max'] = np.max(freq_pack['Vdata'][:freq_pack['ind']-1])
-                                    data_packet['pp'] = data_packet['max'] - data_packet['min']
+                                    data_packet['ch'] = freq_pack['ch']
+                                    data_packet['avg'] = np.zeros((num_ltcs))
+                                    data_packet['std'] = np.zeros((num_ltcs))
+                                    data_packet['min'] = np.zeros((num_ltcs))
+                                    data_packet['max'] = np.zeros((num_ltcs))
+                                    data_packet['pp']  = np.zeros((num_ltcs))
+                                    for ntmp in range(num_ltcs):
+                                        data_packet['avg'][ntmp] = np.mean(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                        data_packet['std'][ntmp] = np.std(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                        data_packet['min'][ntmp] = np.min(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                        data_packet['max'][ntmp] = np.max(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                        data_packet['pp'][ntmp]  = data_packet['max'][ntmp] - data_packet['min'][ntmp]
+
                                     #print(data_packet)
+                                # Oxygen mean and standard deviation calculation                                    
                                 if(freq_pack['name'] == 'Ofr'):
                                     data_packet['avg'] = np.mean(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
                                     data_packet['std'] = np.std(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
@@ -2241,17 +2279,6 @@ def todlraw_to_netCDF():
         parser.print_help()
         sys.exit(1)
 
-
-    rawfile = args.rawfile
-    ncfile = args.ncfile
-
-    print(rawfile,ncfile)
-
-    ncconv = todlnetCDF4File(rawfile)
-    ncconv.to_ncfile_fast(ncfile)
-    ncconv.close()
-    print('Done')
-    
     if(args.verbose == None):
         loglevel = logging.CRITICAL
     elif(args.verbose == 1):
@@ -2260,6 +2287,22 @@ def todlraw_to_netCDF():
         loglevel = logging.DEBUG
         
     logger.setLevel(loglevel)
+    
+    rawfile = args.rawfile
+    ncfile = args.ncfile
+
+    print(rawfile,ncfile)
+    try:
+        ncconv = todlnetCDF4File(rawfile)
+    except Exception as e:
+        print('Not a valid TODL binary file, exiting')
+        return
+        
+    ncconv.to_ncfile_fast(ncfile)
+    ncconv.close()
+    logger.info('Conversion done')
+    
+
     
 
 

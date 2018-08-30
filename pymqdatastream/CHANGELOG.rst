@@ -1,3 +1,14 @@
+0.7.9:
+	- todl_pymqds:
+	  - Changed time base to unix time in the netCDF format of the TODL
+	  - Changed time calculation from interpolation to polyfit in netCDF file
+	  - Changed variable names, t_ is renamed cnt10ks to maked more clear that the variable is simply a counter
+	  - Added compression to netCDF variables
+	  - Added more data fields in Pyro science oxygen	  
+	- todl_gui:
+	  - Corrected average display of ADC
+	  - Added average display for Pyro Science
+
 0.7.1:
 	- Re-Added GPS functionality
 

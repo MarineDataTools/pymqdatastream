@@ -22,16 +22,16 @@ def decode_format31(data_str_split,device_info):
                 packet_type = data_split[0]
                 # LTC2444 packet
                 if(packet_type == 'L'):
-                    #packet_time_old = packet_time
-                    packet_time = int(data_split[1])/device_info['counterfreq']
+                    #packet_cnt10k_old = packet_cnt10k
+                    packet_cnt10k = int(data_split[1])/device_info['counterfreq']
                     packet_num = int(data_split[2])
                     channel = int(data_split[3])
                     ad_data = data_split[4:]
                     # Fill the data list
-                    data_list = [packet_num,packet_time]
+                    data_list = [packet_num,packet_cnt10k]
                     # Fill the data packet dictionary
                     data_packet = {}
-                    data_packet = {'num':packet_num,'t':packet_time}
+                    data_packet = {'num':packet_num,'cnt10ks':packet_cnt10k}
                     data_packet['type'] = 'L'                                
                     data_packet['ch'] = channel
                     data_packet['V'] = [9999.99] * len(device_info['adcs'])
@@ -55,7 +55,7 @@ def decode_format31(data_str_split,device_info):
                 # IMU Information
                 elif(packet_type == 'A'):
                     #A;00000021667084;00000000103737;+40.9;-0.09180;-0.02295;-1.01172;-0.05344;-1.02290;-0.63359;0.000000;0.000000;0.000000
-                    packet_time = int(data_split[1])/device_info['counterfreq']
+                    packet_cnt10k = int(data_split[1])/device_info['counterfreq']
                     packet_num = int(data_split[2])
                     T = float(data_split[3])
                     accx = float(data_split[4])
@@ -67,8 +67,8 @@ def decode_format31(data_str_split,device_info):
                     magx = float(data_split[10])
                     magy = float(data_split[11])
                     magz = float(data_split[12])                                                                
-                    #aux_data_stream[0].append([packet_num,packet_time,T,accx,accy,accz,gyrox,gyroy,gyroz])
-                    data_packet = {'num':packet_num,'t':packet_time}
+                    #aux_data_stream[0].append([packet_num,packet_cnt10k,T,accx,accy,accz,gyrox,gyroy,gyroz])
+                    data_packet = {'num':packet_num,'cnt10ks':packet_cnt10k}
                     data_packet['type'] = 'A'
                     data_packet['T'] = T
                     data_packet['acc'] = [accx,accy,accz]
@@ -84,8 +84,8 @@ def decode_format31(data_str_split,device_info):
                     data_packet['date']   = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
                     data_packet['date_str']   = tstr
                     data_packet['format'] = int(data_split[2].split(':')[1])
-                    data_packet['t']      = float(data_split[3])/device_info['counterfreq']
-                    data_packet['t32']    = int(data_split[4])
+                    data_packet['cnt10ks']      = float(data_split[3])/device_info['counterfreq']
+                    data_packet['cnt32k']    = int(data_split[4])
                     data_packet['start']  = int(data_split[5].split(':')[1])
                     data_packet['show']   = int(data_split[6].split(':')[1])
                     data_packet['log']    = int(data_split[7].split(':')[1])
@@ -105,12 +105,12 @@ def decode_format31(data_str_split,device_info):
                     if("RMR1 3 0" in data_split[2]):
                         data_pyro   = data_split[2].split(' ')                                    
                         if(len(data_pyro) > 4):
-                            packet_time = int(data_split[1])/device_info['counterfreq']
+                            packet_cnt10k = int(data_split[1])/device_info['counterfreq']
                             packet_num  = 0
                             data_stat   = float(data_pyro[4])                                        
                             data_dphi   = float(data_pyro[5])
                             data_umol   = float(data_pyro[6])
-                            data_packet = {'num':packet_num,'t':packet_time}
+                            data_packet = {'num':packet_num,'cnt10ks':packet_cnt10k}
                             data_packet['type'] = 'O'                                
                             data_packet['phi']  = data_dphi 
                             data_packet['umol'] = data_umol
@@ -236,10 +236,10 @@ def decode_format4(data_str,device_info):
                             packet_num_bin  = data_decobs[ind:ind+5]
                             packet_num      = int(packet_num_bin.hex(), 16) # python3
                             ind += 5
-                            packet_time_bin  = data_decobs[ind:ind+5]
-                            packet_time     = int(packet_time_bin.hex(), 16)/device_info['counterfreq']
-                            data_list = [packet_num,packet_time]
-                            data_packet = {'num':packet_num,'t':packet_time}
+                            packet_cnt10k_bin  = data_decobs[ind:ind+5]
+                            packet_cnt10ks     = int(packet_cnt10k_bin.hex(), 16)/device_info['counterfreq']
+                            data_list = [packet_num,packet_cnt10ks]
+                            data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
                             data_packet['type'] = 'L'     
                             data_packet['spd'] = speed
                             data_packet['ch'] = channel
@@ -247,7 +247,7 @@ def decode_format4(data_str,device_info):
                             data_packet['V'] = [9999.99] * num_ltcs
                             ind += 5
                             #logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
-                            #logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
+                            #logger.debug(funcname + ': Packet 10khz time ' + packet_cnt10k_bin.hex())
                             for n,i in enumerate(range(0,num_ltcs*3,3)):
                                 data_ltc = data_decobs[ind+i:ind+i+3]
                                 data_ltc += 0x88.to_bytes(1,'big') # python3
@@ -277,18 +277,18 @@ def decode_format4(data_str,device_info):
                         data_split = data_utf8.split(';')
                         data_packet = {'type':'Stat'}
                         tstr = data_split[1]
-                        td_tmp                = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
+                        td_tmp                  = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
                         #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
                         data_packet['date']     = td_tmp.replace(tzinfo = device_info['timezone'])    
-                        data_packet['timestamp'] = datetime.datetime.timestamp(data_packet['date'])
-                        data_packet['date_str']   = tstr
-                        data_packet['format'] = int(data_split[2].split(':')[1])
-                        data_packet['t']      = float(data_split[3])/device_info['counterfreq']
-                        data_packet['t32']    = int(data_split[4])
-                        data_packet['start']  = int(data_split[5].split(':')[1])
-                        data_packet['show']   = int(data_split[6].split(':')[1])
-                        data_packet['log']    = int(data_split[7].split(':')[1])
-                        data_packet['sd']     = int(data_split[8].split(':')[1])
+                        data_packet['timestamp']= datetime.datetime.timestamp(data_packet['date'])
+                        data_packet['date_str']  = tstr
+                        data_packet['format']    = int(data_split[2].split(':')[1])
+                        data_packet['cnt10ks']   = float(data_split[3])/device_info['counterfreq']
+                        data_packet['cnt32k']    = int(data_split[4])
+                        data_packet['start']     = int(data_split[5].split(':')[1])
+                        data_packet['show']      = int(data_split[6].split(':')[1])
+                        data_packet['log']       = int(data_split[7].split(':')[1])
+                        data_packet['sd']        = int(data_split[8].split(':')[1])
                         if(len(data_split[9]) > 1):
                             data_packet['filename'] = data_split[9]
                         else:
@@ -303,8 +303,8 @@ def decode_format4(data_str,device_info):
                             packet_num_bin  = data_decobs[ind:ind+5]
                             packet_num      = int(packet_num_bin.hex(), 16) # python3, its unsigned, TODO check how to do that
                             ind += 5
-                            packet_time_bin = data_decobs[ind:ind+5]
-                            packet_time     = int(packet_time_bin.hex(), 16)/device_info['counterfreq']
+                            packet_cnt10k_bin = data_decobs[ind:ind+5]
+                            packet_cnt10ks     = int(packet_cnt10k_bin.hex(), 16)/device_info['counterfreq']
                             ind += 5
                             accx = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
                             ind += 2
@@ -326,7 +326,7 @@ def decode_format4(data_str,device_info):
                             magy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
                             ind += 2
                             magz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)                            
-                            data_packet = {'num':packet_num,'t':packet_time}
+                            data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
                             data_packet['type'] = 'A'
                             data_packet['T'] = T
                             data_packet['acc'] = [accx,accy,accz]
@@ -340,20 +340,37 @@ def decode_format4(data_str,device_info):
                             packet_num_bin  = data_decobs[ind:ind+5]
                             packet_num      = int(packet_num_bin.hex(), 16) # python3
                             ind += 5
-                            packet_time_bin = data_decobs[ind:ind+5]
-                            packet_time     = int(packet_time_bin.hex(), 16)/device_info['counterfreq']
-                            data_list_O     = [packet_num,packet_time]
-                            data_utf8       = data_decobs[11:].decode(encoding='utf-8')
+                            packet_cnt10k_bin  = data_decobs[ind:ind+5]
+                            packet_cnt10ks     = int(packet_cnt10k_bin.hex(), 16)/device_info['counterfreq']
+                            data_list_O        = [packet_num,packet_cnt10ks]
+                            data_utf8          = data_decobs[11:].decode(encoding='utf-8')
                             if("RMR1 3 0" in data_utf8):
                                 data_pyro   = data_utf8.split(' ')
                                 if(len(data_pyro) > 4):
                                     data_stat   = float(data_pyro[4])                                        
                                     data_dphi   = float(data_pyro[5])
                                     data_umol   = float(data_pyro[6])
-                                    data_packet = {'num':packet_num,'t':packet_time}
+                                    data_mbar   = float(data_pyro[7])
+                                    data_asat   = float(data_pyro[8])
+                                    data_ext_temp   = float(data_pyro[9])
+                                    data_int_temp   = float(data_pyro[10])
+                                    data_sgn_int    = float(data_pyro[11])
+                                    data_amb_light  = float(data_pyro[12])
+                                    data_press      = float(data_pyro[13])
+                                    data_hum        = float(data_pyro[14])
+                                    data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
                                     data_packet['type'] = 'O'                                
                                     data_packet['phi']  = data_dphi 
                                     data_packet['umol'] = data_umol
+                                    data_packet['mbar'] = data_mbar
+                                    data_packet['asat'] = data_asat
+                                    data_packet['ext_temp'] = data_ext_temp
+                                    data_packet['int_temp'] = data_int_temp
+                                    data_packet['sgn_int']  = data_sgn_int
+                                    data_packet['sgn_amb_light'] = data_amb_light
+                                    data_packet['sgn_press'] = data_press
+                                    data_packet['sgn_hum'] = data_hum
+                                    
                                     data_packets.append(data_packet)
 
             #except cobs.DecodeError:
