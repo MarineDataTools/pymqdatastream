@@ -194,6 +194,7 @@ class DataStreamAddresslist(QtWidgets.QWidget):
         self.close()
 
     def get_addresses(self):
+        print('get addresses')
         return self.addresses  
         
         
@@ -227,11 +228,13 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         # Address list
         #self.address_list = pymqdatastream.standard_datastream_control_addresses
         self.address_list = [ pymqdatastream.standard_datastream_control_address ]
+        # Make an adresslistwidget
+        self.addresses = DataStreamAddresslist(self.address_list)        
 
         # Check if the address of the local datastream is in the list, if yes, remove it
         if(hide_myself):
             for i,addr in enumerate(self.address_list):
-                print(self.Datastream)
+                #print(self.Datastream)
                 if(addr == self.Datastream.address):
                     self.address_list.pop(i)
                     break
@@ -306,7 +309,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
         # Define some signals, these list can be filled with functions which
         # TODO: This could be updated/improved by using Signals/Blinker
         self.signal_newstream = []
-        self.signal_remstream = []                
+        self.signal_remstream = []
 
         # update the figure once in a while
         if(self.update_subscribed_streams):
@@ -319,8 +322,9 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
     def open_address_widget(self):
         """
         """
+        funcname = self.__class__.__name__ + '.open_address_widget()'
         # Address widget
-        self.addresses = DataStreamAddresslist(self.address_list)
+        funcname 
         self.addresses.show()
 
 
@@ -404,6 +408,7 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
                 
     def update_subscribed_stream_statistics(self):
+        funcname = self.__class__.__name__ + '.update_subscribed_stream_statistics()'
         root = self.treeWidgetsub.invisibleRootItem()
         child_count = root.childCount()
         for i in range(child_count):
@@ -524,13 +529,14 @@ class DataStreamSubscribeWidget(QtWidgets.QWidget):
 
         
     def handle_update_clicked(self):
+        funcname = self.__class__.__name__ + '.handle_update_clicked()'
         self.treeWidget.clear()
         # Try to get a new address list from Addresslistwidget
         try:
             self.address_list = self.addresses.get_addresses()
             print('Got data:',self.address_list)
         except Exception as e:
-            print(str(e) + ', no addresslistwidget')
+            print(funcname + ':' + str(e) + ', no addresslistwidget')
         # Fill the list with datastream objects
         remote_datastreams = self.Datastream.query_datastreams_fast(self.address_list)
         self.populate_with_datastreams(remote_datastreams)

@@ -73,7 +73,8 @@ with open(filename) as config_file:
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_gui_todl')
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 import pymqdatastream
@@ -830,7 +831,7 @@ class gpsDevice():
 #
 #
 class todlDevice():
-    def __init__(self, device_changed_function=None):
+    def __init__(self, device_changed_function=None,logging_level = 'INFO'):
         """
         A device class for the turbulent ocean data logger (TODL)
         
@@ -844,7 +845,7 @@ class todlDevice():
         self.status = 0 # The status
         # 0 initialised without a logger open
         # 1 logger at a serial port open
-        self.todl = pymqds_todl.todlDataStream(logging_level='DEBUG')
+        self.todl = pymqds_todl.todlDataStream(logging_level=logging_level)
         # Add a deque for raw serial data
         self.todl.deques_raw_serial.append(collections.deque(maxlen=5000))
         self.rawdata_deque = self.todl.deques_raw_serial[-1]

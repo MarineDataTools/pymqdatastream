@@ -29,7 +29,7 @@ import sys
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_todl')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 # TODL speeds for version 0.4
