@@ -1003,6 +1003,7 @@ class todlDevice():
     def setup(self,name=None, mainwindow=None):
         """Setup of the device
 
+
         """
         self.name = name
         self.mainwindow = mainwindow        
@@ -1180,6 +1181,7 @@ class todlDevice():
             self.combo_serial.addItem(str(port))
 
 
+
     def clicked_serial_query_bu(self):
         """ Querying the datalogger
         """
@@ -1192,7 +1194,7 @@ class todlDevice():
             print('Opening port' + ser + ' with baudrate ' + str(b))
             self.todl.add_serial_device(ser,baud=b)
             
-        if(self.todl.status >= 0): # Succesfull opened
+        if(self.todl.status >= 0): # Succesfully opened
             self.todlConfig._query()
             if(self.todl.FLAG_IS_TODL):
                 # Enable open button
@@ -1202,14 +1204,27 @@ class todlDevice():
             self.todl.stop_serial_data()
 
 
-    def clicked_serial_open_bu(self):
-        """Function to open a serial device
+    def clicked_serial_open_bu(self):            
+        """Function to open a serial device by clicking
         """
         funcname = 'clicked_serial_open_bu()'
-        t = self.serial_open_bu.text()
-        print('Click ' + str(t))
+        command = self.serial_open_bu.text()
+        ser = str(self.combo_serial.currentText())
+        b = int(self.combo_baud.currentText())            
+        self.serial_open(command,ser,b)        
+        
+        
+    def serial_open(self,command,device,baud):
+        """Function to open or close  a serial device
+           Arguments:
+              command:
+              device:
+              baud:
+        """
+        funcname = 'serial_open()'
+        logger.debug(funcname + ':Click ' + str(command))
         if True:
-            if(t == 'Open'):
+            if(command == 'Open'):
                 ser = str(self.combo_serial.currentText())
                 b = int(self.combo_baud.currentText())
                 print('Opening port' + ser + ' with baudrate ' + str(b))
@@ -1231,7 +1246,7 @@ class todlDevice():
                             self.layout_source_row2.addWidget(self.todlConfig,1,0)
                             self.todlConfig.show()
                             #https://stackoverflow.com/questions/28202737/pyside-what-is-the-best-way-to-resize-the-main-window-if-one-widget-is-hidden
-                            self.setup_widget.adjustSize()
+                            #self.setup_widget.adjustSize()
                         # The general purpose version
                         elif(vers >= 0.70):
                             logger.debug('Opening Version 0.70+ device setup')
@@ -1253,9 +1268,7 @@ class todlDevice():
                 else:
                     logger.warning('Could not open port:' + str(ser))
                     
-            #elif(t == 'Open'):
-                #ser = str(self.combo_serial.currentText())
-                #b = int(self.combo_baud.currentText())
+
                 self.serial_open_bu.setText('Close')
                 self._s4l_settings_bu.setEnabled(False)
                 #self._s4l_freq_combo.setEnabled(False)                                            
@@ -1793,7 +1806,7 @@ class todlDevice():
         """
         sender = self._show_data_widget.sender()
         t = self._show_data_bu.text()
-        print('Click ' + str(t))
+        logger.debug('Click ' + str(t))
         if True:
             if(t == 'Show data'):
                 self._show_data_widget_opened = self._show_data_widget
@@ -2476,13 +2489,20 @@ available/known/implemented devices are read from todl_config.yaml
         #self.device_setup_widget_layout.addWidget(cl,1,0)
         self.device_setup_widget.show()
 
-        
+
     def add_devices(self):
-        """ Looks in the configuration for devices and initializing that
-        device object with the appropriate functions 
+        """ Adding a device using the gui
         """
         dev = str( self.combo_dev_add.currentText() )
         print('Hallo add: ' + dev)
+        logger.debug('add_devices(): Adding device: ' + dev)    
+        self.add_device(dev)
+
+        
+    def add_device(self,dev):
+        """ Looks in the configuration for devices and initializing that
+        device object with the appropriate functions 
+        """
         for d in config['devices']: # Search for the config entry
             devname = list(d)[0]
             if(devname == dev):
@@ -2520,6 +2540,8 @@ available/known/implemented devices are read from todl_config.yaml
                 height_main = self.height_orig + height
                 if(width_main > self.width_main):
                     self.resize(width_main,self.height_main)
+
+                return deviceobj
 
 
     def device_changed(self,fname=None):
