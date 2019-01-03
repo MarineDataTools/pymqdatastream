@@ -2195,10 +2195,11 @@ default to None, only with a valid argument that setting will be sent to the dev
                                 data_packet['f'] = (freq_pack['ind']-1)/(dtLt)
                                 # Print number of bad packets
                                 if(freq_pack['name'] == 'Lfr'):
-                                    print('Number of out of range or bad LTC2442 readings:' + str(freq_pack['nbad']))
+                                    #print('Number of out of range or bad LTC2442 readings:' + str(freq_pack['nbad']))
                                     # Also print packet statistics, this is a HACK and should be done somewhere else (in the gui, not in console)
-                                    print(packet_statistics)
-                                    print('Bytes read:' + str(self.bytes_read) + ' converted:' + str(self.bytes_converted ))
+                                    #print(packet_statistics)
+                                    #print('Bytes read:' + str(self.bytes_read) + ' converted:' + str(self.bytes_converted ))
+                                    pass                                    
                                 # Voltage mean and standard deviation calculation
                                 if('Lfr_ch' in freq_pack['name']):
                                     data_packet['ch'] = freq_pack['ch']

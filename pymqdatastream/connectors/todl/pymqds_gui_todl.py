@@ -638,9 +638,10 @@ class todlConfig(QtWidgets.QWidget):
     def _query(self):
         """ Querying the datalogger
         """
-        self.todl.query_todllogger()
-        self._update_status()
-        self.deviceinfo.update(self.todl.device_info)
+        FLAG_LOGGER = self.todl.query_todllogger()
+        if(FLAG_LOGGER):
+            self._update_status()
+            self.deviceinfo.update(self.todl.device_info)
         
 
     def _close(self):

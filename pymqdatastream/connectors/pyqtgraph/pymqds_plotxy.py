@@ -798,7 +798,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                         ind_start = stream.pyqtgraph_npdata['ind_start']
                         ind_end = stream.pyqtgraph_npdata['ind_end']
                         for n in range(len(plot_data)):
-                            stream.pyqtgraph['n_pt_recvd'] += 1                                
+                            stream.pyqtgraph['n_pt_recvd'] += 1
                             if(( stream.pyqtgraph['n_pt_recvd'] % stream.pyqtgraph['nth_pt'] ) == 0):
                                 stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
                                 stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
