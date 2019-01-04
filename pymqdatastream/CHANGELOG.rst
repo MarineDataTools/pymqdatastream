@@ -1,3 +1,6 @@
+0.8.0:
+        - pymqs_gui_todl:
+	  - Added functionality for adding devices without gui ( todlDevice.serial_open() )
 0.7.9:
 	- todl_pymqds:
 	  - Changed time base to unix time in the netCDF format of the TODL

@@ -26,8 +26,8 @@ import time
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
 logger = logging.getLogger('pymqds_plotxy')
-#logger.setLevel(logging.INFO)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
+#logger.setLevel(logging.DEBUG)
 
 
 standard_bufsize=10000
@@ -148,7 +148,7 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
         try:
             stream.pyqtgraph
         except:
-            logger.warning('Initialise stream first with init_stream_settings')
+            self.logger.warning('Initialise stream first with init_stream_settings')
             return
 
         # Color information?
@@ -228,35 +228,35 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
             xl: Xlimit
             yl_valid: The range of valid data, all other data is shown but rejected for e.g. average calculation
         """
-        logger.debug('set_plotting_mode()')
+        self.logger.debug('set_plotting_mode()')
         self.pyqtgraph['ymode'] = None
         self.pyqtgraph['yl'] = yl
         self.pyqtgraph['yl_valid'] = yl_valid
         # Check if we have the long version of mode, if yes get index and use short version
         for i,m in enumerate(self.pyqtgraph['modes']):
             if(m == mode):
-                logger.debug('Long to short mode string ' + m)
+                self.logger.debug('Long to short mode string ' + m)
                 mode = self.pyqtgraph['modes_short'][i]
                 break
 
 
         for i,m in enumerate(self.pyqtgraph['modes']):
             if(m == ymode):
-                logger.debug('Long to short y-mode string ' + m)
+                self.logger.debug('Long to short y-mode string ' + m)
                 ymode = self.pyqtgraph['modes_short'][i]
                 break            
             
         # cont mode
         if(mode == self.pyqtgraph['modes_short'][0]):
-            logger.debug('Constant mode')
+            self.logger.debug('Constant mode')
             self.pyqtgraph['mode'] = mode
             self.pyqtgraph['autorange'] = True
             self.pyqtgraph['xrs'] = None            
         # xlim mode
         elif(mode == self.pyqtgraph['modes_short'][1]):
-            logger.debug('Xlim mode')            
+            self.logger.debug('Xlim mode')            
             if(xl == None):
-                logger.warning('Specify xl for the "xl" mode, doing nothing now')
+                self.logger.warning('Specify xl for the "xl" mode, doing nothing now')
             else:
                 self.pyqtgraph['mode'] = mode
                 self.pyqtgraph['xl'] = xl
@@ -264,9 +264,9 @@ class pyqtgraphDataStream(pymqdatastream.DataStream):
                 self.pyqtgraph['xrs'] = None                
         # x reset mode
         elif(mode == self.pyqtgraph['modes_short'][2]):
-            logger.debug('xr mode')                        
+            self.logger.debug('xr mode')                        
             if(xl == None):
-                logger.warning('Specify xl for the "xr" mode, doing nothing now')
+                self.logger.warning('Specify xl for the "xr" mode, doing nothing now')
             else:
                 self.pyqtgraph['mode'] = mode
                 self.pyqtgraph['xl'] = xl
@@ -375,9 +375,9 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         xlim = self.lined_xlim.text()
         try:
             self.Datastream.pyqtgraph['xl'] = float(xlim)
-            logger.info("Setting xlim to, " + str(xlim) + ".")            
+            self.logger.info("Setting xlim to, " + str(xlim) + ".")            
         except ValueError:
-            logger.info("Please select a number, " + str(xlim) + " is not valid.")
+            self.logger.info("Please select a number, " + str(xlim) + " is not valid.")
                          
 
     def handle_button_plot_stream(self):
@@ -534,7 +534,7 @@ class DataStreamChoosePlotWidget(datastream_qt_service.DataStreamSubscribeWidget
         """
         spin_plot = self.sender()
         nth_point = spin_plot.value()
-        logger.debug('Changing spin plot to' + str(nth_point))
+        self.logger.debug('Changing spin plot to' + str(nth_point))
         spin_plot.pyqtgraph['nth_pt'] = nth_point
         
         
@@ -798,7 +798,7 @@ class pyqtgraphWidget(QtWidgets.QWidget):
                         ind_start = stream.pyqtgraph_npdata['ind_start']
                         ind_end = stream.pyqtgraph_npdata['ind_end']
                         for n in range(len(plot_data)):
-                            stream.pyqtgraph['n_pt_recvd'] += 1                                
+                            stream.pyqtgraph['n_pt_recvd'] += 1
                             if(( stream.pyqtgraph['n_pt_recvd'] % stream.pyqtgraph['nth_pt'] ) == 0):
                                 stream.pyqtgraph_npdata['time'][stream.pyqtgraph_npdata['ind_end']] = time_plot_data
                                 stream.pyqtgraph_npdata['x'][stream.pyqtgraph_npdata['ind_end']] = plot_data[n][ind_x]
