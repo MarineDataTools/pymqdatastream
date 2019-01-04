@@ -475,7 +475,7 @@ class todlnetCDF4File():
             self.pyro_umol_tmp = []
             
             
-    def to_ncfile_fast(self,fname, num_bytes = 1000000, num_bytes_packages=-1,zlib=True,complevel=4):
+    def to_ncfile_fast(self,fname, num_bytes = 10000000, num_bytes_packages=-1,zlib=True,complevel=4):
         """ Reads the data in fname, converts and puts it into a ncfile
 
         Args:
