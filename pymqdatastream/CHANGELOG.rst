@@ -1,3 +1,8 @@
+0.8.1:
+        - pymqs_gui_todl:
+	  - Added plotting functionality of single channels
+	  - todl_data_tool: Tool to convert/quickview TODL data
+	    
 0.8.0:
         - pymqs_gui_todl:
 	  - Added functionality for adding devices without gui ( todlDevice.serial_open() )

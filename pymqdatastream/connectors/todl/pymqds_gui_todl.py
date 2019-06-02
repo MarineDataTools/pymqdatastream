@@ -670,13 +670,16 @@ class todlConfig(QtWidgets.QWidget):
             
             
 
-def _start_pymqds_plotxy(addresses):
+def _start_pymqds_plotxy(addresses,ind_x=1,ind_y=2,plot_nth_point = 1):
     """
     
     Start a pymqds_plotxy session and plots the streams given in the addresses list
     TODO: add a way to close this again! Using a queue seems to be a good idea ...
     Args:
         addresses: List of addresses of pymqdatastream Streams
+        ind_x: Index for data used as the x Axis
+        ind_y: Index for data used as the x Axis
+        plot_nth_point: Plot every nth point
     
     """
 
@@ -697,7 +700,7 @@ def _start_pymqds_plotxy(addresses):
         # ind_x = 0: TODL packet number 
         # ind_x = 1: TODL time
         # ind_x = 2: TODL first data
-        datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = 1, ind_y = 2, plot_nth_point = 1)
+        datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = ind_x, ind_y = ind_y, plot_nth_point = plot_nth_point)
         datastream.plot_datastream(True)
         datastream.set_plotting_mode(mode='cont')        
         datastreams.append(datastream)
@@ -1509,32 +1512,34 @@ class todlDevice():
             
         self._ad_table.setFixedHeight(height + hheight + fwidth)
         # Only select one item
-        #self._ad_table.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
         self._ad_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         # Add a right click menu to the table
         self._ad_table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self._ad_table.customContextMenuRequested.connect(self._ad_table_menu_right_click)
 
     def _ad_table_menu_right_click(self, event):
-        """
-        Handling right click menu of the table
+        """ Handling right click menu of the table
         """
         # From here https://stackoverflow.com/questions/20930764/how-to-add-a-right-click-menu-to-each-cell-of-qtableview-in-pyqt
         # and here https://stackoverflow.com/questions/7782071/how-can-i-get-right-click-context-menus-for-clicks-in-qtableview-header
-        #index = self.indexAt(event.pos())
+
         if self._ad_table.selectionModel().selection().indexes():
             for i in self._ad_table.selectionModel().selection().indexes():
                 row, column = i.row(), i.column()
 
         for ind_row in self._ad_table_index['ltc']:
             if((ind_row == row) and (column>0)):
-                self._menu = QtGui.QMenu()
-                statAction = self._menu.addAction("Show average/std/min/max")
-                action = self._menu.exec_(self._ad_table.mapToGlobal(event))
-                if action ==statAction:
-                    self.show_statistic(row, column)
-
-
+                print('Creating menu')
+                #self._menu = QtGui.QMenu()
+                menu = QtGui.QMenu()
+                statAction = menu.addAction("Show average/std/min/max")
+                plotAction = menu.addAction("Plot data")
+                statAction.triggered.connect(self.show_statistic)
+                plotAction.triggered.connect(self.plot_adc_data)
+                #action = menu.exec_(self._ad_table.mapToGlobal(event)) # exec ends up with several menus, using popup instead
+                action = menu.popup(self._ad_table.mapToGlobal(event))
+                self.menu = menu
+    
 
     def _O2_table_menu_right_click(self, event):
         """
@@ -1549,15 +1554,64 @@ class todlDevice():
 
         self._menu_O2 = QtGui.QMenu()
         statAction = self._menu_O2.addAction("Show average/std/min/max")
-        action = self._menu_O2.exec_(self._O2_table.mapToGlobal(event))
+        action = self._menu_O2.exec_(self._O2_table.mapToGlobal(event)) # TODO, change to popup and action.triggered
         if action == statAction:
             self.show_statistic_O2(row, column)                    
 
+    def plot_adc_data(self,event):
+        """ Plots data of one adc channel """
+        # Find row and column
+        if self._ad_table.selectionModel().selection().indexes():
+            for i in self._ad_table.selectionModel().selection().indexes():
+                row, column = i.row(), i.column()
+                
+        for ind_LTC,ind_tmp in enumerate(self._ad_table_index['ltc']):
+            if(ind_tmp == row):
+                break
 
-    def show_statistic(self,row,column):
+        num_ADC = self.todl.device_info['adcs'][ind_LTC]
+
+        # Get the channel
+        for ch,col_tmp in enumerate(self._ad_table_ind_ch):
+            if(col_tmp == column):
+                break        
+        
+        print('Plotting ADC ' + str(num_ADC) + ' channel ' + str(ch))
+        FOUND_STREAM = False
+
+        for nstr,stream in enumerate(self.todl.Streams):
+            if(FOUND_STREAM):
+                break
+            
+            print('Stream family is ',stream.get_family())                    
+            print(stream.name,stream.variables)
+            chstr = 'ch' + str(ch)
+            if(chstr in stream.name):
+                print('Found stream at position ' + str(nstr))
+                for nch,var in enumerate(stream.variables):
+                    ADCstr =  'ad ' + str(num_ADC) + ' ch ' + str(ch) # like so 'ad 1 ch 1'
+                    if(var['name'] == ADCstr):
+                        print('Found variable at position ' + str(nch))
+                        FOUND_STREAM = True
+                        addresses = [self.todl.get_stream_address(stream)]
+                        ind_x = 1 # Plot versus 10khz counter
+                        ind_y = 2 + num_ADC
+                        multiprocessing.set_start_method('spawn',force=True)
+                        plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,ind_x,ind_y))
+                        self._plotxyprocesses.append(plotxyprocess)
+                        plotxyprocess.daemon = True # If we are done, it will be kills as well        
+                        plotxyprocess.start()
+                        break
+
+
+    #def show_statistic(self,row,column):
+    def show_statistic(self,event):
         """ Creating a widget showing the statistics of the data
         """
         print('Statistic here ...')
+        if self._ad_table.selectionModel().selection().indexes():
+            for i in self._ad_table.selectionModel().selection().indexes():
+                row, column = i.row(), i.column()        
         # Get the channel
         for ch,col_tmp in enumerate(self._ad_table_ind_ch):
             if(col_tmp == column):
@@ -2039,10 +2093,7 @@ class todlDevice():
         print(self._textdataformat)
 
     def _plot_clicked_adc(self):
-        """
-        
-        Starts a pyqtgraph plotting process
-
+        """ Starts a pyqtgraph plotting process 
         """
 
         logger.debug('Plotting the streams')
@@ -2057,7 +2108,7 @@ class todlDevice():
                 
         plotxyprocess= multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,))
         self._plotxyprocesses.append(plotxyprocess)
-        plotxyprocess.daemon = True # If we are done, it will be killes as well        
+        plotxyprocess.daemon = True # If we are done, it will be kills as well        
         plotxyprocess.start()
 
     def _plot_TO2_clicked(self):

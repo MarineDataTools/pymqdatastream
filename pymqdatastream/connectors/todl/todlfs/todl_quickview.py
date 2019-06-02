@@ -55,7 +55,7 @@ def main():
             cnt10ks_ch1 = nca.variables['cnt10ks_ch1'][:]
             time_ch1 = netCDF4.num2date(nca.variables['time_ch1'][:],units=nca.variables['time_ch1'].units)
             f1 = 1/(np.diff(cnt10ks_ch1).mean())
-            V_ch1 = nca.variables['V_adc0_ch1'][:]
+            V_ch1 = nca.variables['V_adc1_ch1'][:]
             FLAG_CH1=True
             print('Found ch1 ADC data')            
         except:
@@ -66,7 +66,7 @@ def main():
             cnt10ks_ch2 = nca.variables['cnt10ks_ch2'][:]
             time_ch2 = netCDF4.num2date(nca.variables['time_ch2'][:],units=nca.variables['time_ch2'].units)
             f2 = 1/(np.diff(cnt10ks_ch2).mean())    
-            V_ch2 = nca.variables['V_adc0_ch2'][:]
+            V_ch2 = nca.variables['V_adc1_ch2'][:]
             FLAG_CH2=True
             print('Found ch2 ADC data')
         except:
@@ -111,7 +111,7 @@ def main():
         V_ch1_pl = np.asarray(V_ch1[:])
         print('Despiking ch1')
         spikes_ch1 = todl_data_processing.findspikes(cnt10ks_ch1,V_ch1_pl,.1)
-        V_ch1_pl = np.ma.masked_where(spikes_ch1 == 1,V_ch1_pl)
+        #V_ch1_pl = np.ma.masked_where(spikes_ch1 == 1,V_ch1_pl)
         print('Plotting ADC ch 1')
         pl.figure(1)
         pl.clf()

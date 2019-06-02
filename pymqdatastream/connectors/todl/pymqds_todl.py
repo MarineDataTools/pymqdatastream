@@ -124,12 +124,14 @@ def parse_device_info(data_str):
     # Get the RTC time
     #
     #
-    # >>>Time: 2017.09.11 10:06:44
+    # >>>Time: 2017.09.11 10:06:44 
     device_info['time_str']   = ''
     device_info['time']   = None
     time_str = ''
-    for i,me in enumerate(re.finditer(r'>>>Time:.*\n',data_str)):
-        time_str = me.group()        
+    for i,me in enumerate(re.finditer(r'>>>Time: \d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}',data_str)):
+        time_str = me.group()
+
+    print(time_str)
 
     if(len(time_str) > 0):
         time_str = time_str.replace('\n','')  
@@ -162,9 +164,9 @@ def parse_device_info(data_str):
     for i,me in enumerate(re.finditer(r'>>>10kHz cnt:.*\n',data_str)):
         cnt10k_str = me.group()
 
-    cnt32k_str = ''        
-    for i,me in enumerate(re.finditer(r'>>>32kHz cnt:.*\n',data_str)):
-        cnt32k_str = me.group()
+    if(len(cnt10k_str) == 0): # This is the new format directly in the date str
+        for i,me in enumerate(re.finditer(r'10kHz:\d* ',data_str)):
+            cnt10k_str = me.group()
 
     device_info['cnt10k_str'] = cnt10k_str
     try:
@@ -172,6 +174,15 @@ def parse_device_info(data_str):
         device_info['cnt10k'] = cnt10k
     except:
         device_info['cnt10k'] = None
+
+    
+    cnt32k_str = ''        
+    for i,me in enumerate(re.finditer(r'>>>32kHz cnt:.*\n',data_str)):
+        cnt32k_str = me.group()
+
+    if(len(cnt32k_str) == 0): # This is the new format directly in the date str
+        for i,me in enumerate(re.finditer(r'32kHz:\d* ',data_str)):
+            cnt32k_str = me.group()                                    
         
     device_info['cnt32k_str'] = cnt32k_str
     try:
@@ -1447,7 +1458,9 @@ default to None, only with a valid argument that setting will be sent to the dev
             # This will be used by the raw_data read functions (at the moment read_file_data only)
             self.deques_raw_serial.append(deque)
             # Add datastreams for all LTC channels and devices
-            for ch in self.device_info['channel_seq']:
+            ch_seq = np.unique(np.asarray(self.device_info['channel_seq']))            
+            #for ch in self.device_info['channel_seq']: # This does not work, if channels are sampled more than once
+            for ch in ch_seq:
                 self.logger.debug(funcname + ': Adding pub stream for channel:' + str(ch))
                 # Adding a stream with all ltcs for each channel
                 timevar = pymqdatastream.StreamVariable('time','seconds','float')
