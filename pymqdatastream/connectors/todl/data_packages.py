@@ -235,7 +235,6 @@ def decode_format4(data_str,device_info):
                 #logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
                 if(len(data_cobs) > 3):
                     data_decobs = cobs.decode(data_cobs)
-                    print(data_decobs)                                    
                     #print('decobs data:')
                     #print(data_decobs)
                     #print(data_decobs[0],type(data_decobs[0]))                            
@@ -369,11 +368,11 @@ def decode_format4(data_str,device_info):
                             data_packet['mag'] = [magx,magy,magz]
                             data_packets.append(data_packet)
                     elif((packet_ident == 0xbb) or (packet_ident == 0xbc)): # ACC IMU FIFO packet
-                        print('FiFO',len(data_decobs))
+                        #print('FiFO',len(data_decobs))
                         nsamples = (len(data_decobs) - 13)/21.
-                        print('Nsamples',nsamples)                        
+                        #print('Nsamples',nsamples)                        
                         #print(data_decobs)
-                        print('FiFO end')
+                        #print('FiFO end')
                         T_all = []
                         accx_all = []
                         accy_all = []
@@ -455,6 +454,8 @@ def decode_format4(data_str,device_info):
                                     data_packet['num'] = packet_num
                                     data_packet['cnt10ks'] = packet_cnt10ks
                                     data_packets.append(data_packet)
+
+
 
             #except cobs.DecodeError:
             #    logger.debug(funcname + ': COBS DecodeError')

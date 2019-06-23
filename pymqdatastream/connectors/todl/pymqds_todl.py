@@ -377,6 +377,8 @@ class todlnetCDF4File():
         dimname          = 'cnt10ks'
         cnt10ks_dim            = sgrp.createDimension(dimname, None)
         self.sgrp        = sgrp
+        self.zlib_level  = zlib
+        self.complevel   = complevel
         self.fill_value  = -9e9
         self.stat_tvar        = sgrp.createVariable(dimname, "f8", (dimname,))
         self.stat_tvar_tmp    = []
@@ -472,18 +474,23 @@ class todlnetCDF4File():
 
         # Or a Pyroscience Firesting?
         if(self.todl.device_info['pyro_freq'] > 0):
-            self.logger.debug(funcname + ': Creating pyro group')
-            pyrogrp     = rootgrp.createGroup('pyro')
-            self.pyrogrp = pyrogrp
-            dimname = 'cnt10ks_pyro'
-            pyro_dim = pyrogrp.createDimension(dimname, None)
-            self.pyro_cnt10ks        =  pyrogrp.createVariable('cnt10ks_pyro', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.pyro_cnt10ks.units = 'time in seconds since device power on'            
-            self.pyro_cnt10ks_tmp    = []
-            self.pyro_phi      =  pyrogrp.createVariable('phi',    "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.pyro_phi_tmp  = []
-            self.pyro_umol     =  pyrogrp.createVariable('umol',   "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.pyro_umol_tmp = []
+            self.create_pyro_group()
+            
+    def create_pyro_group(self):
+        funcname = 'create_pyro_group'
+        rootgrp = self.ncfile
+        self.logger.debug(funcname + ': Creating pyro group')
+        pyrogrp     = rootgrp.createGroup('pyro')
+        self.pyrogrp = pyrogrp
+        dimname = 'cnt10ks_pyro'
+        pyro_dim = pyrogrp.createDimension(dimname, None)
+        self.pyro_cnt10ks        =  pyrogrp.createVariable('cnt10ks_pyro', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+        self.pyro_cnt10ks.units = 'time in seconds since device power on'            
+        self.pyro_cnt10ks_tmp    = []
+        self.pyro_phi      =  pyrogrp.createVariable('phi',    "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+        self.pyro_phi_tmp  = []
+        self.pyro_umol     =  pyrogrp.createVariable('umol',   "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+        self.pyro_umol_tmp = []
             
             
     def to_ncfile_fast(self,fname, num_bytes = 1000000, num_bytes_packages=-1,zlib=True,complevel=4):
@@ -507,6 +514,7 @@ class todlnetCDF4File():
         #num_bytes_packages = 50
         data_str = b''
         file_size = os.path.getsize(self.todl.data_file.name)
+        npacket_an = 0
         while(True):
             num_bytes_packages -= 1
             raw_data = self.todl.data_file.read(num_bytes)
@@ -632,7 +640,38 @@ class todlnetCDF4File():
                     self.imu_magy_tmp.append(data['mag'][1])
                     self.imu_magz_tmp.append(data['mag'][2])
 
+                elif(data['type'] == 'An'): # IMU FIGO data
+                    # HAck, dt in the packet shows wring results, calculating differenc between two packets...
+                    if(npacket_an == 0):
+                        cnt10ks_old = data['cnt10ks']
+                        npacket_an += 1                        
+                    else:
+                        npacket_an += 1
+                        npacket = len(data['T'])                        
+                        dt_packet = (data['cnt10ks'] - cnt10ks_old)/(npacket)
+                        cnt10ks_old = data['cnt10ks']
+                        for nsa in range(npacket):
+                            self.imu_cnt10ks_tmp.append(data['cnt10ks']+nsa*dt_packet)    
+
+                        self.imu_temp_tmp.extend(data['T'][:])                    
+                        self.imu_accx_tmp.extend(data['acc'][0][:])
+                        self.imu_accy_tmp.extend(data['acc'][1][:])
+                        self.imu_accz_tmp.extend(data['acc'][2][:])
+                        self.imu_gyrox_tmp.extend(data['gyro'][0][:])
+                        self.imu_gyroy_tmp.extend(data['gyro'][1][:])
+                        self.imu_gyroz_tmp.extend(data['gyro'][2][:])
+                        self.imu_magx_tmp.extend(data['mag'][0][:])
+                        self.imu_magy_tmp.extend(data['mag'][1][:])
+                        self.imu_magz_tmp.extend(data['mag'][2][:])                    
+
                 elif(data['type'] == 'O'): # Pyro Firesting data
+                    # Check if we have a pyro Firesting group already, of not, create one
+                    try: 
+                        self.pyro_phi_tmp
+                    except:
+                        self.logger.info(funcname + ':Pyro science group have not been crated yet, doing it now')
+                        self.create_pyro_group()
+                        
                     self.pyro_cnt10ks_tmp.append(data['cnt10ks'])
                     self.pyro_phi_tmp.append(data['phi'])
                     self.pyro_umol_tmp.append(data['umol'])       
@@ -658,7 +697,8 @@ class todlnetCDF4File():
                     self.adc_vars_tmp[nch][nadc] = [] # Clear again
 
                     
-            if(self.todl.device_info['imu_freq'] > 0):
+            #if(self.todl.device_info['imu_freq'] > 0):
+            if(len(self.imu_cnt10ks_tmp) > 0):
                 m = len(self.imu_cnt10ks_tmp)                
                 n = len(self.imu_cnt10ks)
                 #print(self.imu_accx_tmp[:])
@@ -686,10 +726,11 @@ class todlnetCDF4File():
                 self.imu_magy_tmp = []
                 self.imu_magz_tmp = []
 
-            if(self.todl.device_info['pyro_freq'] > 0):
+            #if(self.todl.device_info['pyro_freq'] > 0):
+            if(len(self.pyro_cnt10ks_tmp)>0):
                 m = len(self.pyro_cnt10ks_tmp)                
                 n = len(self.pyro_cnt10ks)                
-                self.pyro_cnt10ks[n:n+m]        = self.pyro_cnt10ks_tmp[:]
+                self.pyro_cnt10ks[n:n+m]  = self.pyro_cnt10ks_tmp[:]
                 self.pyro_phi[n:n+m]      = self.pyro_phi_tmp[:]
                 self.pyro_umol[n:n+m]     = self.pyro_umol_tmp[:]
                 # Clear the lists
@@ -1574,7 +1615,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         
         # IMU frequency
         freq_packet = {'name':'IMUfr'}
-        freq_packet['dt_freq'] = 0.5
+        freq_packet['dt_freq'] = 2.0
         freq_packet['len_t_array'] = 1000
         freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
         freq_packet['ind'] = 0
@@ -1807,52 +1848,18 @@ default to None, only with a valid argument that setting will be sent to the dev
                         #(list instead of dict)
                         data_list = [data_packet['num'],data_packet['cnt10ks']] + data_packet['V']
                         data_stream[data_packet['ch']].append(data_list)
-                        ch_tmp = data_packet['ch']
-                        ind_tmp = freq_packets['Lfr_chdata'][ch_tmp]['ind']
-                        # Packet for frequency and average calculation of single channels
-                        if(ind_tmp < freq_packets['Lfr_chdata'][ch_tmp]['len_t_array']):
-                            freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,0] = ts
-                            freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,1] = data_packet['cnt10ks']
-                            freq_packets['Lfr_chdata'][ch_tmp]['Vdata'][ind_tmp,:] = data_packet['V'][:]
-                            freq_packets['Lfr_chdata'][ch_tmp]['ind'] += 1
-                        
-                        # Packet for frequency calculation
-                        if(freq_packets['Lfrdata']['ind'] < freq_packets['Lfrdata']['len_t_array']):
-                            freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],0] = ts
-                            freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],1] = data_packet['cnt10ks']
-                            freq_packets['Lfrdata']['ind'] += 1
-                            # Caculating number of bad data
-                            data_tmp = np.asarray(data_packet['V'][:])
-                            nbad = sum((data_tmp < 0) & (data_tmp > 5))
-                            freq_packets['Lfrdata']['nbad'] += nbad                            
 
                     elif(data_packet['type'] == 'A'): # IMU packet
                         self.packet_statistics['A'] += 1                        
                         aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
-                        # Packet for frequency calculation
-                        if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
-                            freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
-                            freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['cnt10ks']
-                            freq_packets['IMUfrdata']['ind'] += 1
 
                     elif(data_packet['type'] == 'An'): # IMU FIFO packet
                         self.packet_statistics['A'] += 1                        
-                        aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'][0],data_packet['acc'][0][0],data_packet['acc'][1][0],data_packet['acc'][2][0],data_packet['gyro'][0][0],data_packet['gyro'][1][0],data_packet['gyro'][2][0],data_packet['mag'][0][0],data_packet['mag'][1][0],data_packet['mag'][2][0]])
-                        ## Packet for frequency calculation
-                        #if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
-                        #    freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
-                        #    freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['cnt10ks']
-                        #    freq_packets['IMUfrdata']['ind'] += 1                            
+                        aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'][0],data_packet['acc'][0][0],data_packet['acc'][1][0],data_packet['acc'][2][0],data_packet['gyro'][0][0],data_packet['gyro'][1][0],data_packet['gyro'][2][0]])#,data_packet['mag'][0][0],data_packet['mag'][1][0],data_packet['mag'][2][0]])
                             
                     elif(data_packet['type'] == 'O'): # Firesting packet
                         self.packet_statistics['O'] += 1                        
                         aux_data_stream[1].append([data_packet['num'],data_packet['cnt10ks'],data_packet['phi'],data_packet['umol']])
-                        # Packet for frequency calculation
-                        if(freq_packets['Ofrdata']['ind'] < freq_packets['Ofrdata']['len_t_array']):
-                            freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],0] = ts
-                            freq_packets['Ofrdata']['phidata'][freq_packets['Ofrdata']['ind']] = data_packet['phi']
-                            freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],1] = data_packet['cnt10ks']
-                            freq_packets['Ofrdata']['ind'] += 1
 
                     elif(data_packet['type'] == 'Stat'): # Status packet, here the time difference between TODL and PC is calculated
                         pass
@@ -1924,7 +1931,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                     nbad = sum((data_tmp < 0) & (data_tmp > 5))
                     freq_packets['Lfrdata']['nbad'] += nbad                            
 
-            elif(data_packet['type'] == 'A'): # IMU packet
+            elif((data_packet['type'] == 'A') or (data_packet['type'] == 'An')): # IMU packet
                 # Packet for frequency calculation
                 if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
                     freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
