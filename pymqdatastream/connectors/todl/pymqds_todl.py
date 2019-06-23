@@ -739,6 +739,10 @@ class todlDataStream(pymqdatastream.DataStream):
         self.bytes_read = 0
         self.bits_read_avg = 0 # Average bytes received per time interval of 10 seconds
         self.bits_read_avg_dt = 2 # Average bytes received per time interval of 10 seconds
+        self.packet_statistics = {} # Count the number of packets
+        self.packet_statistics['L'] = 0
+        self.packet_statistics['A'] = 0
+        self.packet_statistics['O'] = 0                                
         self.serial = None # The device to be connected to
         # Two initial queues, the first is for internal use (init logger, query_todl), the second is for the raw stream
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen),collections.deque(maxlen=self.dequelen)]
@@ -1191,7 +1195,13 @@ class todlDataStream(pymqdatastream.DataStream):
         # CSV style
         if((data_format == 31) or (data_format == 'csv31')):
             self.device_info['format'] = 31
-            self.init_data_format_functions() 
+            self.init_data_format_functions()
+
+
+        # CSV style
+        if((data_format == 32) or (data_format == 'csv32')):
+            self.device_info['format'] = 32
+            self.init_data_format_functions()             
 
         
     def init_data_format_functions(self):
@@ -1216,6 +1226,10 @@ class todlDataStream(pymqdatastream.DataStream):
 
         if(self.device_info['format'] == 31):
             self.logger.debug(funcname + ': Setting format to 31')
+            self.convert_raw_data = self.convert_raw_data_format31
+
+        if(self.device_info['format'] == 32): # Special format for INAMP but with same structure as 31
+            self.logger.debug(funcname + ': Setting format to 32')
             self.convert_raw_data = self.convert_raw_data_format31
 
         if(self.device_info['format'] == 4):
@@ -1518,7 +1532,7 @@ default to None, only with a valid argument that setting will be sent to the dev
             self.init_data_format_functions()
             # Some statistics
             self.packets_converted = 0
-            self.bytes_converted = 0            
+            self.bytes_converted = 0
             kw = {'ondemand':ondemand}
             if(dt is not None):
                 kw['dt'] = dt
@@ -1529,6 +1543,52 @@ default to None, only with a valid argument that setting will be sent to the dev
             self.logger.debug(funcname + ': Starting thread done')
             self.status = 1
             return self.conv_streams
+
+    def create_freq_packets(self):
+        freq_packets = {}
+        # LTC2442 frequency        
+        freq_packet = {'name':'Lfr'}
+        freq_packet['dt_freq'] = 2.0
+        freq_packet['len_t_array'] = 1000
+        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets (all)
+        freq_packet['ind'] = 0
+        freq_packet['nbad'] = 0 # Sum up number of bad readings        
+        freq_packets['Lfrdata'] = freq_packet
+
+        # LTC2442 frequency, single channels
+        nstreams = (max(self.device_info['channel_seq']) + 1) # The maximum number of possible channels, easier for sorting
+        num_ltcs = len(self.device_info['adcs']) # The number of sampling ltcs
+        freq_packets_tmp = []
+        for nstream in range(nstreams):        
+            freq_packet = {'name':'Lfr_ch' + str(nstream)}
+            freq_packet['ch'] = nstream
+            freq_packet['dt_freq'] = 0.5            
+            freq_packet['len_t_array'] = 1000
+            freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
+            freq_packet['Vdata'] = np.zeros((freq_packet['len_t_array'],num_ltcs))
+            freq_packet['len_t_array'] = 1000
+            freq_packet['ind'] = 0
+            freq_packets_tmp.append(freq_packet)
+            
+        freq_packets['Lfr_chdata'] = freq_packets_tmp
+        
+        # IMU frequency
+        freq_packet = {'name':'IMUfr'}
+        freq_packet['dt_freq'] = 0.5
+        freq_packet['len_t_array'] = 1000
+        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
+        freq_packet['ind'] = 0
+        freq_packets['IMUfrdata'] = freq_packet                
+        # Pyroscience frequency
+        freq_packet = {'name':'Ofr'}
+        freq_packet['dt_freq'] = 2.0
+        freq_packet['len_t_array'] = 1000
+        freq_packet['data']    = np.zeros((freq_packet['len_t_array'],2))
+        freq_packet['phidata'] = np.zeros((freq_packet['len_t_array'],)) # For calculation of an average
+        freq_packet['ind'] = 0
+        freq_packets['Ofrdata'] = freq_packet
+
+        return freq_packets
         
         
     def stop_converting_raw_data(self):
@@ -1554,345 +1614,6 @@ default to None, only with a valid argument that setting will be sent to the dev
             self.status = 0
 
 
-    # Warning, this does not work anymore (at the moment) due to new streams!
-    def convert_raw_data_format0(self, deque, dt = 0.5, ondemand = False):
-        """
-        Converts raw data of the format 0, which is popped from the deque given as argument
-        036:0>450003;16;30
-        0;1345e3;+3.67705640
-        ,
-        """
-        funcname = self.__class__.__name__ + '.convert_raw_data_format0()'
-        self.logger.debug(funcname)
-        ad0_converted = 0
-        data_str = ''
-        while True:
-            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
-            time.sleep(dt)
-            data0 = []
-            while(len(deque) > 0):
-                data = deque.pop()
-                data_str += data
-                # Get commands first
-                for i,me in enumerate(re.finditer(r'[><][><][><].*\n',data_str)):
-                    #print('COMMAND!',i)
-                    #print(me)
-                    #print(me.group(0))
-                    #print(me.span(0))
-                    self.commands.append(me.group(0))
-
-                #logger.debug(funcname + ': str: ' + str(data_str))  
-                [data_str,data_netstr] = netstring.get_netstring(data_str)
-                #logger.debug(funcname + ': raw: ' + str(data_str))
-                #logger.debug(funcname + ': net: ' + str(data_netstr))
-                for nstr in data_netstr:
-                    if(nstr[0:2] == '0>'):
-                        print(nstr)
-                        d_split = nstr.split('\n')
-                        # Remove empty last packet
-                        if(len(d_split[-1]) == 0):
-                            d_split.pop(-1)
-                            
-                        d_split0 = d_split[0].split(';')
-                        timer10khz = float(d_split0[0][2:])
-                        timer_seconds = timer10khz / 10000.0
-                        channel = int(d_split0[1])
-                        cnv_speed = int(d_split0[2])                        
-                        num_ltcs = len(d_split) - 1
-                        self.logger.debug(funcname + ': num_ltcs:' + str(num_ltcs)) 
-                        data_tmp = [timer_seconds]
-                        for nltc in range(num_ltcs):
-                            d_split_ltc = d_split[1+nltc].split(';')
-                            print('Hallo',d_split_ltc)
-                            data_num_ltc = int(d_split_ltc[0])
-                            data_V = float(d_split_ltc[2])
-                            data_tmp.append(data_V)
-                            
-                        data0.append(data_tmp)
-                        self.packets_converted += 1
-                    else:
-                        self.logger.debug(funcname + ': no a valid format 0 string:')
-
-
-            # Push the read data
-            ti = time.time()
-            
-            if(len(data0)>0):
-                streams[0].pub_data(data0)
-                self.intraqueue.appendleft(data0)
-                #self.channel_streams[ch]
-
-            # Try to read from the queue, if something was read, quit
-            try:
-                data = self.conversion_thread_queue.get(block=False)
-                self.logger.debug(funcname + ': Got data:' + data)
-                self.conversion_thread_queue_ans.put('stopping')
-                break
-            except queue.Empty:
-                pass                
-
-
-    def convert_raw_data_format2(self, deque, dt = 0.1, ondemand = False):
-        """
-
-        Converts raw data of the format 2, which is popped from the deque
-        given as argument 
-        The data is sends in binary packages using the the consistent overhead
-        byte stuffing (`COBS
-        <https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing>`_)
-        algorithm.
-        After decoding cobs the binary data has the following content
-
-        ==== ====
-        Byte Usage
-        ==== ====
-        0    0xAD (Packet type)
-        1    FLAG LTC (see comment)
-        2    LTC COMMAND 0 (as send to the AD Converter)
-        3    LTC COMMAND 1
-        4    LTC COMMAND 2
-        5    counter msb
-        ...   
-        12   counter lsb
-        13   clock 50 khz msb
-        ...    
-        20   clock 50 khz lsb
-        21   LTC2442 0 msb
-        22   LTC2442 1 
-        23   LTC2442 2 lsb 
-        .    3 bytes per activated LTC2442
-
-        ==== ====
-
-        FLAG LTC: Every bit is dedicted to one of the eight physically
-        available LTC2442 and is set to one if activated
-
-        Args:
-            deque:
-            stream:
-            dt: Time interval for polling [s]
-        Returns:
-            []: List of data
-
-        """
-        funcname = self.__class__.__name__ + '.convert_raw_data_format2()'
-        self.logger.debug(funcname)
-        ad0_converted = 0
-        data_str = b''
-        ind_ltcs = [0,0,0,0,0,0,0,0]
-        while True:
-            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
-            # Create an empty list for every channel
-            #http://stackoverflow.com/questions/8713620/appending-items-to-a-list-of-lists-in-python
-            nstreams = (max(self.device_info['channel_seq']) + 1)
-            data_stream = [[] for _ in range(nstreams) ]
-            time.sleep(dt)
-            while(len(deque) > 0):
-                data = deque.pop()
-                data_str += data
-                # Get commands first
-                # 
-                #for i,me in enumerate(re.finditer(b'[><][><][><].*\n',data_str)):
-                #    print('COMMAND!',i)
-                #    print(me)
-                #    print(me.group(0))
-                #    print(me.span(0))
-                #    self.commands.append(me.group(0))
-                    
-            #print('data_str')
-            #print(data_str)
-            #print(type(data_str))
-            #print('Hallo!!! ENDE')            
-            data_split = data_str.split(b'\x00')
-            if(len(data_split) > 0):
-                if(len(data_split[-1]) == 0): # The last byte was a 0x00
-                   data_str = b''
-                else:
-                   data_str = data_split[-1]
-
-                for data_cobs in data_split:
-                    #print('Cobs data:')
-                    #print(data_cobs)
-                    try:
-                        #self.logger.debug(funcname + ': ' + data_decobs.encode('hex_codec'))
-                        if(len(data_cobs) > 3):
-                            data_decobs = cobs.decode(data_cobs)
-                            #print('decobs data:')
-                            #print(data_decobs)
-                            #print(data_decobs[0],type(data_decobs[0]))                            
-                            packet_ident    = data_decobs[0]
-                            #self.logger.debug(funcname + ': packet_ident ' + str(packet_ident))
-                            if(packet_ident == 0xad):
-                                #print('JA')
-                                #packet_flag_ltc = ord(data_decobs[1]) # python2
-                                packet_flag_ltc = data_decobs[1]
-                                num_ltcs        = bin(packet_flag_ltc).count("1")
-                                # Convert ltc flat bits into indices
-                                # If this is slow, this is a hot cython candidate
-                                for i in range(8):
-                                    ind_ltcs[i] = (packet_flag_ltc >> i) & 1
-                                    
-                                ind_ltc = ind_ltcs
-                                packet_size = 5 + 8 + 8 + num_ltcs * 3
-                                packet_com_ltc0 = data_decobs[2]
-                                packet_com_ltc1 = data_decobs[3]
-                                packet_com_ltc2 = data_decobs[4]
-                                # Decode the command
-                                speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
-                                ind = 5
-                                #self.logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
-                                #self.logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
-                                #self.logger.debug(funcname + ': Ind ltc '  + str(ind_ltc))
-                                #self.logger.debug(funcname + ': channel '  + str(channel))                                
-                                #self.logger.debug(funcname + ': packet_size ' + str(packet_size))
-                                #self.logger.debug(funcname + ': len(data_cobs) ' + str(len(data_cobs)))
-                                if(len(data_decobs) == packet_size):
-                                    packet_num_bin  = data_decobs[ind:ind+8]
-                                    packet_num      = int(packet_num_bin.hex(), 16) # python3
-                                    ind += 8
-                                    packet_time_bin  = data_decobs[ind:ind+8]
-                                    packet_time     = int(packet_time_bin.hex(), 16)/self.device_info['counterfreq']
-                                    data_list = [packet_num,packet_time]
-                                    data_packet = {'num':packet_num,'cnt10ks':packet_time}
-                                    data_packet['type'] = 'L'                                    
-                                    data_packet['spd'] = speed
-                                    data_packet['ch'] = channel
-                                    data_packet['ind'] = ind_ltcs
-                                    data_packet['V'] = [9999.99] * num_ltcs
-                                    ind += 8
-                                    #self.logger.debug(funcname + ': Packet number: ' + packet_num_bin.hex())
-                                    #self.logger.debug(funcname + ': Packet 10khz time ' + packet_time_bin.hex())
-                                    for n,i in enumerate(range(0,num_ltcs*3,3)):
-                                        data_ltc = data_decobs[ind+i:ind+i+3]
-                                        data_ltc += 0x88.to_bytes(1,'big') # python3
-                                        if(len(data_ltc) == 4):
-                                            conv = ltc2442.convert_binary(data_ltc,ref_voltage=4.096,Voff = 2.048)
-                                            #print(conv)
-                                            data_packet['V'][n] = conv['V'][0]
-                                            # This could make trouble if the list is too short ...
-                                            data_list.append(conv['V'][0])
-                                            self.packets_converted += 1
-                                        #else:
-                                        #    data_packet.append(9999.99)
-                                    data_stream[channel].append(data_list)
-
-                                        
-                    except cobs.DecodeError:
-                        self.logger.debug(funcname + ': COBS DecodeError')
-                        pass
-
-            # Lets publish the converted data!
-            for i in range(len(self.channel_streams)):
-                if(len(data_stream[i])>0):
-                    self.channel_streams[i].pub_data(data_stream[i])
-                    # Put a different format into the intraqueue,
-                    # since the channels are seperate datastreams
-                    # TODO, this is only the last, have to create a list!
-                    self.intraqueue.appendleft(data_packet)
-
-            # Try to read from the queue, if something was read, quit
-            try:
-                data = self.conversion_thread_queue.get(block=False)
-                self.logger.debug(funcname + ': Got data:' + data)
-                self.conversion_thread_queue_ans.put('stopping')
-                break
-            except queue.Empty:
-                pass
-
-
-    def convert_raw_data_format3(self, deque, dt = 0.05, ondemand = False):
-        """
-        Converts raw data of the format 3, which is popped from the deque given as argument
-        Example:
-        00000000692003;00000000000342;2;0;+2.04882227;4;-9.99999999
-        10 khz counter; num package;channel;num ad;Volt ad; ...
-
-        """
-        funcname = self.__class__.__name__ + '.convert_raw_data_format3()'
-        self.logger.debug(funcname)
-        ad0_converted = 0
-        data_packets = []
-        data_str = ''
-        while True:
-            #logger.debug(funcname + ': converted: ' + str(ad0_converted))
-            nstreams = (max(self.device_info['channel_seq']) + 1)
-            # Create a list of data to be submitted for each stream
-            data_stream = [[] for _ in range(nstreams) ] 
-            time.sleep(dt)
-            while(len(deque) > 0):
-                data = deque.pop()
-                try:
-                    data_str += data.decode(encoding='utf-8')
-                except Exception as e:
-                    logger.debug('Problems decoding data string:' + str(data) + '( Exception:' + str(e) + ' )')
-
-                #data_list = [packet_num,packet_time]
-                data_packets = []
-                #for line in data_str.splitlines():
-                data_str_split = data_str.split('\n')
-                if(len(data_str_split[-1]) == 0): # We have a complete last line
-                    data_str = ''
-                else:
-                    data_str = data_str_split[-1]
-                    data_str_split.pop()
-
-                for line in data_str_split:
-                    if(len(line)>3):
-                        try:
-                            data_split = line.split(';')
-                            packet_time = int(data_split[0])/self.device_info['counterfreq']
-                            packet_num = int(data_split[1])
-                            channel = int(data_split[2])
-                            ad_data = data_split[3:]
-                            # Fill the data list
-                            data_list = [packet_num,packet_time]                    
-                            # Fill the data packet dictionary
-                            data_packet = {'num':packet_num,'cnt10ks':packet_time}
-                            data_packet['type'] = 'L'                            
-                            data_packet['ch'] = channel
-                            data_packet['V'] = [9999.99] * len(self.device_info['adcs'])
-                            # Test if the lengths are same
-                            if(len(ad_data) == len(self.device_info['adcs'] * 2)):
-                                for n,i in enumerate(range(0,len(ad_data)-1,2)):
-                                    V = float(ad_data[i+1])
-                                    data_packet['V'][n] = V
-                                    data_list.append(V)
-                            else:
-                               logger.debug( funcname + ': List lengths do not match: ' + str(ad_data) + ' and with num of adcs: ' + str(len(self.device_info['adcs'])) + ' str:' +  data_str_split)
-
-
-                            data_packets.append(data_packet)
-                            data_stream[channel].append(data_list)
-                        except Exception as e:
-                            pass
-                            #logger.debug(funcname + ':' + str(e))
-                            
-            # Push the read data
-            ti = time.time()
-            
-            #if(len(data0)>0):
-            #    streams[0].pub_data(data0)
-
-            for data_packet in data_packets:
-                self.intraqueue.appendleft(data_packet)
-                #self.channel_streams[ch]
-                # Fill the data_stream list
-
-
-            for i in range(len(self.channel_streams)):
-                if(len(data_stream[i])>0):
-                    self.channel_streams[i].pub_data(data_stream[i])                            
-
-            # Try to read from the queue, if something was read, quit
-            try:
-                data = self.conversion_thread_queue.get(block=False)
-                self.logger.debug(funcname + ': Got data:' + data)
-                self.conversion_thread_queue_ans.put('stopping')
-                break
-            except queue.Empty:
-                pass
-
-            
     def convert_raw_data_format31(self, deque, dt = 0.05, ondemand = False):
         """
         Converts raw data of the format 31, which is popped from the deque given as argument
@@ -1913,11 +1634,11 @@ default to None, only with a valid argument that setting will be sent to the dev
         data_packets = []
         data_str = ''
 
-        # Arrays for frequency calculation
-        dt_freq = 0.5
-        len_t_array = 1000
-        Lpacket_t = np.zeros((len_t_array,2)) # For LTC2442 packets
-        Lpacket_t_ind = 0
+        # Frequency and statistic packets
+        freq_packets = self.create_freq_packets()
+
+        # Packet statistics
+        packet_statistics = {'name':'packet_statistics','num_err':0,'num_cobs_err':0,'num_good':0}        
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
             nstreams = (max(self.device_info['channel_seq']) + 1)
@@ -1953,36 +1674,21 @@ default to None, only with a valid argument that setting will be sent to the dev
             # distribution as well as frequency calculations
             for data_packet in data_packets:
                 if(data_packet['type'] == 'L'): # LTC2442 packet
+                    self.packet_statistics['L'] += 1
                     data_list = [data_packet['num'],data_packet['cnt10ks']] + data_packet['V']
                     data_stream[data_packet['ch']].append(data_list)
-                    # Packet for frequency calculation
-                    if(Lpacket_t_ind < len_t_array):
-                        Lpacket_t[Lpacket_t_ind,0] = ts
-                        Lpacket_t[Lpacket_t_ind,1] = data_packet['cnt10ks']
-                        Lpacket_t_ind += 1
 
                 elif(data_packet['type'] == 'A'): # IMU packet
                     #data_packet['mag']
+                    self.packet_statistics['A'] += 1                    
                     aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
-                elif(data_packet['type'] == 'O'): # Firesting packet         
+                elif(data_packet['type'] == 'O'): # Firesting packet
+                    self.packet_statistics['O'] += 1
                     aux_data_stream[1].append([data_packet['num'],data_packet['cnt10ks'],data_packet['phi'],data_packet['umol']])
 
 
-            # Frequency packets
-            if(Lpacket_t_ind > 0):
-                dtL = Lpacket_t[:Lpacket_t_ind,0].max() - Lpacket_t[:Lpacket_t_ind,0].min()
-                if((Lpacket_t_ind >= len_t_array) or (dtL > dt_freq)):
-                    data_packet = {'type':'Lfr'} # Type L freq
-                    data_packet['dt'] = dtL
-                    dtLt = Lpacket_t[Lpacket_t_ind-1,1] - Lpacket_t[0,1]
-                    #print(dtLt)
-                    data_packet['f'] = (Lpacket_t_ind-1)/(dtLt)
-                    Lpacket_t[:,:] = 0
-                    Lpacket_t_ind = 0                    
-                    #print(data_packet)
-                    data_packets.append(data_packet)
 
-
+            self.do_packet_statistics(packet_statistics,freq_packets,data_packets,ts)
             # This data is first put into the local intraque for data distribution (mainly the gui up to now)
             for data_packet in data_packets:
                 self.intraqueue.appendleft(data_packet)
@@ -2066,49 +1772,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         ct = cto
 
         # Frequency packets
-        freq_packets = {}
-        # LTC2442 frequency        
-        freq_packet = {'name':'Lfr'}
-        #freq_packet['dt_freq'] = 0.5
-        freq_packet['dt_freq'] = 2.0
-        freq_packet['len_t_array'] = 1000
-        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets (all)
-        freq_packet['ind'] = 0
-        freq_packet['nbad'] = 0 # Sum up number of bad readings        
-        freq_packets['Lfrdata'] = freq_packet
-
-        # LTC2442 frequency, single channels
-        nstreams = (max(self.device_info['channel_seq']) + 1) # The maximum number of possible channels, easier for sorting
-        num_ltcs = len(self.device_info['adcs']) # The number of sampling ltcs
-        freq_packets_tmp = []
-        for nstream in range(nstreams):        
-            freq_packet = {'name':'Lfr_ch' + str(nstream)}
-            freq_packet['ch'] = nstream
-            freq_packet['dt_freq'] = 0.5            
-            freq_packet['len_t_array'] = 1000
-            freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
-            freq_packet['Vdata'] = np.zeros((freq_packet['len_t_array'],num_ltcs))
-            freq_packet['len_t_array'] = 1000
-            freq_packet['ind'] = 0
-            freq_packets_tmp.append(freq_packet)
-            
-        freq_packets['Lfr_chdata'] = freq_packets_tmp
-        
-        # IMU frequency
-        freq_packet = {'name':'IMUfr'}
-        freq_packet['dt_freq'] = 0.5
-        freq_packet['len_t_array'] = 1000
-        freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
-        freq_packet['ind'] = 0
-        freq_packets['IMUfrdata'] = freq_packet                
-        # Pyroscience frequency
-        freq_packet = {'name':'Ofr'}
-        freq_packet['dt_freq'] = 2.0
-        freq_packet['len_t_array'] = 1000
-        freq_packet['data']    = np.zeros((freq_packet['len_t_array'],2))
-        freq_packet['phidata'] = np.zeros((freq_packet['len_t_array'],)) # For calculation of an average
-        freq_packet['ind'] = 0
-        freq_packets['Ofrdata'] = freq_packet
+        freq_packets = self.create_freq_packets()        
 
         # Packet statistics
         packet_statistics = {'name':'packet_statistics','num_err':0,'num_cobs_err':0,'num_good':0}
@@ -2138,6 +1802,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                 # distribution as well as frequency calculations
                 for data_packet in data_packets:
                     if(data_packet['type'] == 'L'): # LTC2442 packet
+                        self.packet_statistics['L'] += 1                        
                         #repack it for a datastream compatible format
                         #(list instead of dict)
                         data_list = [data_packet['num'],data_packet['cnt10ks']] + data_packet['V']
@@ -2162,14 +1827,25 @@ default to None, only with a valid argument that setting will be sent to the dev
                             freq_packets['Lfrdata']['nbad'] += nbad                            
 
                     elif(data_packet['type'] == 'A'): # IMU packet
+                        self.packet_statistics['A'] += 1                        
                         aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
                         # Packet for frequency calculation
                         if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
                             freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
                             freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['cnt10ks']
                             freq_packets['IMUfrdata']['ind'] += 1
+
+                    elif(data_packet['type'] == 'An'): # IMU FIFO packet
+                        self.packet_statistics['A'] += 1                        
+                        aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'][0],data_packet['acc'][0][0],data_packet['acc'][1][0],data_packet['acc'][2][0],data_packet['gyro'][0][0],data_packet['gyro'][1][0],data_packet['gyro'][2][0],data_packet['mag'][0][0],data_packet['mag'][1][0],data_packet['mag'][2][0]])
+                        ## Packet for frequency calculation
+                        #if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
+                        #    freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
+                        #    freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['cnt10ks']
+                        #    freq_packets['IMUfrdata']['ind'] += 1                            
                             
-                    elif(data_packet['type'] == 'O'): # Firesting packet         
+                    elif(data_packet['type'] == 'O'): # Firesting packet
+                        self.packet_statistics['O'] += 1                        
                         aux_data_stream[1].append([data_packet['num'],data_packet['cnt10ks'],data_packet['phi'],data_packet['umol']])
                         # Packet for frequency calculation
                         if(freq_packets['Ofrdata']['ind'] < freq_packets['Ofrdata']['len_t_array']):
@@ -2187,60 +1863,8 @@ default to None, only with a valid argument that setting will be sent to the dev
                         packet_statistics['num_err'] += data_packet['num_err']
                         packet_statistics['num_cobs_err'] += data_packet['num_cobs_err']
                         packet_statistics['num_good'] += data_packet['num_good']
-                        
-
-                # Frequency packets, calculate in time intervals
-                for name_freq_pack in freq_packets:
-                    if(name_freq_pack == 'Lfr_chdata'):
-                        freq_packets_tmp = freq_packets[name_freq_pack]
-                    else:
-                        freq_packets_tmp = [freq_packets[name_freq_pack]]
-
-                    for freq_pack in freq_packets_tmp:
-                        if(freq_pack['ind'] > 0):
-                            # Maximum time difference
-                            dtL = freq_pack['data'][:freq_pack['ind'],0].max() - freq_pack['data'][:freq_pack['ind'],0].min()
-                            if(freq_pack['ind'] >= (freq_pack['len_t_array']) or (dtL > freq_pack['dt_freq'])):
-                                data_packet = {'type':freq_pack['name']}
-                                data_packet['dt'] = dtL
-                                dtLt = freq_pack['data'][freq_pack['ind']-1,1] - freq_pack['data'][0,1]
-                                #print(dtLt)
-                                data_packet['f'] = (freq_pack['ind']-1)/(dtLt)
-                                # Print number of bad packets
-                                if(freq_pack['name'] == 'Lfr'):
-                                    #print('Number of out of range or bad LTC2442 readings:' + str(freq_pack['nbad']))
-                                    # Also print packet statistics, this is a HACK and should be done somewhere else (in the gui, not in console)
-                                    #print(packet_statistics)
-                                    #print('Bytes read:' + str(self.bytes_read) + ' converted:' + str(self.bytes_converted ))
-                                    pass                                    
-                                # Voltage mean and standard deviation calculation
-                                if('Lfr_ch' in freq_pack['name']):
-                                    data_packet['ch'] = freq_pack['ch']
-                                    data_packet['avg'] = np.zeros((num_ltcs))
-                                    data_packet['std'] = np.zeros((num_ltcs))
-                                    data_packet['min'] = np.zeros((num_ltcs))
-                                    data_packet['max'] = np.zeros((num_ltcs))
-                                    data_packet['pp']  = np.zeros((num_ltcs))
-                                    for ntmp in range(num_ltcs):
-                                        data_packet['avg'][ntmp] = np.mean(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
-                                        data_packet['std'][ntmp] = np.std(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
-                                        data_packet['min'][ntmp] = np.min(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
-                                        data_packet['max'][ntmp] = np.max(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
-                                        data_packet['pp'][ntmp]  = data_packet['max'][ntmp] - data_packet['min'][ntmp]
-
-                                    #print(data_packet)
-                                # Oxygen mean and standard deviation calculation                                    
-                                if(freq_pack['name'] == 'Ofr'):
-                                    data_packet['avg'] = np.mean(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
-                                    data_packet['std'] = np.std(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
-                                    data_packet['min'] = np.min(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
-                                    data_packet['max'] = np.max(freq_pack['phidata'][:freq_pack['ind']-1])/1000.
-                                    data_packet['pp'] = data_packet['max'] - data_packet['min']                                    
-                                    #print(data_packet)
-                                data_packets.append(data_packet)
-                                freq_pack['data'][:,:] = 0
-                                freq_pack['ind'] = 0                            
-
+                    
+                self.do_packet_statistics(packet_statistics,freq_packets,data_packets,ts)
                     
                 ta.append( time.time() )
 
@@ -2270,7 +1894,112 @@ default to None, only with a valid argument that setting will be sent to the dev
                 self.conversion_thread_queue_ans.put('stopping')
                 break
             except queue.Empty:
-                pass                        
+                pass
+
+    def do_packet_statistics(self,packet_statistics,freq_packets,data_packets,ts):
+        ## Packet for frequency calculation
+        #if(Lpacket_t_ind < len_t_array):
+        #    Lpacket_t[Lpacket_t_ind,0] = ts
+        #    Lpacket_t[Lpacket_t_ind,1] = data_packet['cnt10ks']
+        #    Lpacket_t_ind += 1
+        num_ltcs = len(self.device_info['adcs']) # The number of sampling ltcs        
+        for data_packet in data_packets:
+            if(data_packet['type'] == 'L'): # LTC2442 packet
+                ch_tmp = data_packet['ch']
+                ind_tmp = freq_packets['Lfr_chdata'][ch_tmp]['ind']
+                # Packet for frequency and average calculation of single channels
+                if(ind_tmp < freq_packets['Lfr_chdata'][ch_tmp]['len_t_array']):
+                    freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,0] = ts
+                    freq_packets['Lfr_chdata'][ch_tmp]['data'][ind_tmp,1] = data_packet['cnt10ks']
+                    freq_packets['Lfr_chdata'][ch_tmp]['Vdata'][ind_tmp,:] = data_packet['V'][:]
+                    freq_packets['Lfr_chdata'][ch_tmp]['ind'] += 1
+
+                # Packet for frequency calculation
+                if(freq_packets['Lfrdata']['ind'] < freq_packets['Lfrdata']['len_t_array']):
+                    freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],0] = ts
+                    freq_packets['Lfrdata']['data'][freq_packets['Lfrdata']['ind'],1] = data_packet['cnt10ks']
+                    freq_packets['Lfrdata']['ind'] += 1
+                    # Caculating number of bad data
+                    data_tmp = np.asarray(data_packet['V'][:])
+                    nbad = sum((data_tmp < 0) & (data_tmp > 5))
+                    freq_packets['Lfrdata']['nbad'] += nbad                            
+
+            elif(data_packet['type'] == 'A'): # IMU packet
+                # Packet for frequency calculation
+                if(freq_packets['IMUfrdata']['ind'] < freq_packets['IMUfrdata']['len_t_array']):
+                    freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],0] = ts
+                    freq_packets['IMUfrdata']['data'][freq_packets['IMUfrdata']['ind'],1] = data_packet['cnt10ks']
+                    freq_packets['IMUfrdata']['ind'] += 1
+
+            elif(data_packet['type'] == 'O'): # Firesting packet
+                # Packet for frequency calculation
+                if(freq_packets['Ofrdata']['ind'] < freq_packets['Ofrdata']['len_t_array']):
+                    freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],0] = ts
+                    freq_packets['Ofrdata']['phidata'][freq_packets['Ofrdata']['ind']] = data_packet['phi']
+                    freq_packets['Ofrdata']['data'][freq_packets['Ofrdata']['ind'],1] = data_packet['cnt10ks']
+                    freq_packets['Ofrdata']['ind'] += 1
+
+            elif(data_packet['type'] == 'Stat'): # Status packet, here the time difference between TODL and PC is calculated
+                pass
+                #print('stat',data_packet['timestamp'], ta[-1])
+                #print('dt',data_packet['timestamp'] -  ta[-1])
+
+            elif(data_packet['type'] == 'format4_log'): # Packet statistics
+                packet_statistics['num_err'] += data_packet['num_err']
+                packet_statistics['num_cobs_err'] += data_packet['num_cobs_err']
+                packet_statistics['num_good'] += data_packet['num_good']
+
+        # Frequency packets, calculate in time intervals as well as some statistics as mean/std etc.
+        for name_freq_pack in freq_packets:
+            if(name_freq_pack == 'Lfr_chdata'):
+                freq_packets_tmp = freq_packets[name_freq_pack]
+            else:
+                freq_packets_tmp = [freq_packets[name_freq_pack]]
+
+            for freq_pack in freq_packets_tmp:
+                if(freq_pack['ind'] > 0):
+                    # Maximum time difference
+                    dtL = freq_pack['data'][:freq_pack['ind'],0].max() - freq_pack['data'][:freq_pack['ind'],0].min()
+                    if(freq_pack['ind'] >= (freq_pack['len_t_array']) or (dtL > freq_pack['dt_freq'])):
+                        data_packet = {'type':freq_pack['name']}
+                        data_packet['dt'] = dtL
+                        dtLt = freq_pack['data'][freq_pack['ind']-1,1] - freq_pack['data'][0,1]
+                        data_packet['f'] = (freq_pack['ind']-1)/(dtLt)
+                        # Print number of bad packets
+                        if(freq_pack['name'] == 'Lfr'):
+                            #print('Number of out of range or bad LTC2442 readings:' + str(freq_pack['nbad']))
+                            # Also print packet statistics, this is a HACK and should be done somewhere else (in the gui, not in console)
+                            #print(packet_statistics)
+                            #print('Bytes read:' + str(self.bytes_read) + ' converted:' + str(self.bytes_converted ))
+                            pass                                    
+                        # Voltage mean and standard deviation calculation
+                        if('Lfr_ch' in freq_pack['name']):
+                            data_packet['ch'] = freq_pack['ch']
+                            data_packet['avg'] = np.zeros((num_ltcs))
+                            data_packet['std'] = np.zeros((num_ltcs))
+                            data_packet['min'] = np.zeros((num_ltcs))
+                            data_packet['max'] = np.zeros((num_ltcs))
+                            data_packet['pp']  = np.zeros((num_ltcs))
+                            for ntmp in range(num_ltcs):
+                                data_packet['avg'][ntmp] = np.mean(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                data_packet['std'][ntmp] = np.std(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                data_packet['min'][ntmp] = np.min(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                data_packet['max'][ntmp] = np.max(freq_pack['Vdata'][:freq_pack['ind']-1,ntmp])
+                                data_packet['pp'][ntmp]  = data_packet['max'][ntmp] - data_packet['min'][ntmp]
+
+                            #print(data_packet)
+                        # Oxygen mean and standard deviation calculation                                    
+                        if(freq_pack['name'] == 'Ofr'):
+                            data_packet['avg'] = np.mean(freq_pack['phidata'][:freq_pack['ind']-1])
+                            data_packet['std'] = np.std(freq_pack['phidata'][:freq_pack['ind']-1])
+                            data_packet['min'] = np.min(freq_pack['phidata'][:freq_pack['ind']-1])
+                            data_packet['max'] = np.max(freq_pack['phidata'][:freq_pack['ind']-1])
+                            data_packet['pp'] = data_packet['max'] - data_packet['min']                                    
+                            #print(data_packet)
+                        data_packets.append(data_packet)
+                        freq_pack['data'][:,:] = 0
+                        freq_pack['ind'] = 0                            
+        
 
 
 

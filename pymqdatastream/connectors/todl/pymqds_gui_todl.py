@@ -122,9 +122,10 @@ class todlInfo(QtWidgets.QWidget):
         # Bytes read and bytes speed info
         self.bytesread    = QtWidgets.QLabel('Bytes read: ')
         # Widget to show the average transfer rate
-        self.bytesspeed   = QtWidgets.QLabel('Bit/s:')                        
+        self.bytesspeed   = QtWidgets.QLabel('Bit/s:')
+        # Widget to show the number of packets
+        self.packets      = QtWidgets.QLabel('Packets:')                                
 
-        
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.b_version,0,0)
         layout.addWidget(self.f_version,0,1)
@@ -142,6 +143,7 @@ class todlInfo(QtWidgets.QWidget):
         layout.addWidget(self.status_fname,3,1)
         layout.addWidget(self.bytesread,4,0)
         layout.addWidget(self.bytesspeed,4,1)
+        layout.addWidget(self.packets,5,0)        
 
         self.setLayout(layout)        
 
@@ -193,6 +195,13 @@ class todlInfo(QtWidgets.QWidget):
         # Widget to show the average transfer rate
         self.bytesspeed.setText('Bit/s: ' + str(bytes_read_avg))
 
+
+    def update_packets(self,todl):
+        pstr = 'Packets: '
+        for k in todl.packet_statistics.keys():
+            pstr += k + ':' +str(todl.packet_statistics[k]) + '  ' 
+            
+        self.packets.setText(pstr)
 
 
 #
@@ -670,7 +679,7 @@ class todlConfig(QtWidgets.QWidget):
             
             
 
-def _start_pymqds_plotxy(addresses,ind_x=1,ind_y=2,plot_nth_point = 1):
+def _start_pymqds_plotxy(addresses,ind_x=1,ind_y=2,plot_nth_point = 1,bufsize=5000,wtitle="TODL plotxy"):
     """
     
     Start a pymqds_plotxy session and plots the streams given in the addresses list
@@ -692,7 +701,7 @@ def _start_pymqds_plotxy(addresses,ind_x=1,ind_y=2,plot_nth_point = 1):
     for addr in addresses:
         datastream = pyqtgraphDataStream(name = 'plotxy_cont', logging_level=logging_level)
         stream = datastream.subscribe_stream(addr)
-        print('HAllo,stream'+ str(stream))
+        #print('HAllo,stream'+ str(stream))
         if(stream == None): # Could not subscribe
             logger.warning("_start_pymqds_plotxy(): Could not subscribe to:" + str(addr) + ' exiting plotting routine')
             return False
@@ -700,7 +709,7 @@ def _start_pymqds_plotxy(addresses,ind_x=1,ind_y=2,plot_nth_point = 1):
         # ind_x = 0: TODL packet number 
         # ind_x = 1: TODL time
         # ind_x = 2: TODL first data
-        datastream.set_stream_settings(stream, bufsize = 5000, plot_data = True, ind_x = ind_x, ind_y = ind_y, plot_nth_point = plot_nth_point)
+        datastream.set_stream_settings(stream, bufsize = bufsize, plot_data = True, ind_x = ind_x, ind_y = ind_y, plot_nth_point = plot_nth_point)
         datastream.plot_datastream(True)
         datastream.set_plotting_mode(mode='cont')        
         datastreams.append(datastream)
@@ -716,7 +725,7 @@ def _start_pymqds_plotxy(addresses,ind_x=1,ind_y=2,plot_nth_point = 1):
 
     app = QtWidgets.QApplication([])
     # Plot the first stream found
-    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0],wtitle = "TODL ADC")
+    plotxywindow = pymqds_plotxy.pyqtgraphMainWindow(datastream=datastreams[0],wtitle = wtitle)
     # Add more streams if wished
     if(True):
         for i,datastream in enumerate(datastreams):
@@ -1239,7 +1248,7 @@ class todlDevice():
                         self.deviceinfo.update(self.todl.device_info)
                         # Enable a settings button or if version 0.42 add a frequency combo
                         try:
-                            vers = float(self.todl.device_info['firmware'])
+                            vers = float(self.todl.device_info['firmware'].split('_')[0])
                         except: # No float, probably a string
                             vers = -9999
                             #vers = self.todl.device_info['firmware']
@@ -1420,12 +1429,18 @@ class todlDevice():
         # Update the ADC table information
         self._ad_table.clear()
         self._ad_table_setup()
-        vers = float(self.todl.device_info['firmware'])
-        if(not(np.isnan(self.todl.device_info['imu_freq']))):
+        try:
+            vers = float(self.todl.device_info['firmware'].split('_')[0])
+        except: # No float, probably a string
+            vers = -9999
+
+        # Check if we have some packets received, this will be also checked in _poll_intraqueue
+        if(self.todl.packet_statistics['A']>0):
             self._IMU_table.show()
 
-        if(not(np.isnan(self.todl.device_info['pyro_freq']))):            
-            self._O2_table.show()            
+        if(self.todl.packet_statistics['O']>0):        
+            self._O2_table.show()        
+
             
 
 
@@ -1552,11 +1567,24 @@ class todlDevice():
             for i in self._O2_table.selectionModel().selection().indexes():
                 row, column = i.row(), i.column()
 
+        for k in self._O2_table_index.keys():
+            i = self._O2_table_index[k]
+            if(row == i):
+                break
+
+        if(('phi' in k) or ('umol' in k)):
+            pass
+        else:
+            return
+
         self._menu_O2 = QtGui.QMenu()
         statAction = self._menu_O2.addAction("Show average/std/min/max")
-        action = self._menu_O2.exec_(self._O2_table.mapToGlobal(event)) # TODO, change to popup and action.triggered
-        if action == statAction:
-            self.show_statistic_O2(row, column)                    
+        plotAction = self._menu_O2.addAction("Plot data")        
+        #action = self._menu_O2.exec_(self._O2_table.mapToGlobal(event)) # TODO, change to popup and action.triggered
+        statAction.triggered.connect(self.show_statistic_O2)
+        plotAction.triggered.connect(self.plot_O2_data)
+        action = self._menu_O2.popup(self._O2_table.mapToGlobal(event)) # 
+
 
     def plot_adc_data(self,event):
         """ Plots data of one adc channel """
@@ -1604,6 +1632,47 @@ class todlDevice():
                         break
 
 
+    def plot_O2_data(self,event):
+        """ Plots data of the Firesting module channel """
+        # Find row and column
+        if self._O2_table.selectionModel().selection().indexes():
+            for i in self._O2_table.selectionModel().selection().indexes():
+                row, column = i.row(), i.column()
+
+        for k in self._O2_table_index.keys():
+            i = self._O2_table_index[k]
+            if(row == i):
+                break
+
+        print('Plotting O2 ' + str(row) + ' column ' + str(column))
+        FOUND_STREAM = False
+
+        for nstr,stream in enumerate(self.todl.Streams):
+            print('Stream family is ',stream.get_family())                    
+            print(stream.name,stream.variables)            
+            if(FOUND_STREAM):
+                break
+
+            if('O2 (PyroScience)' in stream.name):
+                print('Found stream at position ' + str(nstr))
+                FOUND_STREAM = True
+                addresses = [self.todl.get_stream_address(stream)]
+                ind_x = 1 # Plot versus 10khz counter
+                if('phi' in k):
+                    ind_y = 2
+                elif('umol' in k):
+                    ind_y = 3
+                    
+                multiprocessing.set_start_method('spawn',force=True)
+                plotxyprocess = multiprocessing.Process(target =_start_pymqds_plotxy,args=(addresses,ind_x,ind_y,1,40000,'TODL Firesting ' + str(k)))
+                self._plotxyprocesses.append(plotxyprocess)
+                plotxyprocess.daemon = True # If we are done, it will be kills as well        
+                plotxyprocess.start()
+                break                
+
+
+
+
     #def show_statistic(self,row,column):
     def show_statistic(self,event):
         """ Creating a widget showing the statistics of the data
@@ -1645,10 +1714,13 @@ class todlDevice():
         cellText = cell.text()
 
 
-    def show_statistic_O2(self,row,column):
+    def show_statistic_O2(self,event):
         """ Creating a widget showing the statistics of the data
         """
-        print('Statistic O2 here ...')
+        if self._O2_table.selectionModel().selection().indexes():
+            for i in self._O2_table.selectionModel().selection().indexes():
+                row, column = i.row(), i.column()                
+
         w = QtWidgets.QTableWidget()
         w.setColumnCount(6)
         w.setRowCount(2)
@@ -1826,9 +1898,9 @@ class todlDevice():
 
     def poll_serial_bytes(self):
         self.deviceinfo.update_bytes(self.todl.bytes_read, self.todl.bits_read_avg)
+        self.deviceinfo.update_packets(self.todl)
         #self.bytesreadlcd.display(self.todl.bytes_read)
         #self.bytesspeed.setText(str(self.todl.bits_read_avg))
-        pass        
 
 
     def poll_deque(self):
@@ -1884,6 +1956,13 @@ class todlDevice():
         showA = True
         showO = True
         show_channels = [True,True,True,True] # Show each channel once during the
+        # Check what to show and what not
+        if(self.todl.packet_statistics['A']>0):
+            self._IMU_table.show()
+
+        if(self.todl.packet_statistics['O']>0):        
+            self._O2_table.show()
+            
         # Get all data        
         while(len(self.todl.intraqueue) > 0):
             data = self.todl.intraqueue.pop()
@@ -2070,7 +2149,7 @@ class todlDevice():
                         for i in range(wtmp[2].rowCount()):
                             height += wtmp[2].rowHeight(i)
                             
-                        wtmp[2].setFixedHeight(height + hheight + fwidth)                        
+                        wtmp[2].setFixedHeight(height + hheight + fwidth)       
                         
                     
         # Update the recording file status as well (addding file size)
