@@ -436,6 +436,20 @@ def decode_format4(data_str,device_info):
                         data_packet['gyro'] = [gyrox_all,gyroy_all,gyroz_all]
                         data_packet['mag'] = [magx_all,magy_all,magz_all]
                         data_packets.append(data_packet)
+                    elif(packet_ident == 0xA0): # U3
+
+                        ind = 1                            
+                        packet_num_bin      = data_decobs[ind:ind+5]
+                        packet_num          = int(packet_num_bin.hex(), 16) # python3
+                        ind += 5
+                        packet_cnt10k_bin   = data_decobs[ind:ind+5]
+                        packet_cnt10ks      = int(packet_cnt10k_bin.hex(), 16)/device_info['counterfreq']
+                        ind += 5                        
+                        packet_serial_data  = data_decobs[ind:]
+                        print('ind',ind,len(data_decobs))
+                        print('Serial data package',packet_num,packet_cnt10ks)                        
+                        print(packet_serial_data)                        
+                        print('Serial data package done')                        
                     elif(packet_ident == 0xf0): # Pyroscience firesting
                         #\xf0\x00\x00\x00\x01Y\x00\x00\x08\x8f\x03RMR1 3 0 13 2 153908 -867323 -634011 -305757 -300000 -300000 482 16785 -1 -1 0 -62587\r
                         if(len(data_decobs) > 12):

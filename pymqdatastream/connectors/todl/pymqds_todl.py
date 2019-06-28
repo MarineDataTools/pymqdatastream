@@ -126,12 +126,11 @@ def parse_device_info(data_str):
     #
     # >>>Time: 2017.09.11 10:06:44 
     device_info['time_str']   = ''
-    device_info['time']   = None
+    device_info['time']       = None
     time_str = ''
     for i,me in enumerate(re.finditer(r'>>>Time: \d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}',data_str)):
         time_str = me.group()
 
-    print(time_str)
 
     if(len(time_str) > 0):
         time_str = time_str.replace('\n','')  
@@ -140,10 +139,14 @@ def parse_device_info(data_str):
         
     try:
         device_info['time']   = datetime.datetime.strptime(time_str, '>>>Time: %Y.%m.%d %H:%M:%S')
-        device_info['time'] = device_info['time'].replace(tzinfo = device_info['timezone'])                    
+        device_info['time']   = device_info['time'].replace(tzinfo = device_info['timezone'])                    
     except Exception as e:
         logger.debug(funcname + ':' + str(e))
-        device_info['time'] = None
+        print(funcname + ':' + str(e))
+        device_info['time']   = None
+
+    #print('time string',time_str)
+    #print('device_info[time]',device_info['time'])
         
     freq_str = ''
     HAS_FREQ_STR = False
@@ -388,12 +391,16 @@ class todlnetCDF4File():
 
         # The time base is UNIX time
         if(self.todl.device_info['time'] == None):
-            time_unit    = "0000-01-01 00:00:00"
+            time_unit    = "0001-01-01 00:00:00"
+            self.todl.device_info['time'] = datetime.datetime.strptime(time_unit,"%Y-%m-%d %H:%M:%S")
+            self.todl.device_info['time'] = self.todl.device_info['time'].replace(tzinfo = self.todl.device_info['timezone'])
         else:
             #time_unit    = self.todl.device_info['time'].strftime('%Y-%m-%d 00:00:00') # was up to 0.7.8
             time_unit    = "1970-01-01 00:00:00"
-            
+
+        print('Time unit',time_unit)
         self.time_base = datetime.datetime.strptime(time_unit,"%Y-%m-%d %H:%M:%S")
+
         #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
         self.time_base = self.time_base.replace(tzinfo = self.todl.device_info['timezone'])
         self.stat_timevar.units = 'seconds since ' + time_unit
