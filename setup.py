@@ -42,6 +42,7 @@ if sys.version_info >= (3,4):
           'pymqds_plotxy=pymqdatastream.connectors.pyqtgraph.pymqds_plotxy:main',\
           'todl=pymqdatastream.connectors.todl.pymqds_todl:main',\
           'todl_gui=pymqdatastream.connectors.todl.pymqds_gui_todl:main',\
+          'todl_datatool=pymqdatastream.connectors.todl.todl_data_tool:main',\
           'todl_rawtonc=pymqdatastream.connectors.todl.pymqds_todl:todlraw_to_netCDF',\
           'todl_quickview=pymqdatastream.connectors.todl.todlfs.todl_quickview:main',\
           'todlfs_get_files=pymqdatastream.connectors.todl.todlfs.todlfs_get_files:todlfs_get_files',\

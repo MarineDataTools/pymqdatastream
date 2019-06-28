@@ -9,6 +9,43 @@ import datetime
 logger = logging.getLogger('todl_data_packages')
 logger.setLevel(logging.DEBUG)
 
+def parse_firesting_data(data_str,unit_convert = True):
+    # Packet of the form
+    #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383
+    #                               S  phi    umol   mbar   asat  ext T   int T   amp amblig P Hum adc oxy
+    if(unit_convert):
+        fac = 1/1000.
+    else:
+        fac = 1.0
+    data_pyro   = data_str.split(' ')    
+    data_stat     = float(data_pyro[4])                                        
+    data_dphi     = float(data_pyro[5])*fac
+    data_umol     = float(data_pyro[6])*fac
+    data_mbar     = float(data_pyro[7])*fac
+    data_asat     = float(data_pyro[8])*fac                        
+    data_ext_temp = float(data_pyro[9])*fac                            
+    data_int_temp = float(data_pyro[10])*fac
+    data_sgn_int  = float(data_pyro[11])*fac
+    data_amb_light= float(data_pyro[12])*fac
+    data_press     = float(data_pyro[13])*fac
+    data_hum      = float(data_pyro[14])*fac
+    data_adc      = float(data_pyro[15])*fac
+    #data_oxy      = float(data_pyro[16])
+    data_packet = {'type':'O'}
+    data_packet['phi']  = data_dphi 
+    data_packet['umol'] = data_umol
+    data_packet['mbar'] = data_mbar
+    data_packet['asat'] = data_asat
+    data_packet['ext_temp'] = data_ext_temp
+    data_packet['int_temp'] = data_int_temp
+    data_packet['sgn_int']  = data_sgn_int
+    data_packet['sgn_amb_light'] = data_amb_light
+    data_packet['sgn_press'] = data_press
+    data_packet['sgn_hum'] = data_hum
+    return data_packet
+    
+    
+
 def decode_format31(data_str_split,device_info):
     """
     Converts raw data of the format 31
@@ -102,18 +139,15 @@ def decode_format31(data_str_split,device_info):
                 elif('U3' in packet_type):
                     # Packet of the form
                     #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383
+                    #                               S  phi    umol   mbar   asat  ext T   int T   amp amblig P Hum adc oxy
                     if("RMR1 3 0" in data_split[2]):
                         data_pyro   = data_split[2].split(' ')                                    
                         if(len(data_pyro) > 4):
                             packet_cnt10k = int(data_split[1])/device_info['counterfreq']
-                            packet_num  = 0
-                            data_stat   = float(data_pyro[4])                                        
-                            data_dphi   = float(data_pyro[5])
-                            data_umol   = float(data_pyro[6])
-                            data_packet = {'num':packet_num,'cnt10ks':packet_cnt10k}
-                            data_packet['type'] = 'O'                                
-                            data_packet['phi']  = data_dphi 
-                            data_packet['umol'] = data_umol
+                            packet_num    = 0
+                            data_packet   = parse_firesting_data(data_split[2])
+                            data_packet['num'] = packet_num
+                            data_packet['cnt10ks'] = packet_cnt10k
                             data_packets.append(data_packet)                                    
 
             except Exception as e:
@@ -332,7 +366,90 @@ def decode_format4(data_str,device_info):
                             data_packet['acc'] = [accx,accy,accz]
                             data_packet['gyro'] = [gyrox,gyroy,gyroz]
                             data_packet['mag'] = [magx,magy,magz]
-                            data_packets.append(data_packet)        
+                            data_packets.append(data_packet)
+                    elif((packet_ident == 0xbb) or (packet_ident == 0xbc)): # ACC IMU FIFO packet
+                        #print('FiFO',len(data_decobs))
+                        nsamples = (len(data_decobs) - 13)/21.
+                        #print('Nsamples',nsamples)                        
+                        #print(data_decobs)
+                        #print('FiFO end')
+                        T_all = []
+                        accx_all = []
+                        accy_all = []
+                        accz_all = []
+                        gyrox_all = []
+                        gyroy_all = []
+                        gyroz_all = []                        
+                        magx_all = []
+                        magy_all = []
+                        magz_all = []
+                        ind = 1                            
+                        packet_num_bin  = data_decobs[ind:ind+5]
+                        packet_num         = int.from_bytes(packet_num_bin,'big',signed=False)
+                        ind += 5
+                        packet_cnt10k_bin = data_decobs[ind:ind+5]
+                        packet_cnt10ks     = int.from_bytes(packet_cnt10k_bin,'big',signed=False)/device_info['counterfreq']
+                        ind += 5
+                        packet_dt_cnt10k_bin = data_decobs[ind:ind+2]
+                        packet_dt_cnt10ks     = int.from_bytes(packet_dt_cnt10k_bin,'big',signed=False)/device_info['counterfreq']
+                        ind += 2
+                        for nsa in range(int(nsamples)):
+                            accx = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                            ind += 2
+                            accy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                            ind += 2
+                            accz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                            ind += 2
+                            T    = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            T    = T / 333.87 + 21.0
+                            ind += 2                            
+                            gyrox = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            gyroy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            gyroz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            ind += 2
+                            magx = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
+                            ind += 2
+                            magy = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
+                            ind += 2
+                            magz = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
+                            ind += 2
+                            prop = data_decobs[ind]
+                            ind += 1
+
+                            T_all.append(T)
+                            accx_all.append(accx)
+                            accy_all.append(accy)
+                            accz_all.append(accz)
+                            gyrox_all.append(gyrox)
+                            gyroy_all.append(gyroy)
+                            gyroz_all.append(gyroz)                   
+                            magx_all.append(magx)
+                            magy_all.append(magy)
+                            magz_all.append(magz)                       
+                                
+                        data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks,'dt_cnt10ks':packet_dt_cnt10ks}
+                        data_packet['type'] = 'An'
+                        data_packet['T'] = T_all
+                        data_packet['acc'] = [accx_all,accy_all,accz_all]
+                        data_packet['gyro'] = [gyrox_all,gyroy_all,gyroz_all]
+                        data_packet['mag'] = [magx_all,magy_all,magz_all]
+                        data_packets.append(data_packet)
+                    elif(packet_ident == 0xA0): # U3
+
+                        ind = 1                            
+                        packet_num_bin      = data_decobs[ind:ind+5]
+                        packet_num          = int(packet_num_bin.hex(), 16) # python3
+                        ind += 5
+                        packet_cnt10k_bin   = data_decobs[ind:ind+5]
+                        packet_cnt10ks      = int(packet_cnt10k_bin.hex(), 16)/device_info['counterfreq']
+                        ind += 5                        
+                        packet_serial_data  = data_decobs[ind:]
+                        print('ind',ind,len(data_decobs))
+                        print('Serial data package',packet_num,packet_cnt10ks)                        
+                        print(packet_serial_data)                        
+                        print('Serial data package done')                        
                     elif(packet_ident == 0xf0): # Pyroscience firesting
                         #\xf0\x00\x00\x00\x01Y\x00\x00\x08\x8f\x03RMR1 3 0 13 2 153908 -867323 -634011 -305757 -300000 -300000 482 16785 -1 -1 0 -62587\r
                         if(len(data_decobs) > 12):
@@ -347,31 +464,12 @@ def decode_format4(data_str,device_info):
                             if("RMR1 3 0" in data_utf8):
                                 data_pyro   = data_utf8.split(' ')
                                 if(len(data_pyro) > 4):
-                                    data_stat   = float(data_pyro[4])                                        
-                                    data_dphi   = float(data_pyro[5])
-                                    data_umol   = float(data_pyro[6])
-                                    data_mbar   = float(data_pyro[7])
-                                    data_asat   = float(data_pyro[8])
-                                    data_ext_temp   = float(data_pyro[9])
-                                    data_int_temp   = float(data_pyro[10])
-                                    data_sgn_int    = float(data_pyro[11])
-                                    data_amb_light  = float(data_pyro[12])
-                                    data_press      = float(data_pyro[13])
-                                    data_hum        = float(data_pyro[14])
-                                    data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
-                                    data_packet['type'] = 'O'                                
-                                    data_packet['phi']  = data_dphi 
-                                    data_packet['umol'] = data_umol
-                                    data_packet['mbar'] = data_mbar
-                                    data_packet['asat'] = data_asat
-                                    data_packet['ext_temp'] = data_ext_temp
-                                    data_packet['int_temp'] = data_int_temp
-                                    data_packet['sgn_int']  = data_sgn_int
-                                    data_packet['sgn_amb_light'] = data_amb_light
-                                    data_packet['sgn_press'] = data_press
-                                    data_packet['sgn_hum'] = data_hum
-                                    
+                                    data_packet = parse_firesting_data(data_utf8)
+                                    data_packet['num'] = packet_num
+                                    data_packet['cnt10ks'] = packet_cnt10ks
                                     data_packets.append(data_packet)
+
+
 
             #except cobs.DecodeError:
             #    logger.debug(funcname + ': COBS DecodeError')
