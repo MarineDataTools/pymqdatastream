@@ -48,7 +48,43 @@ class MplWidget(QtWidgets.QWidget):
         self.vbl.addWidget(self.mpl_toolbar)
         self.setLayout(self.vbl)
 
-class todlquickviewMainWindow(QtWidgets.QWidget):
+
+class todlquickviewMainWindow(QtWidgets.QMainWindow):
+    """The main interface of the TODL-Quickview gui
+
+    """
+    def __init__(self,fname):
+        QtWidgets.QMainWindow.__init__(self)
+        self.all_widgets = []
+        mainMenu = self.menuBar()
+        self.setWindowTitle("TODL Quickview")
+        #self.setWindowIcon(QtGui.QIcon('logo/pymqdatastream_logo_v0.2.svg.png'))
+        extractAction = QtWidgets.QAction("&Quit", self)
+        extractAction.setShortcut("Ctrl+Q")
+        extractAction.setStatusTip('Closing the program')
+        extractAction.triggered.connect(self.close_application)
+
+        fileMenu = mainMenu.addMenu('&File')
+        fileMenu.addAction(extractAction)
+
+        self.statusBar()
+
+        self.mainwidget = todlquickviewWidget(fname)
+        self.setCentralWidget(self.mainwidget)                
+        self.width_orig = self.frameGeometry().width()
+        self.height_orig = self.frameGeometry().height()
+        self.width_main = self.width_orig
+        self.height_main = self.height_orig
+    def close_application(self):
+        logger.debug('Goodbye!')
+        self.close()
+        for w in self.mainwidget.plotWidgets:
+            w.close()
+            
+        self.mainwidget.close()
+        
+
+class todlquickviewWidget(QtWidgets.QWidget):
     """
     """
     def __init__(self,fname=None):
@@ -77,11 +113,16 @@ class todlquickviewMainWindow(QtWidgets.QWidget):
     def plot_data(self):
         print('Plotting')
         plotvar_y = self.var_combo.currentText()
-        plotdata_y = self.data[plotvar_y][plotvar_y]
-        plotdata_x = self.data[plotvar_y]['x0']
+        plotdata_y = self.data[plotvar_y][plotvar_y][:] * 15
+        plotdata_x = self.data[plotvar_y]['x0'][:]
+        # Calculate the frequency
+        fi = 1/(np.diff(plotdata_x).mean())
         plotFrame = MplWidget()
+        ax = plotFrame.canvas.ax
         plotFrame.canvas.ax.plot(plotdata_x,plotdata_y)
+        ax.set_title('Frequency:' + str(fi))
         plotFrame.show()
+        self.plotWidgets.append(plotFrame)
 
     def read_ncfile(self,fname):
         nc = netCDF4.Dataset(fname)
@@ -97,8 +138,8 @@ class todlquickviewMainWindow(QtWidgets.QWidget):
                 cnt10ks_ch1 = nca.variables['cnt10ks_ch1'][:]
                 time_ch1 = netCDF4.num2date(nca.variables['time_ch1'][:],units=nca.variables['time_ch1'].units)
                 f1 = 1/(np.diff(cnt10ks_ch1).mean())
-                V_ch1 = nca.variables['V_adc1_ch1'][:]
-                self.data['V_adc1_ch1'] = {'V_adc1_ch1':V_ch1,'cnt10ks_ch1':cnt10ks_ch1}
+                #V_ch1 = nca.variables['V_adc1_ch1'][:]
+                self.data['V_adc1_ch1'] = {'V_adc1_ch1':nca.variables['V_adc1_ch1'],'cnt10ks_ch1':nca.variables['cnt10ks_ch1']}
                 self.data['V_adc1_ch1']['x0'] = self.data['V_adc1_ch1']['cnt10ks_ch1']
                 # Add to the gui
                 self.var_combo.addItem('V_adc1_ch1')
@@ -111,16 +152,17 @@ class todlquickviewMainWindow(QtWidgets.QWidget):
 
             try:     
                 cnt10ks_ch2 = nca.variables['cnt10ks_ch2'][:]
-                time_ch2 = netCDF4.num2date(nca.variables['time_ch2'][:],units=nca.variables['time_ch2'].units)
+                #time_ch2 = netCDF4.num2date(nca.variables['time_ch2'][:],units=nca.variables['time_ch2'].units)
                 f2 = 1/(np.diff(cnt10ks_ch2).mean())    
-                V_ch2 = nca.variables['V_adc1_ch2'][:]
-                self.data['V_adc1_ch2'] = {'V_adc1_ch2':V_ch2,'cnt10ks_ch2':cnt10ks_ch2}
+                #V_ch2 = nca.variables['V_adc1_ch2'][:]
+                self.data['V_adc1_ch2'] = {'V_adc1_ch2':nca.variables['V_adc1_ch2'],'cnt10ks_ch2':cnt10ks_ch2}
                 self.data['V_adc1_ch2']['x0'] = self.data['V_adc1_ch2']['cnt10ks_ch2']                
                 # Add to the gui                
                 self.var_combo.addItem('V_ch2')                
                 self.FLAG_CH2=True
                 print('Found ch2 ADC data')
-            except:
+            except Exception as e:
+                print(e)
                 self.FLAG_CH2=False            
                 pass            
 
@@ -133,9 +175,9 @@ class todlquickviewMainWindow(QtWidgets.QWidget):
             fp = 1/(np.diff(cnt10ks_p).mean())
             # Add to the gui                
             self.var_combo.addItem('phi')
-            phi = ncp.variables['phi'][:]
+            #phi = ncp.variables['phi'][:]
             # Add to the data
-            self.data['phi'] = {'phi':phi,'cnt10ks_p':cnt10ks_p}
+            self.data['phi'] = {'phi':ncp.variables['phi'],'cnt10ks_p':ncp.variables['cnt10ks_pyro']}
             self.data['phi']['x0'] = self.data['phi']['cnt10ks_p']                
             self.FLAG_PYRO=True
             print('Found Pyro data')        
@@ -157,19 +199,18 @@ class todlquickviewMainWindow(QtWidgets.QWidget):
                 if(not "cnt" in vartmp):
                     print('reading')
                     self.var_combo.addItem(vartmp)
-                    vardata = nci.variables[vartmp][:]                    
-                    self.data[vartmp] = {vartmp:vardata,'cnt10ks_imu':cnt10ks_imu}
+                    self.data[vartmp] = {vartmp:nci.variables[vartmp],'cnt10ks_imu':nci.variables['cnt10ks_imu']}
                     self.data[vartmp]['x0'] = self.data[vartmp]['cnt10ks_imu']
                     
-            accx = nci.variables['accx'][:]
-            accy = nci.variables['accy'][:]
-            accz = nci.variables['accz'][:]
-            gyrox = nci.variables['gyrox'][:]
-            gyroy = nci.variables['gyroy'][:]
-            gyroz = nci.variables['gyroz'][:]
-            magx = nci.variables['magx'][:]
-            magy = nci.variables['magy'][:]
-            magz = nci.variables['magz'][:]
+            #accx = nci.variables['accx'][:]
+            #accy = nci.variables['accy'][:]
+            #accz = nci.variables['accz'][:]
+            #gyrox = nci.variables['gyrox'][:]
+            #gyroy = nci.variables['gyroy'][:]
+            #gyroz = nci.variables['gyroz'][:]
+            #magx = nci.variables['magx'][:]
+            #magy = nci.variables['magy'][:]
+            #magz = nci.variables['magz'][:]
             print('Found IMU data')                
         except Exception as e:
             print('Hallo!')
