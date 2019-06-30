@@ -27,6 +27,7 @@ import argparse
 import traceback # For debugging purposes
 import sys
 
+
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger('pymqds_todl')
 logger.setLevel(logging.INFO)
@@ -2027,7 +2028,7 @@ def todlraw_to_netCDF():
     desc = 'Converts raw turbulent ocean data logger files into netCDF files. Example usage: ' + usage_str
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('rawfile', help= 'The filename of the raw data file')
-    parser.add_argument('ncfile',help='The filename of the converted netcdf file')    
+    parser.add_argument('ncfile',nargs='?', default=None,help='The filename of the converted netcdf file')    
     parser.add_argument('--verbose', '-v', action='count')    
 
     args = parser.parse_args()
@@ -2042,13 +2043,18 @@ def todlraw_to_netCDF():
         loglevel = logging.INFO
     elif(args.verbose > 1):
         loglevel = logging.DEBUG
-        
+
+
+
     logger.setLevel(loglevel)
     
     rawfile = args.rawfile
-    ncfile = args.ncfile
+    if(args.ncfile == None):
+        ncfile = rawfile + '.nc'
+    else:
+        ncfile = args.ncfile
 
-    print(rawfile,ncfile)
+    print('Reading:' + rawfile + ' and will convert to: ' + ncfile)
     try:
         ncconv = todlnetCDF4File(rawfile)
     except Exception as e:

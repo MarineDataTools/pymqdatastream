@@ -5,6 +5,7 @@ import pymqdatastream.connectors.todl.ltc2442 as ltc2442
 import traceback # For debugging purposes
 import sys
 import datetime
+import pynortek # Needed to convert Nortek binary data
 
 logger = logging.getLogger('todl_data_packages')
 logger.setLevel(logging.DEBUG)
@@ -437,19 +438,24 @@ def decode_format4(data_str,device_info):
                         data_packet['mag'] = [magx_all,magy_all,magz_all]
                         data_packets.append(data_packet)
                     elif(packet_ident == 0xA0): # U3
-
                         ind = 1                            
                         packet_num_bin      = data_decobs[ind:ind+5]
                         packet_num          = int(packet_num_bin.hex(), 16) # python3
                         ind += 5
                         packet_cnt10k_bin   = data_decobs[ind:ind+5]
                         packet_cnt10ks      = int(packet_cnt10k_bin.hex(), 16)/device_info['counterfreq']
-                        ind += 5                        
+                        ind += 5
                         packet_serial_data  = data_decobs[ind:]
-                        print('ind',ind,len(data_decobs))
-                        print('Serial data package',packet_num,packet_cnt10ks)                        
-                        print(packet_serial_data)                        
-                        print('Serial data package done')                        
+                        adv_data = pynortek.convert_bin(packet_serial_data,apply_unit_factor = True)
+                        #data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
+                        #data_packet['type'] = 'ADV'
+                        #data_packet.update(adv_data)
+                        #data_packets.append(data_packet)                        
+                        #print(data_packet)
+                        #print('ind',ind,len(data_decobs))
+                        #print('Serial data package',packet_num,packet_cnt10ks)                        
+                        #print(packet_serial_data)                        
+                        #print('Serial data package done')                        
                     elif(packet_ident == 0xf0): # Pyroscience firesting
                         #\xf0\x00\x00\x00\x01Y\x00\x00\x08\x8f\x03RMR1 3 0 13 2 153908 -867323 -634011 -305757 -300000 -300000 482 16785 -1 -1 0 -62587\r
                         if(len(data_decobs) > 12):

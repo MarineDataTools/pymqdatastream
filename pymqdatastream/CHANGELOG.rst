@@ -1,3 +1,6 @@
+0.8.2:
+        - todl_quickview with gui
+	- several changes to incorporate new data_packages (ADV, IMU with FIFO) for todl
 0.8.1:
         - pymqs_gui_todl:
 	  - Added plotting functionality of single channels
