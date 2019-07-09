@@ -431,12 +431,21 @@ def decode_format4(data_str,device_info):
                             magz_all.append(magz)                       
                                 
                         data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks,'dt_cnt10ks':packet_dt_cnt10ks}
+                        if(packet_ident == 0xbb):
+                            sensor_num = 0
+                        if(packet_ident == 0xbc):
+                            sensor_num = 1
+                            
                         data_packet['type'] = 'An'
+                        data_packet['sensor'] = sensor_num
                         data_packet['T'] = T_all
                         data_packet['acc'] = [accx_all,accy_all,accz_all]
                         data_packet['gyro'] = [gyrox_all,gyroy_all,gyroz_all]
                         data_packet['mag'] = [magx_all,magy_all,magz_all]
+                        #https://arduino.stackexchange.com/questions/18625/converting-three-axis-magnetometer-to-degrees
+                        data_packet['heading_xy'] = np.arctan2(np.asarray(magx_all),np.asarray(magy_all))/np.pi * 180
                         data_packets.append(data_packet)
+                        
                     elif(packet_ident == 0xA0): # U3
                         ind = 1                            
                         packet_num_bin      = data_decobs[ind:ind+5]

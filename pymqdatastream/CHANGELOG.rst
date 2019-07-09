@@ -1,3 +1,6 @@
+0.8.3:
+        - todl_quickview in tools folder
+	- todl_set_time 
 0.8.2:
         - todl_quickview with gui
 	- several changes to incorporate new data_packages (ADV, IMU with FIFO) for todl

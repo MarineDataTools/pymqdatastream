@@ -467,6 +467,7 @@ class todlnetCDF4File():
             self.imu_magx = imugrp.createVariable('magx', "f8", (dimname,),zlib=zlib,complevel=complevel)
             self.imu_magy = imugrp.createVariable('magy', "f8", (dimname,),zlib=zlib,complevel=complevel)
             self.imu_magz = imugrp.createVariable('magz', "f8", (dimname,),zlib=zlib,complevel=complevel)
+            self.imu_headxy = imugrp.createVariable('heading_xy', "f8", (dimname,),zlib=zlib,complevel=complevel)
             self.imu_cnt10ks_tmp     = []
             self.imu_temp_tmp  = []            
             self.imu_accx_tmp  = []
@@ -478,6 +479,7 @@ class todlnetCDF4File():
             self.imu_magx_tmp = []
             self.imu_magy_tmp = []
             self.imu_magz_tmp = []
+            self.imu_headxy_tmp = []            
 
 
         # Or a Pyroscience Firesting?
@@ -670,8 +672,10 @@ class todlnetCDF4File():
                         self.imu_gyroz_tmp.extend(data['gyro'][2][:])
                         self.imu_magx_tmp.extend(data['mag'][0][:])
                         self.imu_magy_tmp.extend(data['mag'][1][:])
-                        self.imu_magz_tmp.extend(data['mag'][2][:])                    
-
+                        self.imu_magz_tmp.extend(data['mag'][2][:])
+                        self.imu_headxy_tmp.extend(data['heading_xy'][:])                                            
+                        
+                        
                 elif(data['type'] == 'O'): # Pyro Firesting data
                     # Check if we have a pyro Firesting group already, of not, create one
                     try: 
@@ -721,6 +725,7 @@ class todlnetCDF4File():
                 self.imu_magx[n:n+m] = self.imu_magx_tmp[:]
                 self.imu_magy[n:n+m] = self.imu_magy_tmp[:]
                 self.imu_magz[n:n+m] = self.imu_magz_tmp[:]
+                self.imu_headxy[n:n+m] = self.imu_headxy_tmp[:]                
                 # Clear the lists                
                 self.imu_cnt10ks_tmp = []
                 self.imu_temp_tmp = []
@@ -733,8 +738,13 @@ class todlnetCDF4File():
                 self.imu_magx_tmp = []
                 self.imu_magy_tmp = []
                 self.imu_magz_tmp = []
+                self.imu_headxy_tmp = []                
 
             #if(self.todl.device_info['pyro_freq'] > 0):
+            try:
+                self.pyro_cnt10ks_tmp
+            except:
+                self.pyro_cnt10ks_tmp = []
             if(len(self.pyro_cnt10ks_tmp)>0):
                 m = len(self.pyro_cnt10ks_tmp)                
                 n = len(self.pyro_cnt10ks)                
@@ -1018,15 +1028,17 @@ class todlDataStream(pymqdatastream.DataStream):
                         data,address = self.serial.recvfrom(10000)
                         num_bytes = len(data)
                         if(self.print_serial_data):
-                            print(data)
+                            print('data recv:',data)
 
                         self.bytes_read += num_bytes
                         bytes_read += num_bytes                        
                         for n,deque in enumerate(self.deques_raw_serial):
                             deque.appendleft(data)
+                            
                     else:
                         print('block!')
                 except Exception as e:
+                    #print('Exception in read_serial:' + str(e))
                     #logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
                     pass
                         
@@ -1410,7 +1422,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         time.sleep(0.1+dt)
 
         self.send_serial_data('info\n')
-        time.sleep(0.1+dt)        
+        time.sleep(0.5+dt)        
         data_str = ''
         while(len(deque) > 0):
             data = deque.pop()
@@ -1418,12 +1430,14 @@ default to None, only with a valid argument that setting will be sent to the dev
             try:
                 data_str += data.decode(encoding='utf-8')
             except Exception as e:
+                print(funcname + ': Exception:' + str(e))                
                 self.logger.debug(funcname + ': Exception:' + str(e))
-                return False
+                #return False
 
         return_str = data_str
         # Parse the received data for a valid reply
         if( ('>>>stop' in data_str) or ('><<stop' in data_str) ):
+            print('Found stop str')
             FLAG_IS_TODL=True
             self.FLAG_IS_TODL = True
             boardversion = '??'
@@ -1862,8 +1876,11 @@ default to None, only with a valid argument that setting will be sent to the dev
                         aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
 
                     elif(data_packet['type'] == 'An'): # IMU FIFO packet
-                        self.packet_statistics['A'] += 1                        
-                        aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'][0],data_packet['acc'][0][0],data_packet['acc'][1][0],data_packet['acc'][2][0],data_packet['gyro'][0][0],data_packet['gyro'][1][0],data_packet['gyro'][2][0]])#,data_packet['mag'][0][0],data_packet['mag'][1][0],data_packet['mag'][2][0]])
+                        try:
+                            self.packet_statistics['A'] += 1                        
+                            aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'][0],data_packet['acc'][0][0],data_packet['acc'][1][0],data_packet['acc'][2][0],data_packet['gyro'][0][0],data_packet['gyro'][1][0],data_packet['gyro'][2][0]])#,data_packet['mag'][0][0],data_packet['mag'][1][0],data_packet['mag'][2][0]])
+                        except Exception as e:
+                            print('Bad acc packet, TODO, solve that')
                             
                     elif(data_packet['type'] == 'O'): # Firesting packet
                         self.packet_statistics['O'] += 1                        

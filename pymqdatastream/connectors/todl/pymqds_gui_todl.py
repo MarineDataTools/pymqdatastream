@@ -1079,8 +1079,8 @@ class todlDevice():
         # IP source
         self.text_ip = QtWidgets.QLineEdit()
         # Hack, this should be removed later
-        #self.text_ip.setText('192.168.236.18:28117') # EMB DSL System, Port C
-        self.text_ip.setText('192.168.236.18:28108') # EMB DSL System, Port ?
+        self.text_ip.setText('192.168.236.18:28117') # EMB DSL System, Port C
+        #self.text_ip.setText('192.168.236.18:28108') # EMB DSL System, Port ?
         #self.text_ip.setText('192.168.0.200:10002') # PCTD mobile system, Port L
         self._button_sockets_choices = ['Connect to IP','Disconnect from IP']
         self.button_open_socket = QtWidgets.QPushButton(self._button_sockets_choices[0])
@@ -1355,7 +1355,7 @@ class todlDevice():
                     if(self.todl.query_todllogger() == True):
                         self.deviceinfo.update(self.todl.device_info)
                         # Here clock information for the time widget should appear
-                        self.todlConfig.timeWidget.add_
+                        #self.todlConfig.timeWidget.add_
                         self.print_serial_data = False
                         time.sleep(0.1)
                         self.todl.send_serial_data('start\n')
