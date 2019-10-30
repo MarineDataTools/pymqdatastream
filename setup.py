@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup,find_packages
 import os
 
 import sys
@@ -22,7 +22,8 @@ if sys.version_info >= (3,4):
           author='Peter Holtermann',
           author_email='peter.holtermann@systemausfall.org',
           license='GPLv03',
-          packages=['pymqdatastream'],
+          #packages=['pymqdatastream'],
+          packages=find_packages(),
           scripts = ['pymqdatastream/connectors/test/pymqds_bare.py',\
                      'pymqdatastream/connectors/test/pymqds_bare_reqrep.py',\
                      'pymqdatastream/connectors/math_operator/pymqds_math_op.py',\

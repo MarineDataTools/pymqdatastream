@@ -356,11 +356,12 @@ def decode_format4(data_str,device_info):
                             ind += 2
                             gyroz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
                             ind += 2
-                            magx = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            magx = int.from_bytes(data_decobs[ind:ind+2], byteorder = 'big',signed=False)
                             ind += 2
-                            magy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                            magy = int.from_bytes(data_decobs[ind:ind+2], byteorder = 'big',signed=False)
                             ind += 2
-                            magz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)                            
+                            magz = int.from_bytes(data_decobs[ind:ind+2], byteorder = 'big',signed=False)
+                            print(magz)
                             data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
                             data_packet['type'] = 'A'
                             data_packet['T'] = T
@@ -368,83 +369,130 @@ def decode_format4(data_str,device_info):
                             data_packet['gyro'] = [gyrox,gyroy,gyroz]
                             data_packet['mag'] = [magx,magy,magz]
                             data_packets.append(data_packet)
-                    elif((packet_ident == 0xbb) or (packet_ident == 0xbc)): # ACC IMU FIFO packet
+                    elif((packet_ident == 0xbb) or (packet_ident == 0xbc)): # ACC IMU FIFO packet (slim version)
                         #print('FiFO',len(data_decobs))
-                        nsamples = (len(data_decobs) - 13)/21.
-                        #print('Nsamples',nsamples)                        
-                        #print(data_decobs)
-                        #print('FiFO end')
-                        T_all = []
-                        accx_all = []
-                        accy_all = []
-                        accz_all = []
-                        gyrox_all = []
-                        gyroy_all = []
-                        gyroz_all = []                        
-                        magx_all = []
-                        magy_all = []
-                        magz_all = []
-                        ind = 1                            
-                        packet_num_bin  = data_decobs[ind:ind+5]
-                        packet_num         = int.from_bytes(packet_num_bin,'big',signed=False)
-                        ind += 5
-                        packet_cnt10k_bin = data_decobs[ind:ind+5]
-                        packet_cnt10ks     = int.from_bytes(packet_cnt10k_bin,'big',signed=False)/device_info['counterfreq']
-                        ind += 5
-                        packet_dt_cnt10k_bin = data_decobs[ind:ind+2]
-                        packet_dt_cnt10ks     = int.from_bytes(packet_dt_cnt10k_bin,'big',signed=False)/device_info['counterfreq']
-                        ind += 2
-                        for nsa in range(int(nsamples)):
-                            accx = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
-                            ind += 2
-                            accy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
-                            ind += 2
-                            accz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
-                            ind += 2
-                            T    = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
-                            T    = T / 333.87 + 21.0
-                            ind += 2                            
-                            gyrox = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
-                            ind += 2
-                            gyroy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
-                            ind += 2
-                            gyroz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
-                            ind += 2
-                            magx = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
-                            ind += 2
-                            magy = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
-                            ind += 2
-                            magz = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
-                            ind += 2
-                            prop = data_decobs[ind]
-                            ind += 1
+                        package_size = 21
+                        nsamples = (len(data_decobs) - 13)/package_size
+                        try: # We need T to test for valid data in uneven datasets
+                            Ttst
+                        except:
+                            Ttst = -100
+                        if(abs(nsamples - int(nsamples)) > 0.01): # Don take data with wrong size, have to deal with that later...
+                            print('Wrong size, trying to shift start',nsamples)
+                            #print(data_decobs)
+                            ind_T = 6 + 13 # 13 bytes header and then at the sixth position
+                            if(Ttst > -100):
+                                for nt in range(0,package_size-1): # Check 10 bytes and compare 2 calculated temperatures with "old" temperature are within a given offset, if thats the case, take the data as valid
+                                    Ttst1    = int.from_bytes(data_decobs[nt+ind_T:nt+ind_T+2],byteorder='big',signed=True)
+                                    Ttst1    = Ttst1 / 333.87 + 21.0
+                                    Ttst2    = int.from_bytes(data_decobs[nt+ind_T+package_size:nt+ind_T+2+package_size],byteorder='big',signed=True)
+                                    Ttst2    = Ttst2 / 333.87 + 21.0               
+                                    #print('T',T,'nt',nt,'Ttst1',Ttst1,'Ttst2',Ttst2)
+                                    dT1 = abs(Ttst - Ttst1)
+                                    dT2 = abs(Ttst - Ttst2)                                    
+                                    if((dT1 < 0.25) & (dT2 < 0.25)):
+                                        #print(data_decobs[nt:],len(data_decobs[nt:]))
+                                        data_decobs_new = data_decobs[:13] + data_decobs[13 + nt:]
+                                        #print(data_decobs_new,len(data_decobs_new))
+                                        nsamples_new = (len(data_decobs[nt:]) - 13)/package_size
+                                        #print('Found good index by shifting start by',nt,nsamples_new)
 
-                            T_all.append(T)
-                            accx_all.append(accx)
-                            accy_all.append(accy)
-                            accz_all.append(accz)
-                            gyrox_all.append(gyrox)
-                            gyroy_all.append(gyroy)
-                            gyroz_all.append(gyroz)                   
-                            magx_all.append(magx)
-                            magy_all.append(magy)
-                            magz_all.append(magz)                       
-                                
-                        data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks,'dt_cnt10ks':packet_dt_cnt10ks}
-                        if(packet_ident == 0xbb):
-                            sensor_num = 0
-                        if(packet_ident == 0xbc):
-                            sensor_num = 1
-                            
-                        data_packet['type'] = 'An'
-                        data_packet['sensor'] = sensor_num
-                        data_packet['T'] = T_all
-                        data_packet['acc'] = [accx_all,accy_all,accz_all]
-                        data_packet['gyro'] = [gyrox_all,gyroy_all,gyroz_all]
-                        data_packet['mag'] = [magx_all,magy_all,magz_all]
-                        #https://arduino.stackexchange.com/questions/18625/converting-three-axis-magnetometer-to-degrees
-                        data_packet['heading_xy'] = np.arctan2(np.asarray(magx_all),np.asarray(magy_all))/np.pi * 180
-                        data_packets.append(data_packet)
+                                        if(abs(nsamples_new - int(nsamples_new)) < 0.01): # Good now?
+                                            nsamples = nsamples_new
+                                            #data_decobs = data_decobs[nt:]
+                                            data_decobs = data_decobs_new
+                                            print('Found good index by shifting start by',nt,nsamples_new)
+
+                                        break                                                                                    
+                        if(abs(nsamples - int(nsamples)) > 0.01): # Don take data with wrong size, have to deal with that later...
+                            print('Could not find good samples in package (wrong package size)')
+                        else:
+                            #print('Nsamples',nsamples)                        
+                            #print(data_decobs)
+                            #print('FiFO end')
+                            T_all = []
+                            accx_all = []
+                            accy_all = []
+                            accz_all = []
+                            gyrox_all = []
+                            gyroy_all = []
+                            gyroz_all = []                        
+                            magx_all = []
+                            magy_all = []
+                            magz_all = []
+                            ind = 1                            
+                            packet_num_bin  = data_decobs[ind:ind+5]
+                            packet_num         = int.from_bytes(packet_num_bin,'big',signed=False)
+                            ind += 5
+                            packet_cnt10k_bin = data_decobs[ind:ind+5]
+                            packet_cnt10ks     = int.from_bytes(packet_cnt10k_bin,'big',signed=False)/device_info['counterfreq']
+                            ind += 5
+                            packet_dt_cnt10k_bin = data_decobs[ind:ind+2]
+                            packet_dt_cnt10ks     = int.from_bytes(packet_dt_cnt10k_bin,'big',signed=False)/device_info['counterfreq']
+                            ind += 2
+                            for nsa in range(int(nsamples)):
+                                accx = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                                ind += 2
+                                accy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                                ind += 2
+                                accz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)/16384.
+                                ind += 2
+                                T    = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                                T    = T / 333.87 + 21.0
+                                Ttst = T # Having the data for testing packages with wrong package size
+                                ind += 2                            
+                                gyrox = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                                ind += 2
+                                gyroy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                                ind += 2
+                                gyroz = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
+                                ind += 2
+                                magx = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
+                                ind += 2
+                                magy = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
+                                ind += 2
+                                magz = int.from_bytes(data_decobs[ind:ind+2],byteorder='little',signed=True)
+                                ind += 2
+
+                                #bits = 16
+                                #if (magx & (1 << (bits - 1))) != 0: # twos complement and Little Endian format
+                                #    magx = magx - (1 << bits)
+                                #if (magy & (1 << (bits - 1))) != 0: # twos complement and Little Endian format
+                                #    magy = magy - (1 << bits)
+                                #if (magz & (1 << (bits - 1))) != 0: # twos complement and Little Endian format
+                                #    magz = magz - (1 << bits)
+
+                                prop = data_decobs[ind]
+                                ind += 1
+
+                                T_all.append(T)
+                                accx_all.append(accx)
+                                accy_all.append(accy)
+                                accz_all.append(accz)
+                                gyrox_all.append(gyrox)
+                                gyroy_all.append(gyroy)
+                                gyroz_all.append(gyroz)                   
+                                magx_all.append(magx)
+                                magy_all.append(magy)
+                                magz_all.append(magz)                       
+
+                            data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks,'dt_cnt10ks':packet_dt_cnt10ks}
+                            if(packet_ident == 0xbb):
+                                sensor_num = 0
+                            if(packet_ident == 0xbc):
+                                sensor_num = 1
+
+                            data_packet['type'] = 'An'
+                            data_packet['sensor'] = sensor_num
+                            data_packet['T'] = T_all
+                            data_packet['acc'] = [accx_all,accy_all,accz_all]
+                            data_packet['gyro'] = [gyrox_all,gyroy_all,gyroz_all]
+                            data_packet['mag'] = [magx_all,magy_all,magz_all]
+                            #https://arduino.stackexchange.com/questions/18625/converting-three-axis-magnetometer-to-degrees
+                            data_packet['heading_xy'] = np.arctan2(np.asarray(magx_all),np.asarray(magy_all))/np.pi * 180
+                            data_packet['heading_xz'] = np.arctan2(np.asarray(magx_all),np.asarray(magz_all))/np.pi * 180
+                            data_packet['heading_yz'] = np.arctan2(np.asarray(magy_all),np.asarray(magz_all))/np.pi * 180
+                            data_packets.append(data_packet)
                         
                     elif(packet_ident == 0xA0): # U3
                         ind = 1                            

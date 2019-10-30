@@ -96,13 +96,20 @@ class todlsettimeWidget(QtWidgets.QWidget):
 
         self.combo_baud.setCurrentIndex(len(baud)-3)
         #self.combo_baud.setEditable(True)
+        self.gettime_bu = QtWidgets.QPushButton('Get time')
+        self.gettime_bu.clicked.connect(self.clicked_get_time)
         self.serial_open_bu = QtWidgets.QPushButton('Set time')
-        self.serial_open_bu.clicked.connect(self.clicked_set_time)
+        self.serial_open_bu.clicked.connect(self.clicked_set_time)        
         #self.serial_open_bu.setEnabled(False)
         layout.addWidget(self.combo_serial,0,0)
         layout.addWidget(self.combo_baud,0,1)
-        layout.addWidget(self.serial_open_bu,0,2)                
+        layout.addWidget(self.gettime_bu,0,2)                        
+        layout.addWidget(self.serial_open_bu,0,3)                
         self.show()
+
+    def clicked_get_time(self):
+        self.open_todl()
+        self.compare_clocks()
 
     def clicked_set_time(self):
         self.open_todl()
@@ -114,9 +121,9 @@ class todlsettimeWidget(QtWidgets.QWidget):
         print('Looking for device on port: ' + PORT + ' with baudrate:' + str(BAUD))
         ser = serial.Serial(PORT,BAUD)  # open serial port
         print(ser.name)         # check which port was really used
-        ser.reset_input_buffer()
         ser.write(b'stop\n')     # write a stop
         time.sleep(.5)
+        ser.reset_input_buffer()
         ser.write(b'stop\n')     # write a stop
         time.sleep(.5)
         ser.write(b'time\n')     # write a time command
@@ -210,15 +217,6 @@ class todlsettimeWidget(QtWidgets.QWidget):
         print(tstr)
 
 
-
-
-
-
-
-
-
-
-        
 
 
 

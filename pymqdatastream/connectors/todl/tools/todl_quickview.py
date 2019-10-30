@@ -128,7 +128,8 @@ class todlquickviewWidget(QtWidgets.QWidget):
         except:
             lab_unit = ''
         ylabel = plotvar_y + lab_unit
-        if('ch1' in plotvar_y):
+        #if('ch1' in plotvar_y):
+        if False:
             print('Calculating temperature from polynom')
             plotdata_y = np.polyval(P,plotdata_y)
             plotdata_y = np.ma.masked_where((plotdata_y > T.max()) | (plotdata_y < T.min()),plotdata_y)
@@ -195,18 +196,29 @@ class todlquickviewWidget(QtWidgets.QWidget):
         # Read in IMU
         print('Trying IMU data')        
         try:
-            self.FLAG_IMU = True        
-            nci = nc.groups['imu']
-            cnt10ks_imu = nci.variables['cnt10ks_imu'][:]
-            #time_imu = netCDF4.num2date(nci.variables['time'][:],units=nci.variables['time'].units)        
-            fi = 1/(np.diff(cnt10ks_imu).mean())
-            for vartmp in nci.variables:
-                print(vartmp)
-                if(not "cnt" in vartmp):
-                    print('reading')
-                    self.var_combo.addItem(vartmp)
-                    self.data[vartmp] = {vartmp:nci.variables[vartmp],'cnt10ks_imu':nci.variables['cnt10ks_imu']}
-                    self.data[vartmp]['x0'] = self.data[vartmp]['cnt10ks_imu']
+            self.FLAG_IMU = True
+            for g in nc.groups:
+                print(g)
+                if('imu' in g):
+                    nci = nc.groups[g]
+                    try:
+                        cntvar = 'cnt10ks_imu'
+                        nci.variables[cntvar][:]
+                    except:
+                        cntvar = 'cnt10ks'
+                        nci.variables[cntvar][:]
+                        
+                    cnt10ks_imu = nci.variables[cntvar][:]
+                    #time_imu = netCDF4.num2date(nci.variables['time'][:],units=nci.variables['time'].units)        
+                    fi = 1/(np.diff(cnt10ks_imu).mean())
+                    for vartmp in nci.variables:
+                        print(vartmp)
+                        if(not "cnt" in vartmp):
+                            varname = g + ' ' + vartmp
+                            print('reading')
+                            self.var_combo.addItem(varname)
+                            self.data[varname] = {varname:nci.variables[vartmp],'cnt10ks':nci.variables[cntvar]}
+                            self.data[varname]['x0'] = self.data[varname][cntvar]
                     
             #accx = nci.variables['accx'][:]
             #accy = nci.variables['accy'][:]

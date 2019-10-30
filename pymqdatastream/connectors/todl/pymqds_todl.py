@@ -409,11 +409,11 @@ class todlnetCDF4File():
         # Add the time information from the device info, this is earlier to every measurement
         self.stat_tvar[0] = self.todl.device_info['cnt10k']/self.todl.device_info['counterfreq']
         self.stat_timevar[0] = (self.todl.device_info['time'] - self.time_base).total_seconds()
-        
+
+        self.ncfile = rootgrp
         # Test if we have adcs
         if(self.todl.device_info['adcs'] is not None):
             self.logger.debug(funcname + ': Creating adc group')
-            self.ncfile = rootgrp
             adcgrp     = rootgrp.createGroup('adc')
             self.adcgrp = adcgrp
             ch_dims    = []
@@ -449,37 +449,57 @@ class todlnetCDF4File():
 
         # Check if we have an IMU
         #if(self.todl.device_info['imu_freq'] > 0):
+        self.imugroups = {}        
+        self.imudata = {} #
+
+    def create_imu_group(self,name='imu',zlib=True):
+        funcname = 'create_imu_group'
+                    
+        rootgrp = self.ncfile
         if True:
             self.logger.debug(funcname + ': Creating imu group')
-            imugrp     = rootgrp.createGroup('imu')
-            self.imugrp = imugrp
-            dimname = 'cnt10ks_imu'
+            imugrp     = rootgrp.createGroup(name)
+                
+            try:
+                self.imudata[name]
+            except:
+                self.imudata[name] = {}               
+                
+            self.imugroups[name] = imugrp
+            dimname = 'cnt10ks'
             imu_dim = imugrp.createDimension(dimname, None)
-            self.imu_cnt10ks    = imugrp.createVariable('cnt10ks_imu', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_cnt10ks.units = 'time in seconds since device power on'
-            self.imu_temp = imugrp.createVariable('temp', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_accx = imugrp.createVariable('accx', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_accy = imugrp.createVariable('accy', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_accz = imugrp.createVariable('accz', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_gyrox = imugrp.createVariable('gyrox', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_gyroy = imugrp.createVariable('gyroy', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_gyroz = imugrp.createVariable('gyroz', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_magx = imugrp.createVariable('magx', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_magy = imugrp.createVariable('magy', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_magz = imugrp.createVariable('magz', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_headxy = imugrp.createVariable('heading_xy', "f8", (dimname,),zlib=zlib,complevel=complevel)
-            self.imu_cnt10ks_tmp     = []
-            self.imu_temp_tmp  = []            
-            self.imu_accx_tmp  = []
-            self.imu_accy_tmp  = []
-            self.imu_accz_tmp  = []
-            self.imu_gyrox_tmp = []
-            self.imu_gyroy_tmp = []
-            self.imu_gyroz_tmp = []
-            self.imu_magx_tmp = []
-            self.imu_magy_tmp = []
-            self.imu_magz_tmp = []
-            self.imu_headxy_tmp = []            
+            self.imudata[name]['cnt10ks']    = imugrp.createVariable('cnt10ks', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['cnt10ks'].units = 'time in seconds since device power on'
+            self.imudata[name]['temp']       = imugrp.createVariable('temp', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['accx']       = imugrp.createVariable('accx', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['accy']       = imugrp.createVariable('accy', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['accz']       = imugrp.createVariable('accz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['gyrox']      = imugrp.createVariable('gyrox', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['gyroy']      = imugrp.createVariable('gyroy', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['gyroz']      = imugrp.createVariable('gyroz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['magx']       = imugrp.createVariable('magx', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['magy']       = imugrp.createVariable('magy', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['magz']       = imugrp.createVariable('magz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['headxy']     = imugrp.createVariable('heading_xy', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['headxz']     = imugrp.createVariable('heading_xz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
+            self.imudata[name]['headyz']     = imugrp.createVariable('heading_yz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)            
+            self.imudata[name]['cnt10ks_tmp']= []
+            self.imudata[name]['temp_tmp']   = []            
+            self.imudata[name]['accx_tmp']   = []
+            self.imudata[name]['accy_tmp']   = []
+            self.imudata[name]['accz_tmp']   = []
+            self.imudata[name]['gyrox_tmp']  = []
+            self.imudata[name]['gyroy_tmp']  = []
+            self.imudata[name]['gyroz_tmp']  = []
+            self.imudata[name]['magx_tmp']   = []
+            self.imudata[name]['magy_tmp']   = []
+            self.imudata[name]['magz_tmp']   = []
+            self.imudata[name]['headxy_tmp'] = []
+            self.imudata[name]['headxz_tmp'] = []
+            self.imudata[name]['headyz_tmp'] = []            
+            # Statistics
+            self.imudata[name]['cnt10ks_old'] = 0
+            self.imudata[name]['npacket_an'] = 0
 
 
         # Or a Pyroscience Firesting?
@@ -503,7 +523,7 @@ class todlnetCDF4File():
         self.pyro_umol_tmp = []
             
             
-    def to_ncfile_fast(self,fname, num_bytes = 10000000, num_bytes_packages=-1,zlib=True,complevel=4):
+    def to_ncfile_fast(self,fname, num_bytes = 1000000, num_bytes_packages=-1,zlib=True,complevel=4):
         """ Reads the data in fname, converts and puts it into a ncfile
 
         Args:
@@ -525,6 +545,8 @@ class todlnetCDF4File():
         data_str = b''
         file_size = os.path.getsize(self.todl.data_file.name)
         npacket_an = 0
+        npacket_firesting = 0
+        npacket_LTC2442 = 0        
         while(True):
             num_bytes_packages -= 1
             raw_data = self.todl.data_file.read(num_bytes)
@@ -600,11 +622,6 @@ class todlnetCDF4File():
             # Read the data into temporary buffer
             for data in data_packets:
                 cnt += 1
-                if(np.mod(cnt,10000) == 0):
-                    print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' from '
-                          + str(file_size) + ' bytes read (' + str(round(bytes_read/file_size * 100,2))
-                          + '%). Num good: ' + str(num_good) + ' Num err: ' + str(num_err))
-
                 if(data['type'] == 'Stat'): # Status packet
                     self.stat_tvar_tmp.append(data['cnt10ks'])
                     # Check if we are in a acceptable range of time shift between the 10k counter and the RTC time
@@ -628,6 +645,7 @@ class todlnetCDF4File():
 
                 elif(data['type'] == 'L'): # ADC data
                     try:
+                        npacket_LTC2442 += 1
                         ind = np.squeeze(np.where(self.ch_seq == data['ch'])[0])
                         self.adc_tvars_tmp[ind].append(data['cnt10ks'])
                         # Put the voltage data into the variable
@@ -650,34 +668,45 @@ class todlnetCDF4File():
                     self.imu_magy_tmp.append(data['mag'][1])
                     self.imu_magz_tmp.append(data['mag'][2])
 
-                elif(data['type'] == 'An'): # IMU FIGO data
-                    # HAck, dt in the packet shows wring results, calculating differenc between two packets...
-                    if(npacket_an == 0):
-                        cnt10ks_old = data['cnt10ks']
-                        npacket_an += 1                        
-                    else:
-                        npacket_an += 1
-                        npacket = len(data['T'])                        
-                        dt_packet = (data['cnt10ks'] - cnt10ks_old)/(npacket)
-                        cnt10ks_old = data['cnt10ks']
-                        for nsa in range(npacket):
-                            self.imu_cnt10ks_tmp.append(data['cnt10ks']+nsa*dt_packet)    
+                elif(data['type'] == 'An'): # IMU FIFO data
+                    # Hack, dt in the packet shows wrong results, calculating difference between two packets...
+                    imu_name = 'imu{:02d}'.format(data['sensor']) # Sensor number
+                    try:
+                        self.imudata[imu_name]
+                    except Exception as e:
+                        print(e)
+                        print('Creating IMU group:' + imu_name)
+                        self.create_imu_group(imu_name)
 
-                        self.imu_temp_tmp.extend(data['T'][:])                    
-                        self.imu_accx_tmp.extend(data['acc'][0][:])
-                        self.imu_accy_tmp.extend(data['acc'][1][:])
-                        self.imu_accz_tmp.extend(data['acc'][2][:])
-                        self.imu_gyrox_tmp.extend(data['gyro'][0][:])
-                        self.imu_gyroy_tmp.extend(data['gyro'][1][:])
-                        self.imu_gyroz_tmp.extend(data['gyro'][2][:])
-                        self.imu_magx_tmp.extend(data['mag'][0][:])
-                        self.imu_magy_tmp.extend(data['mag'][1][:])
-                        self.imu_magz_tmp.extend(data['mag'][2][:])
-                        self.imu_headxy_tmp.extend(data['heading_xy'][:])                                            
                         
+                    if(self.imudata[imu_name]['npacket_an'] == 0):
+                        self.imudata[imu_name]['cnt10ks_old'] = data['cnt10ks']
+                        self.imudata[imu_name]['npacket_an'] += 1    
+                    else:
+                        self.imudata[imu_name]['npacket_an'] += 1
+                        npacket = len(data['T'])                        
+                        dt_packet = (data['cnt10ks'] - self.imudata[imu_name]['cnt10ks_old'])/(npacket)
+                        self.imudata[imu_name]['cnt10ks_old'] = data['cnt10ks']
+                        for nsa in range(npacket):
+                            self.imudata[imu_name]['cnt10ks_tmp'].append(data['cnt10ks']+nsa*dt_packet)    
+
+                        self.imudata[imu_name]['temp_tmp'].extend(data['T'][:])                    
+                        self.imudata[imu_name]['accx_tmp'].extend(data['acc'][0][:])
+                        self.imudata[imu_name]['accy_tmp'].extend(data['acc'][1][:])
+                        self.imudata[imu_name]['accz_tmp'].extend(data['acc'][2][:])
+                        self.imudata[imu_name]['gyrox_tmp'].extend(data['gyro'][0][:])
+                        self.imudata[imu_name]['gyroy_tmp'].extend(data['gyro'][1][:])
+                        self.imudata[imu_name]['gyroz_tmp'].extend(data['gyro'][2][:])
+                        self.imudata[imu_name]['magx_tmp'].extend(data['mag'][0][:])
+                        self.imudata[imu_name]['magy_tmp'].extend(data['mag'][1][:])
+                        self.imudata[imu_name]['magz_tmp'].extend(data['mag'][2][:])
+                        self.imudata[imu_name]['headxy_tmp'].extend(data['heading_xy'][:])
+                        self.imudata[imu_name]['headxz_tmp'].extend(data['heading_xz'][:])
+                        self.imudata[imu_name]['headyz_tmp'].extend(data['heading_yz'][:])                                                
                         
                 elif(data['type'] == 'O'): # Pyro Firesting data
                     # Check if we have a pyro Firesting group already, of not, create one
+                    npacket_firesting += 1
                     try: 
                         self.pyro_phi_tmp
                     except:
@@ -689,6 +718,21 @@ class todlnetCDF4File():
                     self.pyro_umol_tmp.append(data['umol'])       
                     
 
+            # Print some statistics
+            print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' from '
+                  + str(file_size) + ' bytes read (' + str(round(bytes_read/file_size * 100,2))
+                  + '%). Num good: ' + str(num_good) + ' Num err: ' + str(num_err))            
+            print('LTC2442 packages read:',npacket_LTC2442)
+            try:
+                for key in self.imudata.keys():
+                    npacket_tmp = self.imudata[key]['npacket_an']
+                    print('MPU9250 ' + key + ' packages read:',npacket_tmp)
+            except Exception as e:
+                print(e)
+                pass
+            
+
+            print('Firesting oxygen packages read:',npacket_firesting)
             # Writing data to ncfile
             print('Writing to netCDF')
             # Status information
@@ -710,35 +754,40 @@ class todlnetCDF4File():
 
                     
             #if(self.todl.device_info['imu_freq'] > 0):
-            if(len(self.imu_cnt10ks_tmp) > 0):
-                m = len(self.imu_cnt10ks_tmp)                
-                n = len(self.imu_cnt10ks)
-                #print(self.imu_accx_tmp[:])
-                self.imu_cnt10ks[n:n+m]     = self.imu_cnt10ks_tmp[:]
-                self.imu_temp[n:n+m]  = self.imu_temp_tmp[:]
-                self.imu_accx[n:n+m]  = self.imu_accx_tmp[:]
-                self.imu_accy[n:n+m]  = self.imu_accy_tmp[:]
-                self.imu_accz[n:n+m]  = self.imu_accz_tmp[:]
-                self.imu_gyrox[n:n+m] = self.imu_gyrox_tmp[:]
-                self.imu_gyroy[n:n+m] = self.imu_gyroy_tmp[:]
-                self.imu_gyroz[n:n+m] = self.imu_gyroz_tmp[:]
-                self.imu_magx[n:n+m] = self.imu_magx_tmp[:]
-                self.imu_magy[n:n+m] = self.imu_magy_tmp[:]
-                self.imu_magz[n:n+m] = self.imu_magz_tmp[:]
-                self.imu_headxy[n:n+m] = self.imu_headxy_tmp[:]                
-                # Clear the lists                
-                self.imu_cnt10ks_tmp = []
-                self.imu_temp_tmp = []
-                self.imu_accx_tmp = []
-                self.imu_accy_tmp = []
-                self.imu_accz_tmp = []
-                self.imu_gyrox_tmp = []
-                self.imu_gyroy_tmp = []
-                self.imu_gyroz_tmp = []
-                self.imu_magx_tmp = []
-                self.imu_magy_tmp = []
-                self.imu_magz_tmp = []
-                self.imu_headxy_tmp = []                
+            for imu_name in self.imudata.keys():
+                if(len(self.imudata[imu_name]['cnt10ks_tmp']) > 0):
+                    m = len(self.imudata[imu_name]['cnt10ks_tmp'])                
+                    n = len(self.imudata[imu_name]['cnt10ks'])
+                    #print(self.imu_accx_tmp[:])
+                    self.imudata[imu_name]['cnt10ks'][n:n+m]= self.imudata[imu_name]['cnt10ks_tmp'][:]
+                    self.imudata[imu_name]['temp'][n:n+m]   = self.imudata[imu_name]['temp_tmp'][:]
+                    self.imudata[imu_name]['accx'][n:n+m]   = self.imudata[imu_name]['accx_tmp'][:]
+                    self.imudata[imu_name]['accy'][n:n+m]   = self.imudata[imu_name]['accy_tmp'][:]
+                    self.imudata[imu_name]['accz'][n:n+m]   = self.imudata[imu_name]['accz_tmp'][:]
+                    self.imudata[imu_name]['gyrox'][n:n+m]  = self.imudata[imu_name]['gyrox_tmp'][:]
+                    self.imudata[imu_name]['gyroy'][n:n+m]  = self.imudata[imu_name]['gyroy_tmp'][:]
+                    self.imudata[imu_name]['gyroz'][n:n+m]  = self.imudata[imu_name]['gyroz_tmp'][:]
+                    self.imudata[imu_name]['magx'][n:n+m]   = self.imudata[imu_name]['magx_tmp'][:]
+                    self.imudata[imu_name]['magy'][n:n+m]   = self.imudata[imu_name]['magy_tmp'][:]
+                    self.imudata[imu_name]['magz'][n:n+m]   = self.imudata[imu_name]['magz_tmp'][:]
+                    self.imudata[imu_name]['headxy'][n:n+m] = self.imudata[imu_name]['headxy_tmp'][:]
+                    self.imudata[imu_name]['headxz'][n:n+m] = self.imudata[imu_name]['headxz_tmp'][:]
+                    self.imudata[imu_name]['headyz'][n:n+m] = self.imudata[imu_name]['headyz_tmp'][:]                                    
+                    # Clear the lists                
+                    self.imudata[imu_name]['cnt10ks_tmp'] = []
+                    self.imudata[imu_name]['temp_tmp']    = []
+                    self.imudata[imu_name]['accx_tmp']    = []
+                    self.imudata[imu_name]['accy_tmp']    = []
+                    self.imudata[imu_name]['accz_tmp']    = []
+                    self.imudata[imu_name]['gyrox_tmp']   = []
+                    self.imudata[imu_name]['gyroy_tmp']   = []
+                    self.imudata[imu_name]['gyroz_tmp']   = []
+                    self.imudata[imu_name]['magx_tmp']    = []
+                    self.imudata[imu_name]['magy_tmp']    = []
+                    self.imudata[imu_name]['magz_tmp']    = []
+                    self.imudata[imu_name]['headxy_tmp']  = []
+                    self.imudata[imu_name]['headxz_tmp']  = []
+                    self.imudata[imu_name]['headyz_tmp']  = []                     
 
             #if(self.todl.device_info['pyro_freq'] > 0):
             try:
