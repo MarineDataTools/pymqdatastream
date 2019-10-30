@@ -50,7 +50,7 @@ if sys.version_info >= (3,4):
           'todlfs_get_files=pymqdatastream.connectors.todl.todlfs.todlfs_get_files:todlfs_get_files',\
           'todlfs_list=pymqdatastream.connectors.todl.todlfs.todlfs_get_files:todlfs_list',\
           'pymqds_test_slogger=pymqdatastream.connectors.logger.pymqds_slogger:test'], },
-          package_data = {'microrider':['data/*.DAT'],'':['VERSION'],'todl_gui':['connectors/todl/todl_config.yaml']},
+          package_data = {'microrider':['data/*.DAT'],'':['VERSION'],'':['connectors/todl/todl_config.yaml']},
           zip_safe=False)
 
 else:
