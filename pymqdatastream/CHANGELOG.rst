@@ -1,3 +1,5 @@
+0.8.4:
+        - __init__.py in todl/tools
 0.8.3:
         - todl_quickview in tools folder
 	- todl_set_time 
