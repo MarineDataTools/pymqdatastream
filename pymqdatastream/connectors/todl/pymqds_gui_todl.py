@@ -2066,25 +2066,26 @@ class todlDevice():
                     self._IMU_table.setItem(self._IMU_table_index['counter'], 1, item)
                     # Temperature
                     tabdata = data['T']
-                    if(len(tabdata) > 1):
-                        tabdata = tabdata[0]
+                    if(data['type']=='An'):
+                        tabdata = tabdata[0]                        
+
                     item = QtWidgets.QTableWidgetItem(str(tabdata))                    
                     self._IMU_table.setItem(self._IMU_table_index['temp'], 1, item)                    
                     for i in range(3):
                         tabdata = data['acc'][i]
-                        if(len(tabdata) > 1):
+                        if(data['type']=='An'):
                             tabdata = tabdata[0]                        
                         item = QtWidgets.QTableWidgetItem(str(tabdata))
                         self._IMU_table.setItem(self._IMU_table_index['acc'][i], 1, item )
                     for i in range(3):
                         tabdata = data['gyro'][i]
-                        if(len(tabdata) > 1):
+                        if(data['type']=='An'):
                             tabdata = tabdata[0]                        
                         item = QtWidgets.QTableWidgetItem(str(tabdata))
                         self._IMU_table.setItem(self._IMU_table_index['gyro'][i], 1, item )
                     for i in range(3):
                         tabdata = data['mag'][i]
-                        if(len(tabdata) > 1):
+                        if(data['type']=='An'):
                             tabdata = tabdata[0]                        
                         item = QtWidgets.QTableWidgetItem(str(tabdata))
                         self._IMU_table.setItem(self._IMU_table_index['mag'][i], 1, item )
