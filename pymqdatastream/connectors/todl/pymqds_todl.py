@@ -593,14 +593,15 @@ class todlnetCDF4File():
                             adc_timevar[:]     = np.polyval(time_poly,self.adc_tvars[nch][:])
                             
                     # IMU
-                    if(self.todl.device_info['imu_freq'] > 0):
-                        print('Creating a timevariable for IMU')
-                        dimname = 'cnt10ks_imu'
-                        varname = 'time'
-                        imu_time    = self.imugrp.createVariable(varname, "f8", (dimname,),zlib=zlib,complevel=complevel)
-                        imu_time.units = self.stat_timevar.units
-                        #imu_time[:] = np.interp(self.imu_cnt10ks[:],cnt10ks,time)
-                        imu_time[:] = np.polyval(time_poly,self.imu_cnt10ks[:])
+                    if False: # Legacy this is done on the fly now, will be removed soon
+                        if(self.todl.device_info['imu_freq'] > 0):
+                            print('Creating a timevariable for IMU')
+                            dimname = 'cnt10ks_imu'
+                            varname = 'time'
+                            imu_time    = self.imugrp.createVariable(varname, "f8", (dimname,),zlib=zlib,complevel=complevel)
+                            imu_time.units = self.stat_timevar.units
+                            #imu_time[:] = np.interp(self.imu_cnt10ks[:],cnt10ks,time)
+                            imu_time[:] = np.polyval(time_poly,self.imu_cnt10ks[:])
                         
                         
                         
@@ -655,18 +656,42 @@ class todlnetCDF4File():
                     except Exception as e:
                         self.logger.debug(funcname + ':Exception:' + str(e))                            
                         
-                elif(data['type'] == 'A'): # IMU data
-                    self.imu_cnt10ks_tmp.append(data['cnt10ks'])
-                    self.imu_temp_tmp.append(data['T'])                    
-                    self.imu_accx_tmp.append(data['acc'][0])
-                    self.imu_accy_tmp.append(data['acc'][1])
-                    self.imu_accz_tmp.append(data['acc'][2])
-                    self.imu_gyrox_tmp.append(data['gyro'][0])
-                    self.imu_gyroy_tmp.append(data['gyro'][1])
-                    self.imu_gyroz_tmp.append(data['gyro'][2])
-                    self.imu_magx_tmp.append(data['mag'][0])
-                    self.imu_magy_tmp.append(data['mag'][1])
-                    self.imu_magz_tmp.append(data['mag'][2])
+                elif(data['type'] == 'A'): # IMU data in polling format
+                    imu_name = 'imu'
+                    try:
+                        self.imudata[imu_name]
+                    except Exception as e:
+                        print('Exception',e)
+                        print('Creating IMU group:' + imu_name)
+                        self.create_imu_group(imu_name)
+
+                    self.imudata[imu_name]['temp_tmp'].append(data['T'])
+                    self.imudata[imu_name]['accx_tmp'].append(data['acc'][0])
+                    self.imudata[imu_name]['accy_tmp'].append(data['acc'][1])
+                    self.imudata[imu_name]['accz_tmp'].append(data['acc'][2])
+                    self.imudata[imu_name]['gyrox_tmp'].append(data['gyro'][0])
+                    self.imudata[imu_name]['gyroy_tmp'].append(data['gyro'][1])
+                    self.imudata[imu_name]['gyroz_tmp'].append(data['gyro'][2])
+                    self.imudata[imu_name]['magx_tmp'].append(data['mag'][0])
+                    self.imudata[imu_name]['magy_tmp'].append(data['mag'][1])
+                    self.imudata[imu_name]['magz_tmp'].append(data['mag'][2])
+                    #self.imudata[imu_name]['headxy_tmp'].append(data['heading_xy'])
+                    #self.imudata[imu_name]['headxz_tmp'].append(data['heading_xz'])
+                    #self.imudata[imu_name]['headyz_tmp'].append(data['heading_yz'])
+                    self.imudata[imu_name]['cnt10ks_tmp'].append(data['cnt10ks'])
+                    
+                        
+                    #self.imu_cnt10ks_tmp.append(data['cnt10ks'])
+                    #self.imu_temp_tmp.append(data['T'])                    
+                    #self.imu_accx_tmp.append(data['acc'][0])
+                    #self.imu_accy_tmp.append(data['acc'][1])
+                    #self.imu_accz_tmp.append(data['acc'][2])
+                    #self.imu_gyrox_tmp.append(data['gyro'][0])
+                    #self.imu_gyroy_tmp.append(data['gyro'][1])
+                    #self.imu_gyroz_tmp.append(data['gyro'][2])
+                    #self.imu_magx_tmp.append(data['mag'][0])
+                    #self.imu_magy_tmp.append(data['mag'][1])
+                    #self.imu_magz_tmp.append(data['mag'][2])
 
                 elif(data['type'] == 'An'): # IMU FIFO data
                     # Hack, dt in the packet shows wrong results, calculating difference between two packets...

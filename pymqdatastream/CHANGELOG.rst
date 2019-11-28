@@ -1,3 +1,5 @@
+0.8.5:
+        - several bugfixes regarding older TODL firmware (IMU/IMU FIFO)
 0.8.4:
         - __init__.py in todl/tools
 0.8.3:
