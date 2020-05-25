@@ -3,7 +3,7 @@
 # Bytes 0:4: uint32 first free sector
 #
 #
-# File: 
+# File:
 #
 import sys
 import os
@@ -25,7 +25,7 @@ todl_fname = 'todl_data_2017-10-09:09:08:05.todl' # EMB169 v0.77 short logger te
 todl_fname = 'todl_data_2017-10-09:09:48:44.todl' # EMB169 test, freq 250
 todl_fname = 'todl_data_2017-10-09:13:55:23.todl' # EMB169 test, freq 650
 #todl_fname = 'todl_read.todlfs' # Bathtub test
-todl_fname = 'todl_2.todlfs' # 
+todl_fname = 'todl_2.todlfs' #
 todl_fname = 'todl_bathtub.todlfs' # Bathtub test 2
 todl_data_full = todl_data + todl_fname
 
@@ -42,7 +42,7 @@ def todlfs_scan(filename):
     num_sectors = first_free_sector - 1
     print('Num sectors:' + str(num_sectors))
     files = []
-    
+
     # Get file information
     cur_sector = 2
     num_file = 0
@@ -55,7 +55,7 @@ def todlfs_scan(filename):
         first_file_sector = cur_sector
         last_file_sector = int.from_bytes(data_f[IND_LASTSECTOR[0]:IND_LASTSECTOR[1]], byteorder='big')
         print(' ')
-        print(' ')        
+        print(' ')
         print('File:')
         print('Filesize:' + str(filesize) + ' last sector of file (in 512 byte steps):' + str(last_file_sector))
         ind = IND_LASTSECTOR[1]
@@ -63,35 +63,37 @@ def todlfs_scan(filename):
         # This should basically work, but v0.78 and prior version have a bug not writing the "F"
         #file_name = file_info.split('@@F:')[1]
         # Look like this: @C:2017.10.21 10:39:04@@M:2017.10.22 07:09:29@@\x00:todl_data_000001.todl\x00
-        # Should look like this: @C:2017.10.21 10:39:04@@M:2017.10.22 07:09:29@@F:todl_data_000001.todl\x00        
-        # Lets read until we have a \x00 and many (2) @s        
+        # Should look like this: @C:2017.10.21 10:39:04@@M:2017.10.22 07:09:29@@F:todl_data_000001.todl\x00
+        # Lets read until we have a \x00 and many (2) @s
         while(True):
             #print(str(data_f[ind]))
             if( (data_f[ind] == 0) and (data_f[ind+1] == 0x40) and (data_f[ind+2] == 0x40)):
-                break            
+                break
             file_info += data_f[ind:ind+1]
             ind += 1
 
         print(last_file_sector)
-        cur_sector = last_file_sector + 1        
+        cur_sector = last_file_sector + 1
         f.seek(cur_sector * 512)
         # Replace the missing F
         print(file_info)
         file_info = file_info.replace(b'\x00',b'F')
-        print(file_info)        
+        print(file_info)
         file_info = file_info.decode("utf-8")
         print('File info: ' + file_info)
         file_name = file_info.split('@@F:')[1]
-        file_index = int(file_name.split('_')[0])
-        
+        #file_index = int(file_name.split('_')[0])
+        # for a file info like this:
+        #File info: @C:2017.10.19 10:59:30@@M:2017.10.20 04:26:58@@F:todl_data_000001.todl
+        file_index = int(file_name.split('_')[-1].split('.todl')[0])
         # file_name = file_info.rsplit(':')[0]
         print('Num:' + str(num_file) + ' Filename:' + file_name)
-        # 
+        #
         finfo = {'sstart':first_file_sector,'send':last_file_sector,'file_name':file_name,'filesize':filesize,'file_info':file_info}
         files.append(finfo)
         num_file += 1
-        
-    f.close()    
+
+    f.close()
     return files
 
 
@@ -99,9 +101,9 @@ def todlfs_list():
     desc = 'Lists files within a todlfs data file.'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('todlfs', help= 'The filename of the todlfs file')
-    args = parser.parse_args()    
-    filename  = args.todlfs    
-    files = todlfs_scan(filename)    
+    args = parser.parse_args()
+    filename  = args.todlfs
+    files = todlfs_scan(filename)
 
 def todlfs_get_files():
     usage_str = 'todlfs_get_files'
@@ -110,7 +112,7 @@ def todlfs_get_files():
     parser.add_argument('todlfs', help= 'The filename of the todlfs file')
     parser.add_argument('data_folder',help='The folder in which the splitted files will be saved')
     parser.add_argument('index',help='Which files to be extracted',nargs='?')
-    #parser.add_argument('deployment',help='The name of the deployment')        
+    #parser.add_argument('deployment',help='The name of the deployment')
     parser.add_argument('--verbose', '-v', action='count')
 
     args = parser.parse_args()
@@ -118,7 +120,7 @@ def todlfs_get_files():
     if len(sys.argv)==1:
         parser.print_help()
         sys.exit(1)
-        
+
     #todl_fname = args.deployment
     filename  = args.todlfs
     todl_data_folder = args.data_folder
@@ -130,9 +132,9 @@ def todlfs_get_files():
         f_ind = []
         for i in f_ind_tmp:
             f_ind.append(int(i))
-            
 
-    
+
+
     # Creating a data folder
     if not os.path.exists(todl_data_folder):
         print('Folder:' + todl_data_folder + ' does not exist, creating it')
@@ -140,7 +142,7 @@ def todlfs_get_files():
     else:
         print('Folder:' + todl_data_folder + ' exists, exiting')
         exit()
-        
+
     if(args.verbose == None):
         loglevel = logging.CRITICAL
     elif(args.verbose == 1):
@@ -148,16 +150,16 @@ def todlfs_get_files():
     elif(args.verbose > 1):
         loglevel = logging.DEBUG
 
-    
+
     # Scan the todlfs dataset for files
     files = todlfs_scan(filename)
-    
+
     # Write data to file
     if f_ind == None:
         f_ind = range(0,len(files))
 
     # Opening the file again
-    f = open(filename,'rb')        
+    f = open(filename,'rb')
     for i in f_ind:
         finfo = files[i]
         print('Saving file' + str(finfo))
@@ -173,9 +175,7 @@ def todlfs_get_files():
         fsplit.write(b'\n')
         fsplit.write(file_data)
         fsplit.close()
-    
+
 
 
 #print(data)
-
-

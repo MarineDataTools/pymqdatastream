@@ -70,12 +70,12 @@ def parse_device_info(data_str):
     device_info = {}
     # Pre-initialise some things
     device_info['adcs'] = None
-    
+
     boardversion = '??'
     firmwareversion = '??'
     # If we dont have a time zone, its UTC
     device_info['timezone'] = pytz.UTC
-    logger.debug(funcname + ': data_str: \n' + str(data_str))    
+    logger.debug(funcname + ': data_str: \n' + str(data_str))
     #print(data_str)
     for line in data_str.split('\n'):
         if( ' board version:' in line ):
@@ -84,7 +84,7 @@ def parse_device_info(data_str):
             boardversion = line.rsplit(': ')
             try:
                 boardversion = boardversion[1].split(' --')[0]
-            except:                    
+            except:
                 logger.debug(funcname + ': No valid version string')
 
         elif( 'firmware version:' in line ):
@@ -99,7 +99,7 @@ def parse_device_info(data_str):
 
 
     device_info['board'] = boardversion
-    device_info['firmware'] = firmwareversion                            
+    device_info['firmware'] = firmwareversion
     #print(data_str)
     #print('Data str:' + data_str)
     # Parse the data
@@ -125,7 +125,7 @@ def parse_device_info(data_str):
     # Get the RTC time
     #
     #
-    # >>>Time: 2017.09.11 10:06:44 
+    # >>>Time: 2017.09.11 10:06:44
     device_info['time_str']   = ''
     device_info['time']       = None
     time_str = ''
@@ -134,13 +134,13 @@ def parse_device_info(data_str):
 
 
     if(len(time_str) > 0):
-        time_str = time_str.replace('\n','')  
+        time_str = time_str.replace('\n','')
         print('Time string:',time_str)
         device_info['time_str']   = time_str
-        
+
     try:
         device_info['time']   = datetime.datetime.strptime(time_str, '>>>Time: %Y.%m.%d %H:%M:%S')
-        device_info['time']   = device_info['time'].replace(tzinfo = device_info['timezone'])                    
+        device_info['time']   = device_info['time'].replace(tzinfo = device_info['timezone'])
     except Exception as e:
         logger.debug(funcname + ':' + str(e))
         print(funcname + ':' + str(e))
@@ -148,7 +148,7 @@ def parse_device_info(data_str):
 
     #print('time string',time_str)
     #print('device_info[time]',device_info['time'])
-        
+
     freq_str = ''
     HAS_FREQ_STR = False
     for i,me in enumerate(re.finditer(r'>>>Freqs:.*\n',data_str)):
@@ -179,21 +179,21 @@ def parse_device_info(data_str):
     except:
         device_info['cnt10k'] = None
 
-    
-    cnt32k_str = ''        
+
+    cnt32k_str = ''
     for i,me in enumerate(re.finditer(r'>>>32kHz cnt:.*\n',data_str)):
         cnt32k_str = me.group()
 
     if(len(cnt32k_str) == 0): # This is the new format directly in the date str
         for i,me in enumerate(re.finditer(r'32kHz:\d* ',data_str)):
-            cnt32k_str = me.group()                                    
-        
+            cnt32k_str = me.group()
+
     device_info['cnt32k_str'] = cnt32k_str
     try:
         cnt32k = [int(s) for s in re.findall(r'\b\d+\b', cnt32k_str)][-1]
-        device_info['cnt32k'] = cnt32k            
+        device_info['cnt32k'] = cnt32k
     except:
-        device_info['cnt32k'] = None   
+        device_info['cnt32k'] = None
 
     #
     # Get the sampling frequencies
@@ -201,7 +201,7 @@ def parse_device_info(data_str):
     #>>>Freqs:ADCs: 100, IMU: 5
     adcs_freq = np.NaN
     imu_freq = np.NaN
-    pyro_freq = np.NaN    
+    pyro_freq = np.NaN
     if(len(freq_str) > 0):
         freq_str = freq_str.replace('>>>Freqs:','')
         freq_str = freq_str.replace('\n','')
@@ -218,7 +218,7 @@ def parse_device_info(data_str):
             ind2 = freq_str[ind1:].find(',')
             if(ind2 == -1): # End of line
                 ind2 = len(freq_str[ind1:])
-                
+
             imu_freq = float(freq_str[ind1 + 4 : ind2+ind1])
         else:
             imu_freq = np.NaN
@@ -228,17 +228,17 @@ def parse_device_info(data_str):
             ind1 = freq_str.find('PYRO:')
             ind2 = freq_str[ind1:].find(',')
             if(ind2 == -1): # End of line
-                ind2 = len(freq_str[ind1:])            
+                ind2 = len(freq_str[ind1:])
             pyro_freq = float(freq_str[ind1 + 5 : ind2+ind1])
         else:
-            pyro_freq = np.NaN            
-            
-            
+            pyro_freq = np.NaN
+
+
 
     #print('Channel str:' + channel_str)
     speed_str = ''
     for i,me in enumerate(re.finditer(r'>>>speed:.*\n',data_str)):
-        speed_str = me.group()                                            
+        speed_str = me.group()
 
 
     data_format_tmp = [int(s) for s in re.findall(r'\b\d+\b', format_str)]
@@ -258,7 +258,7 @@ def parse_device_info(data_str):
     # Some versions dont have a freq string (e.g. v0.42)
     if HAS_FREQ_STR == False:
         freq_str = str(speed_data[-1])
-        
+
     device_info['info_str'] = data_str
     device_info['counterfreq'] = s4lv0_4_tfreq # TODO, this should come from the firmware
     device_info['format'] = data_format
@@ -269,7 +269,7 @@ def parse_device_info(data_str):
     device_info['freq'] = speed_data[-1]
     device_info['freq_str'] = freq_str
     device_info['imu_freq'] = imu_freq
-    device_info['pyro_freq'] = pyro_freq    
+    device_info['pyro_freq'] = pyro_freq
     # Create a list for each channel and fill it later with streams
 
     # Update the local parameters
@@ -295,7 +295,7 @@ def find_todl_header(data_file):
         if((bytes_read >= maxstartbytes) and (VALID_HEADER == False)):
             logger.warning(funcname + ': Could not find header in the first ' + str(maxstartbytes) + ' bytes, aborting')
             break
-        
+
         if(bytes_read >= maxbytes):
             logger.warning(funcname + ': Could not read file')
             break
@@ -303,7 +303,7 @@ def find_todl_header(data_file):
         pos = data_file.tell()
         b = data_file.read(1)
         data += b
-        
+
         if(VALID_HEADER):
             # Check for the end of header, either a not utf-8 decodable value or a missing >>> after a newline
             # Try to decode the header
@@ -312,7 +312,7 @@ def find_todl_header(data_file):
             except:
                 logger.debug(funcname + ': Stop of header due to error in decoding to utf-8 at position: ' + str(pos))
                 break
-            header += b            
+            header += b
             # Check if we have a \n, if yes check the next three bytes for >>>
             if(b == b'\n'):
                 d = data_file.read(3)
@@ -328,7 +328,7 @@ def find_todl_header(data_file):
                 logger.debug(funcname + ': Found a valid start header')
                 header += data[-len(file_header_start_sam4log):]
                 VALID_HEADER=True
-        if(len(data) > len(file_header_start_todl)):                
+        if(len(data) > len(file_header_start_todl)):
             if (data[-len(file_header_start_todl):] == file_header_start_todl):
                 logger.debug(funcname + ': Found a valid start header')
                 header += data[-len(file_header_start_todl):]
@@ -345,14 +345,14 @@ def find_todl_header(data_file):
 #
 #
 class todlnetCDF4File():
-    """ A turbulent ocean data logger (TODL) netCDF4 file object. This object can open, read and convert files. TODO: In the bright future it should also stream data to a todl datastream ... 
+    """ A turbulent ocean data logger (TODL) netCDF4 file object. This object can open, read and convert files. TODO: In the bright future it should also stream data to a todl datastream ...
     """
 
     def __init__(self,fname):
         funcname = self.__class__.__name__ + '.__init__()'
         self.logger = logger
         self.todl = todlDataStream()
-        # This can also 
+        # This can also
         TODL_FILE = self.todl.load_file(fname,start_read = False)
         print('TODL_FILE',TODL_FILE)
         if(TODL_FILE == False):
@@ -360,7 +360,7 @@ class todlnetCDF4File():
         # We have a device info now, lets create the netCDF4 groups
         print(self.todl.device_info)
 
-        
+
     def create_ncfile(self,fname,zlib=True,complevel=4):
         """Creates a new netCDF4 File based on the device_info information of
         the available data
@@ -389,6 +389,12 @@ class todlnetCDF4File():
         self.stat_tvar.units  = 'time in seconds since device power on (10kHz counter)'
         self.stat_timevar     = sgrp.createVariable("time", "f8", (dimname,), fill_value=self.fill_value,zlib=zlib,complevel=complevel)
         self.stat_timevar_tmp = []
+        # The RTC counter
+        #dimname          = 'rtc_32k'
+        self.stat_rtcvar_tmp    = []
+        self.stat_rtcvar     = sgrp.createVariable("rtc", "f8", ('cnt10ks',), fill_value=self.fill_value,zlib=zlib,complevel=complevel)
+        self.stat_rtcvar.units  = 'time in seconds since device power on (32kHz RTC counter)'
+        self.stat_rtcvar_tmp = []
 
         # The time base is UNIX time
         if(self.todl.device_info['time'] == None):
@@ -405,7 +411,7 @@ class todlnetCDF4File():
         #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
         self.time_base = self.time_base.replace(tzinfo = self.todl.device_info['timezone'])
         self.stat_timevar.units = 'seconds since ' + time_unit
-        
+
         # Add the time information from the device info, this is earlier to every measurement
         self.stat_tvar[0] = self.todl.device_info['cnt10k']/self.todl.device_info['counterfreq']
         self.stat_timevar[0] = (self.todl.device_info['time'] - self.time_base).total_seconds()
@@ -421,14 +427,14 @@ class todlnetCDF4File():
             self.adc_tvars  = []
             # For temporary storage of data, this is faster as a direct write to the ncfile
             self.adc_vars_tmp   = []
-            self.adc_tvars_tmp  = []            
+            self.adc_tvars_tmp  = []
             # Creating up to four different time dimensions, to cover
             # all channels
             ch_seq = np.unique(np.asarray(self.todl.device_info['channel_seq']))
             self.ch_seq = ch_seq
             for nch,ch in enumerate(ch_seq):
                 dimname = 'cnt10ks_ch' + str(ch)
-                print(dimname)
+                print('Dimname',dimname)
                 ch_dim = adcgrp.createDimension(dimname, None)
                 ch_dim
                 ch_dims.append(ch_dim)
@@ -439,7 +445,7 @@ class todlnetCDF4File():
 
                 self.adc_tvars_tmp.append([])
                 self.adc_vars_tmp.append([])
-                
+
                 # Creating variables
                 for adc in self.todl.device_info['adcs']:
                     varname = 'V_adc' + str(adc) + '_ch' + str(ch)
@@ -449,22 +455,22 @@ class todlnetCDF4File():
 
         # Check if we have an IMU
         #if(self.todl.device_info['imu_freq'] > 0):
-        self.imugroups = {}        
+        self.imugroups = {}
         self.imudata = {} #
 
     def create_imu_group(self,name='imu',zlib=True):
         funcname = 'create_imu_group'
-                    
+
         rootgrp = self.ncfile
         if True:
             self.logger.debug(funcname + ': Creating imu group')
             imugrp     = rootgrp.createGroup(name)
-                
+
             try:
                 self.imudata[name]
             except:
-                self.imudata[name] = {}               
-                
+                self.imudata[name] = {}
+
             self.imugroups[name] = imugrp
             dimname = 'cnt10ks'
             imu_dim = imugrp.createDimension(dimname, None)
@@ -482,9 +488,9 @@ class todlnetCDF4File():
             self.imudata[name]['magz']       = imugrp.createVariable('magz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
             self.imudata[name]['headxy']     = imugrp.createVariable('heading_xy', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
             self.imudata[name]['headxz']     = imugrp.createVariable('heading_xz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
-            self.imudata[name]['headyz']     = imugrp.createVariable('heading_yz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)            
+            self.imudata[name]['headyz']     = imugrp.createVariable('heading_yz', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
             self.imudata[name]['cnt10ks_tmp']= []
-            self.imudata[name]['temp_tmp']   = []            
+            self.imudata[name]['temp_tmp']   = []
             self.imudata[name]['accx_tmp']   = []
             self.imudata[name]['accy_tmp']   = []
             self.imudata[name]['accz_tmp']   = []
@@ -496,7 +502,7 @@ class todlnetCDF4File():
             self.imudata[name]['magz_tmp']   = []
             self.imudata[name]['headxy_tmp'] = []
             self.imudata[name]['headxz_tmp'] = []
-            self.imudata[name]['headyz_tmp'] = []            
+            self.imudata[name]['headyz_tmp'] = []
             # Statistics
             self.imudata[name]['cnt10ks_old'] = 0
             self.imudata[name]['npacket_an'] = 0
@@ -504,8 +510,11 @@ class todlnetCDF4File():
 
         # Or a Pyroscience Firesting?
         if(self.todl.device_info['pyro_freq'] > 0):
-            self.create_pyro_group()
-            
+            try:
+                self.create_pyro_group()
+            except:
+                print('Pyto group already existing')
+
     def create_pyro_group(self):
         funcname = 'create_pyro_group'
         rootgrp = self.ncfile
@@ -515,14 +524,14 @@ class todlnetCDF4File():
         dimname = 'cnt10ks_pyro'
         pyro_dim = pyrogrp.createDimension(dimname, None)
         self.pyro_cnt10ks        =  pyrogrp.createVariable('cnt10ks_pyro', "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
-        self.pyro_cnt10ks.units = 'time in seconds since device power on'            
+        self.pyro_cnt10ks.units = 'time in seconds since device power on'
         self.pyro_cnt10ks_tmp    = []
         self.pyro_phi      =  pyrogrp.createVariable('phi',    "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
         self.pyro_phi_tmp  = []
         self.pyro_umol     =  pyrogrp.createVariable('umol',   "f8", (dimname,),zlib=self.zlib_level,complevel=self.complevel)
         self.pyro_umol_tmp = []
-            
-            
+
+
     def to_ncfile_fast(self,fname, num_bytes = 1000000, num_bytes_packages=-1,zlib=True,complevel=4):
         """ Reads the data in fname, converts and puts it into a ncfile
 
@@ -546,7 +555,7 @@ class todlnetCDF4File():
         file_size = os.path.getsize(self.todl.data_file.name)
         npacket_an = 0
         npacket_firesting = 0
-        npacket_LTC2442 = 0        
+        npacket_LTC2442 = 0
         while(True):
             num_bytes_packages -= 1
             raw_data = self.todl.data_file.read(num_bytes)
@@ -572,7 +581,7 @@ class todlnetCDF4File():
                     #        ind_bad    = time.mask == True
                     #        cnt10ks    = cnt10ks[~ind_bad]
                     #        time       = time[~ind_bad]
-                        
+
                     # PyroScience
                     if(self.todl.device_info['pyro_freq'] > 0):
                         print('Creating timevariable for Pyroscience Firesting')
@@ -586,12 +595,12 @@ class todlnetCDF4File():
                         for nch,ch in enumerate(self.ch_seq):
                             print('Creating a timevariable for channel:' + str(ch))
                             varname = 'time_ch' + str(ch)
-                            dimname = 'cnt10ks_ch' + str(ch)                        
+                            dimname = 'cnt10ks_ch' + str(ch)
                             adc_timevar = self.adcgrp.createVariable(varname, "f8", (dimname,),zlib=zlib,complevel=complevel)
                             adc_timevar.units  = self.stat_timevar.units
                             #adc_timevar[:]     = np.interp(self.adc_tvars[nch][:],cnt10ks,time)
                             adc_timevar[:]     = np.polyval(time_poly,self.adc_tvars[nch][:])
-                            
+
                     # IMU
                     if False: # Legacy this is done on the fly now, will be removed soon
                         if(self.todl.device_info['imu_freq'] > 0):
@@ -602,13 +611,13 @@ class todlnetCDF4File():
                             imu_time.units = self.stat_timevar.units
                             #imu_time[:] = np.interp(self.imu_cnt10ks[:],cnt10ks,time)
                             imu_time[:] = np.polyval(time_poly,self.imu_cnt10ks[:])
-                        
-                        
-                        
-                        
+
+
+
+
                 # DONE!
                 self.logger.debug(funcname + ': EOF')
-                return True            
+                return True
 
             # This is the only crucial part where we should check what format we have
             # This is not done yet
@@ -618,30 +627,31 @@ class todlnetCDF4File():
                 [data_packets,data_str] = data_packages.decode_format4(data_str,self.todl.device_info)
                 err_packet = data_packets[-1]
                 num_good += err_packet['num_good']
-                num_err += err_packet['num_err']                
+                num_err += err_packet['num_err']
 
             # Read the data into temporary buffer
             for data in data_packets:
                 cnt += 1
                 if(data['type'] == 'Stat'): # Status packet
+                    self.stat_rtcvar_tmp.append(data['cnt32k']/32768)
                     self.stat_tvar_tmp.append(data['cnt10ks'])
                     # Check if we are in a acceptable range of time shift between the 10k counter and the RTC time
                     cnt10ks_info = self.todl.device_info['cnt10k']/self.todl.device_info['counterfreq']
                     dts_cnt = data['cnt10ks'] - cnt10ks_info # Calculate the counter difference
                     dt = data['date'] -  self.todl.device_info['time'] # Calculate the time difference
                     dts = dt.total_seconds()
-                    dts_timevar = (data['date'] - self.time_base).total_seconds()                    
+                    dts_timevar = (data['date'] - self.time_base).total_seconds()
                     if(dts < 0): # Negative number should not appear!
                         print('Bad count (too small):', dts,dts_cnt,data['date'])
                         dts_timevar = -9e9
                     elif(abs(dts - dts_cnt)>2.0): # If difference is too large, discard
-                        print('Bad count (too large)', dts,dts_cnt,data['date'])                        
+                        print('Bad count (too large)', dts,dts_cnt,data['date'])
                         dts_timevar = -9e9
                     else:
                         pass
                         #print('Good time data', dts,dts_cnt,data['date'])
 
-                    
+
                     self.stat_timevar_tmp.append(dts_timevar)
 
                 elif(data['type'] == 'L'): # ADC data
@@ -654,13 +664,16 @@ class todlnetCDF4File():
                             self.adc_vars_tmp[ind][nadc].append(data['V'][nadc])
 
                     except Exception as e:
-                        self.logger.debug(funcname + ':Exception:' + str(e))                            
-                        
+                        self.logger.debug(funcname + ':Exception:' + str(e))
+
                 elif(data['type'] == 'A'): # IMU data in polling format
                     imu_name = 'imu'
+                    #print(self.imudata)
                     try:
                         self.imudata[imu_name]
                     except Exception as e:
+                        print('Hallo!',self.imudata)
+                        print(self.imugroups)
                         print('Exception',e)
                         print('Creating IMU group:' + imu_name)
                         self.create_imu_group(imu_name)
@@ -679,10 +692,10 @@ class todlnetCDF4File():
                     #self.imudata[imu_name]['headxz_tmp'].append(data['heading_xz'])
                     #self.imudata[imu_name]['headyz_tmp'].append(data['heading_yz'])
                     self.imudata[imu_name]['cnt10ks_tmp'].append(data['cnt10ks'])
-                    
-                        
+
+
                     #self.imu_cnt10ks_tmp.append(data['cnt10ks'])
-                    #self.imu_temp_tmp.append(data['T'])                    
+                    #self.imu_temp_tmp.append(data['T'])
                     #self.imu_accx_tmp.append(data['acc'][0])
                     #self.imu_accy_tmp.append(data['acc'][1])
                     #self.imu_accz_tmp.append(data['acc'][2])
@@ -695,27 +708,28 @@ class todlnetCDF4File():
 
                 elif(data['type'] == 'An'): # IMU FIFO data
                     # Hack, dt in the packet shows wrong results, calculating difference between two packets...
+                    print('An, ...')
                     imu_name = 'imu{:02d}'.format(data['sensor']) # Sensor number
                     try:
                         self.imudata[imu_name]
                     except Exception as e:
-                        print(e)
+                        print('e',e)
                         print('Creating IMU group:' + imu_name)
                         self.create_imu_group(imu_name)
 
-                        
+
                     if(self.imudata[imu_name]['npacket_an'] == 0):
                         self.imudata[imu_name]['cnt10ks_old'] = data['cnt10ks']
-                        self.imudata[imu_name]['npacket_an'] += 1    
+                        self.imudata[imu_name]['npacket_an'] += 1
                     else:
                         self.imudata[imu_name]['npacket_an'] += 1
-                        npacket = len(data['T'])                        
+                        npacket = len(data['T'])
                         dt_packet = (data['cnt10ks'] - self.imudata[imu_name]['cnt10ks_old'])/(npacket)
                         self.imudata[imu_name]['cnt10ks_old'] = data['cnt10ks']
                         for nsa in range(npacket):
-                            self.imudata[imu_name]['cnt10ks_tmp'].append(data['cnt10ks']+nsa*dt_packet)    
+                            self.imudata[imu_name]['cnt10ks_tmp'].append(data['cnt10ks']+nsa*dt_packet)
 
-                        self.imudata[imu_name]['temp_tmp'].extend(data['T'][:])                    
+                        self.imudata[imu_name]['temp_tmp'].extend(data['T'][:])
                         self.imudata[imu_name]['accx_tmp'].extend(data['acc'][0][:])
                         self.imudata[imu_name]['accy_tmp'].extend(data['acc'][1][:])
                         self.imudata[imu_name]['accz_tmp'].extend(data['acc'][2][:])
@@ -727,26 +741,26 @@ class todlnetCDF4File():
                         self.imudata[imu_name]['magz_tmp'].extend(data['mag'][2][:])
                         self.imudata[imu_name]['headxy_tmp'].extend(data['heading_xy'][:])
                         self.imudata[imu_name]['headxz_tmp'].extend(data['heading_xz'][:])
-                        self.imudata[imu_name]['headyz_tmp'].extend(data['heading_yz'][:])                                                
-                        
+                        self.imudata[imu_name]['headyz_tmp'].extend(data['heading_yz'][:])
+
                 elif(data['type'] == 'O'): # Pyro Firesting data
                     # Check if we have a pyro Firesting group already, of not, create one
                     npacket_firesting += 1
-                    try: 
+                    try:
                         self.pyro_phi_tmp
                     except:
                         self.logger.info(funcname + ':Pyro science group have not been crated yet, doing it now')
                         self.create_pyro_group()
-                        
+
                     self.pyro_cnt10ks_tmp.append(data['cnt10ks'])
                     self.pyro_phi_tmp.append(data['phi'])
-                    self.pyro_umol_tmp.append(data['umol'])       
-                    
+                    self.pyro_umol_tmp.append(data['umol'])
+
 
             # Print some statistics
             print(str(cnt) + ' data packages converted and ' + str(bytes_read) + ' from '
                   + str(file_size) + ' bytes read (' + str(round(bytes_read/file_size * 100,2))
-                  + '%). Num good: ' + str(num_good) + ' Num err: ' + str(num_err))            
+                  + '%). Num good: ' + str(num_good) + ' Num err: ' + str(num_err))
             print('LTC2442 packages read:',npacket_LTC2442)
             try:
                 for key in self.imudata.keys():
@@ -755,7 +769,7 @@ class todlnetCDF4File():
             except Exception as e:
                 print(e)
                 pass
-            
+
 
             print('Firesting oxygen packages read:',npacket_firesting)
             # Writing data to ncfile
@@ -765,6 +779,8 @@ class todlnetCDF4File():
             m = len(self.stat_tvar_tmp)
             self.stat_tvar[n:n+m] = self.stat_tvar_tmp[:]
             self.stat_tvar_tmp = []
+            self.stat_rtcvar[n:n+m] = self.stat_rtcvar_tmp[:]
+            self.stat_rtcvar_tmp = []
             self.stat_timevar[n:n+m] = self.stat_timevar_tmp[:]
             self.stat_timevar_tmp = []
             # ADCS
@@ -777,11 +793,11 @@ class todlnetCDF4File():
                     self.adc_vars[nch][nadc][n:n+m] = self.adc_vars_tmp[nch][nadc][:]
                     self.adc_vars_tmp[nch][nadc] = [] # Clear again
 
-                    
+
             #if(self.todl.device_info['imu_freq'] > 0):
             for imu_name in self.imudata.keys():
                 if(len(self.imudata[imu_name]['cnt10ks_tmp']) > 0):
-                    m = len(self.imudata[imu_name]['cnt10ks_tmp'])                
+                    m = len(self.imudata[imu_name]['cnt10ks_tmp'])
                     n = len(self.imudata[imu_name]['cnt10ks'])
                     #print(self.imu_accx_tmp[:])
                     self.imudata[imu_name]['cnt10ks'][n:n+m]= self.imudata[imu_name]['cnt10ks_tmp'][:]
@@ -797,8 +813,8 @@ class todlnetCDF4File():
                     self.imudata[imu_name]['magz'][n:n+m]   = self.imudata[imu_name]['magz_tmp'][:]
                     self.imudata[imu_name]['headxy'][n:n+m] = self.imudata[imu_name]['headxy_tmp'][:]
                     self.imudata[imu_name]['headxz'][n:n+m] = self.imudata[imu_name]['headxz_tmp'][:]
-                    self.imudata[imu_name]['headyz'][n:n+m] = self.imudata[imu_name]['headyz_tmp'][:]                                    
-                    # Clear the lists                
+                    self.imudata[imu_name]['headyz'][n:n+m] = self.imudata[imu_name]['headyz_tmp'][:]
+                    # Clear the lists
                     self.imudata[imu_name]['cnt10ks_tmp'] = []
                     self.imudata[imu_name]['temp_tmp']    = []
                     self.imudata[imu_name]['accx_tmp']    = []
@@ -812,7 +828,7 @@ class todlnetCDF4File():
                     self.imudata[imu_name]['magz_tmp']    = []
                     self.imudata[imu_name]['headxy_tmp']  = []
                     self.imudata[imu_name]['headxz_tmp']  = []
-                    self.imudata[imu_name]['headyz_tmp']  = []                     
+                    self.imudata[imu_name]['headyz_tmp']  = []
 
             #if(self.todl.device_info['pyro_freq'] > 0):
             try:
@@ -820,24 +836,24 @@ class todlnetCDF4File():
             except:
                 self.pyro_cnt10ks_tmp = []
             if(len(self.pyro_cnt10ks_tmp)>0):
-                m = len(self.pyro_cnt10ks_tmp)                
-                n = len(self.pyro_cnt10ks)                
+                m = len(self.pyro_cnt10ks_tmp)
+                n = len(self.pyro_cnt10ks)
                 self.pyro_cnt10ks[n:n+m]  = self.pyro_cnt10ks_tmp[:]
                 self.pyro_phi[n:n+m]      = self.pyro_phi_tmp[:]
                 self.pyro_umol[n:n+m]     = self.pyro_umol_tmp[:]
                 # Clear the lists
-                self.pyro_cnt10ks_tmp    = [] 
+                self.pyro_cnt10ks_tmp    = []
                 self.pyro_phi_tmp  = []
                 self.pyro_umol_tmp = []
-                
-            
-            
-        
+
+
+
+
     def close(self):
-        self.ncfile.close()        
-        
-        
-#       
+        self.ncfile.close()
+
+
+#
 #
 #
 # The datastream
@@ -875,7 +891,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self.packet_statistics = {} # Count the number of packets
         self.packet_statistics['L'] = 0
         self.packet_statistics['A'] = 0
-        self.packet_statistics['O'] = 0                                
+        self.packet_statistics['O'] = 0
         self.serial = None # The device to be connected to
         # Two initial queues, the first is for internal use (init logger, query_todl), the second is for the raw stream
         self.deques_raw_serial = [collections.deque(maxlen=self.dequelen),collections.deque(maxlen=self.dequelen)]
@@ -887,13 +903,13 @@ class todlDataStream(pymqdatastream.DataStream):
         # Two queues to start/stop the raw_data datastream thread
         self.raw_stream = None # The stream for raw data
         self._raw_data_thread_queue = queue.Queue()
-        self._raw_data_thread_queue_ans = queue.Queue()        
+        self._raw_data_thread_queue_ans = queue.Queue()
         # List of conversion streams
         self.conv_streams = []
         # A list with Nones or the streams dedicated for the channels
         self.channel_streams = None
         # A list for other channels (TODO make this clean)
-        self.aux_streams = None        
+        self.aux_streams = None
         self.commands = []
 
         # The data format
@@ -907,7 +923,7 @@ class todlDataStream(pymqdatastream.DataStream):
         """Loads a file and reads it chunk by chunk
 
         """
-        VALID_HEADER=False        
+        VALID_HEADER=False
         funcname = self.__class__.__name__ + '.load_file()'
         self.bytes_read = 0
         self.data_file = open(filename,'rb')
@@ -928,14 +944,14 @@ class todlDataStream(pymqdatastream.DataStream):
             self.start_read_file(dt,num_bytes)
 
         return True
-    
-    
+
+
     def start_read_file(self,dt=0.01,num_bytes=200, ondemand=False):
         funcname = self.__class__.__name__ + '.start_read_file()'
         if(self.file_status == 0):
             self.file_thread = threading.Thread(target=self.read_file_data,kwargs={'dt':dt,'num_bytes':num_bytes,'ondemand':ondemand})
             self.file_thread.daemon = True
-            self.file_thread.start()            
+            self.file_thread.start()
             self.logger.debug(funcname + ': Starting thread done')
             self.file_status = 1 # Reading
         else:
@@ -943,17 +959,17 @@ class todlDataStream(pymqdatastream.DataStream):
 
 
     def stop_read_file(self):
-        funcname = self.__class__.__name__ + '.stop_read_file()'        
+        funcname = self.__class__.__name__ + '.stop_read_file()'
         self.serial_thread_queue.put('stop')
         self.file_status = 0 # File open
-        
+
 
     def close_file(self):
         funcname = self.__class__.__name__ + '.close_file()'
         self.stop_read_file()
         self.file_status = -1 # File closed
-        
-        
+
+
     def read_file_data(self, dt = 0.01, num_bytes = 200, ondemand=False):
         """
 
@@ -981,17 +997,17 @@ class todlDataStream(pymqdatastream.DataStream):
                         self.file_status = 2
                         self.logger.debug(funcname + ': EOF')
                         return True
-                    
+
                     #self.bytes_read += num_bytes
                     self.bytes_read += len(data)
                     for n,deque in enumerate(self.deques_raw_serial):
                         deque.appendleft(data)
 
-                        
+
                 except Exception as e:
                     self.logger.debug(funcname + ':Exception:' + str(e))
 
-                    
+
             # Try to read from the queue, if something was read, quit
             try:
                 data = self.serial_thread_queue.get(block=False)
@@ -999,11 +1015,11 @@ class todlDataStream(pymqdatastream.DataStream):
                 break
             except queue.Empty:
                 pass
-                    
-        self.logger.debug(funcname + ': done_exiting')
-        return True                    
 
-        
+        self.logger.debug(funcname + ': done_exiting')
+        return True
+
+
     def add_serial_device(self,port,baud=921600):
         """
         """
@@ -1014,15 +1030,15 @@ class todlDataStream(pymqdatastream.DataStream):
             self.serial = serial.Serial(port,baud)
             self.serial_type = ['serial',0]
             num_bytes = self.serial.inWaiting()
-            serial_lock_file(port)            
-            self.logger.debug(funcname + ': Starting thread')            
+            serial_lock_file(port)
+            self.logger.debug(funcname + ': Starting thread')
             self.serial_thread = threading.Thread(target=self.read_serial_data)
             self.serial_thread.daemon = True
-            self.serial_thread.start()            
+            self.serial_thread.start()
             self.logger.debug(funcname + ': Starting thread done')
             self.status = 0
         except Exception as e:
-            self.logger.debug(funcname + ': Exception: ' + str(e))            
+            self.logger.debug(funcname + ': Exception: ' + str(e))
             self.logger.debug(funcname + ': Could not open device at: ' + str(port))
 
 
@@ -1031,7 +1047,7 @@ class todlDataStream(pymqdatastream.DataStream):
         Adds a socket for communication with the TODL
         """
         funcname = self.__class__.__name__ + '.add_socket()'
-        self.logger.debug(funcname + ': Opening: ' + address + ':' + str(port))        
+        self.logger.debug(funcname + ': Opening: ' + address + ':' + str(port))
         try:
             self.bytes_read = 0
             # Make two sockets for the same connection, one received, one send
@@ -1043,16 +1059,16 @@ class todlDataStream(pymqdatastream.DataStream):
             self.serial_type = ['socket',1]
             self.serial.setblocking(0) # Nonblocking
 
-            self.logger.debug(funcname + ': Starting thread')            
+            self.logger.debug(funcname + ': Starting thread')
             self.serial_thread = threading.Thread(target=self.read_serial_data)
             self.serial_thread.daemon = True
-            self.serial_thread.start()            
+            self.serial_thread.start()
             self.logger.debug(funcname + ': Starting thread done')
             self.status = 0
         except Exception as e:
-            self.logger.debug(funcname + ': Exception: ' + str(e))            
-            self.logger.debug(funcname + ': Could not open device at: ' + str(port))            
-            
+            self.logger.debug(funcname + ': Exception: ' + str(e))
+            self.logger.debug(funcname + ': Could not open device at: ' + str(port))
+
 
     #def read_serial_data(self, dt = 0.003):
     def read_serial_data(self, dt = 0.01):
@@ -1076,7 +1092,7 @@ class todlDataStream(pymqdatastream.DataStream):
                 tstart = time.time()
                 self.bits_read_avg = bytes_read*8/self.bits_read_avg_dt
                 bytes_read = 0
-                
+
             # Distingiush here between serial data and socket data
             if(self.serial_type[1] == 0): # Serial device
                 num_bytes = self.serial.inWaiting()
@@ -1084,7 +1100,7 @@ class todlDataStream(pymqdatastream.DataStream):
                     try:
                         data = self.serial.read(num_bytes)
                         if(self.print_serial_data):
-                            print(data)
+                            print('data',data)
 
                         self.bytes_read += num_bytes
                         bytes_read += num_bytes
@@ -1105,18 +1121,18 @@ class todlDataStream(pymqdatastream.DataStream):
                             print('data recv:',data)
 
                         self.bytes_read += num_bytes
-                        bytes_read += num_bytes                        
+                        bytes_read += num_bytes
                         for n,deque in enumerate(self.deques_raw_serial):
                             deque.appendleft(data)
-                            
+
                     else:
                         print('block!')
                 except Exception as e:
                     #print('Exception in read_serial:' + str(e))
                     #logger.debug(funcname + ':Exception:' + str(e) + ' num_bytes: ' + str(num_bytes))
                     pass
-                        
-                    
+
+
             # Try to read from the queue, if something was read, quit
             try:
                 data = self.serial_thread_queue.get(block=False)
@@ -1125,21 +1141,21 @@ class todlDataStream(pymqdatastream.DataStream):
                 break
             except queue.Empty:
                 pass
-                    
+
         return True
 
 
     def send_serial_data(self,data):
         """
-        
+
         Sends data to serial device
-        
+
         """
         funcname = self.__class__.__name__ + '.send_serial_data()'
         # Distingiush here between serial data and socket data
 
         if(self.serial != None):
-            if(self.serial_type[1] == 0): # Serial device                    
+            if(self.serial_type[1] == 0): # Serial device
                 self.logger.debug(funcname + ': Sending to device:' + str(data))
                 # Python2 work with that
                 self.serial.write(str(data).encode('utf-8'))
@@ -1149,7 +1165,7 @@ class todlDataStream(pymqdatastream.DataStream):
                 self.logger.debug(funcname + ': Sending to socket (device):' + str(data))
                 self.serial.send(str(data).encode('utf-8'))
                 self.logger.debug(funcname + ': Sending done')
-                self.serial_block = False                
+                self.serial_block = False
         else:
             self.logger.warning(funcname + ':Serial port/socket is not open.')
 
@@ -1166,7 +1182,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self._rem_raw_data_stream()
         port = self.serial.name
         # Distingiush here between serial data and socket data
-        if(self.serial_type[1] == 0): # Serial device                            
+        if(self.serial_type[1] == 0): # Serial device
             self.serial.close()
             serial_lock_file(port,remove=True)
         elif(self.serial_type[1] == 1): # Socket
@@ -1174,14 +1190,14 @@ class todlDataStream(pymqdatastream.DataStream):
 
 
         self.status = -1
-        self.logger.debug(funcname + ': TODL status:' + str(self.status))        
+        self.logger.debug(funcname + ': TODL status:' + str(self.status))
 
-        
+
     def log_serial_data(self,filename):
         """
         Saves the raw serial data into filename
         """
-        funcname = self.__class__.__name__ + '._log_serial_data()'        
+        funcname = self.__class__.__name__ + '._log_serial_data()'
         deque = collections.deque(maxlen=self.dequelen)
         self.deques_raw_serial.append(deque)
         self._log_thread_queue = queue.Queue()
@@ -1191,11 +1207,11 @@ class todlDataStream(pymqdatastream.DataStream):
         # Writing the start header
         tstartstr='# TODL file, pymqdatastream_version:' + pymqdatastream.version + '\n'
         self.logfile.write(tstartstr.encode('utf-8'))
-        self.logfile_bytes_wrote += len(tstartstr)                
+        self.logfile_bytes_wrote += len(tstartstr)
         # Writing local PC Time
         tlocalstr = time.strftime('# PC Time (GMT): %Y-%m-%d %H:%M:%S\n',time.gmtime())
         self.logfile.write(tlocalstr.encode('utf-8'))
-        self.logfile_bytes_wrote += len(tlocalstr)        
+        self.logfile_bytes_wrote += len(tlocalstr)
         # Writing the info header
         info_str = self.device_info['info_str'].encode('utf-8')
         info_str += file_header_end
@@ -1205,7 +1221,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self._logfile_thread.daemon = True
         self._logfile_thread.start()
 
-        
+
     def stop_log_serial_data(self):
         """
         """
@@ -1215,11 +1231,11 @@ class todlDataStream(pymqdatastream.DataStream):
         self.logfile.close()
         self.logfile_bytes_wrote = 0
 
-        
+
     def _logging_thread(self,deque,logfile,dt = 0.2):
-        funcname = self.__class__.__name__ + '._logging_thread()'        
+        funcname = self.__class__.__name__ + '._logging_thread()'
         while True:
-            logfile.flush()                            
+            logfile.flush()
             time.sleep(dt)
             # Try to read from the queue, if something was read, quit
             while(len(deque) > 0):
@@ -1232,21 +1248,21 @@ class todlDataStream(pymqdatastream.DataStream):
                 self._log_thread_queue_ans.put('stopping')
                 break
             except queue.Empty:
-                pass                                        
+                pass
 
-        
+
     def add_raw_data_stream(self):
         """
-        
-        Adds a stream containing the raw data read from todl. 
+
+        Adds a stream containing the raw data read from todl.
 
         Args: None
-            
+
         Returns:
-            raw_stream: the raw data stream 
-        
+            raw_stream: the raw data stream
+
         """
-        
+
         funcname = self.__class__.__name__ + '.add_raw_data_stream()'
         logger.debug(funcname)
         rawvar = pymqdatastream.StreamVariable(name = 'serial binary',unit = '',datatype = 'b')
@@ -1260,7 +1276,7 @@ class todlDataStream(pymqdatastream.DataStream):
         self.raw_stream_thread.start()
         return stream
 
-    
+
     def _rem_raw_data_stream(self):
         """
         Stops the raw_data thread and removes self.raw_data
@@ -1277,15 +1293,15 @@ class todlDataStream(pymqdatastream.DataStream):
             self.logger.debug(funcname + ': Got data from conversion thread, thread stopped')
             self.rem_stream(self.raw_stream)
             self.raw_stream = None
-        
-        
+
+
     def push_raw_stream_data(self,stream,dt = 0.1):
         """Pushes the raw serial data into the raw datastream
 
         """
-        
+
         funcname = self.__class__.__name__ + '.push_raw_stream_data()'
-        logger.debug(funcname)        
+        logger.debug(funcname)
         deque = self.deques_raw_serial[1]
         while True:
             time.sleep(dt)
@@ -1302,9 +1318,9 @@ class todlDataStream(pymqdatastream.DataStream):
                 self._raw_data_thread_queue_ans.put('stopping')
                 break
             except queue.Empty:
-                pass                                
+                pass
 
-            
+
     def init_data_format(self,data_format):
         """Sets the data format of the input data
 
@@ -1318,14 +1334,14 @@ class todlDataStream(pymqdatastream.DataStream):
 
         if(data_format == 2):
             self.device_info['format'] = 2
-            self.init_data_format_functions()            
+            self.init_data_format_functions()
 
 
         # CSV style
         if((data_format == 3) or (data_format == 'csv')):
             self.device_info['format'] = 3
             self.init_data_format_functions()
-            
+
 
         # CSV style
         if((data_format == 31) or (data_format == 'csv31')):
@@ -1336,9 +1352,9 @@ class todlDataStream(pymqdatastream.DataStream):
         # CSV style
         if((data_format == 32) or (data_format == 'csv32')):
             self.device_info['format'] = 32
-            self.init_data_format_functions()             
+            self.init_data_format_functions()
 
-        
+
     def init_data_format_functions(self):
         """The TODL output can have different data formats (human readable csv
         format or cobs encoded binary format).  This function chooses the
@@ -1346,9 +1362,9 @@ class todlDataStream(pymqdatastream.DataStream):
 
         """
         funcname = self.__class__.__name__ + '.init_data_format_functions()'
-        self.logger.debug(funcname)                
+        self.logger.debug(funcname)
         if(self.device_info['format'] == 0):
-            self.logger.debug(funcname + ': Setting format to 0')              
+            self.logger.debug(funcname + ': Setting format to 0')
             self.convert_raw_data = self.convert_raw_data_format0
 
         if(self.device_info['format'] == 2):
@@ -1391,8 +1407,8 @@ default to None, only with a valid argument that setting will be sent to the dev
             if(self.status >= 1): # Already converting
                 self.logger.debug(funcname + ': Stop converting raw data')
                 self.stop_converting_raw_data()
-                
-            self.print_serial_data = True        
+
+            self.print_serial_data = True
             self.send_serial_data('stop\n')
             time.sleep(dt_wait)
             self.send_serial_data('showdata off\n')
@@ -1407,14 +1423,14 @@ default to None, only with a valid argument that setting will be sent to the dev
                 self.logger.debug(funcname + ' sending:' + cmd)
                 time.sleep(dt_wait)
 
-            if(freq is not None):                
+            if(freq is not None):
                 # Due to a bug freq has to be send before data format if freq is 30, check firmware! (old, check if still true)
                 # Freq
                 cmd = 'freq ' + str(freq)
                 self.send_serial_data(cmd + '\n')
                 self.logger.debug(funcname + ' sending:' + cmd)
 
-            if(data_format is not None):                
+            if(data_format is not None):
                 # Data format
                 self.device_info['format'] = data_format
                 self.init_data_format_functions()
@@ -1439,12 +1455,12 @@ default to None, only with a valid argument that setting will be sent to the dev
                 self.logger.debug(funcname + ' sending:' + cmd)
 
 
-            self.print_serial_data = False            
+            self.print_serial_data = False
             # Update the device_info struct etc.
             self.query_todllogger()
             time.sleep(dt_wait)
             self.send_serial_data('showdata on\n')
-            time.sleep(dt_wait)            
+            time.sleep(dt_wait)
             self.send_serial_data('start\n')
             for fun in self.init_notification_functions:
                 fun()
@@ -1461,12 +1477,12 @@ default to None, only with a valid argument that setting will be sent to the dev
         print('setting time to:' + tstr)
         cmd = 'set time ' + tstr
         self.send_serial_data('stop\n')
-        time.sleep(0.1)                
+        time.sleep(0.1)
         self.send_serial_data(cmd)
         self.send_serial_data('start\n')
-        time.sleep(0.1)                        
-        
-            
+        time.sleep(0.1)
+
+
     def query_todllogger(self):
         """Queries the logger and sets the important parameters to the values read
         TODO: Do something if query fails, check if the extra commands are needed
@@ -1477,7 +1493,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         """
         dt = 0.2 # Additional wait between commands
         funcname = self.__class__.__name__ + '.query_todllogger()'
-        self.logger.debug(funcname)        
+        self.logger.debug(funcname)
         self.print_serial_data = True
         self.send_serial_data('stop\n')
         time.sleep(0.1+dt)
@@ -1496,7 +1512,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         time.sleep(0.1+dt)
 
         self.send_serial_data('info\n')
-        time.sleep(0.5+dt)        
+        time.sleep(0.5+dt)
         data_str = ''
         while(len(deque) > 0):
             data = deque.pop()
@@ -1504,7 +1520,7 @@ default to None, only with a valid argument that setting will be sent to the dev
             try:
                 data_str += data.decode(encoding='utf-8')
             except Exception as e:
-                print(funcname + ': Exception:' + str(e))                
+                print(funcname + ': Exception:' + str(e))
                 self.logger.debug(funcname + ': Exception:' + str(e))
                 #return False
 
@@ -1518,16 +1534,16 @@ default to None, only with a valid argument that setting will be sent to the dev
             firmwareversion = '??'
             self.logger.debug(funcname + ': Found a valid stop reply')
             for line in data_str.split('\n'):
-                print(line)
+                print('line',line)
                 if( ' board version:' in line ):
                     # Expecting a string like this:
                     # >>> --  board version: 9.00 --
                     boardversion = line.rsplit(': ')
                     try:
                         boardversion = boardversion[1].split(' --')[0]
-                    except:                    
+                    except:
                         self.logger.debug(funcname + ': No valid version string')
-                    print('Board version:',boardversion)           
+                    print('Board version:',boardversion)
                 elif( 'firmware version:' in line ):
                     # Expecting a string like this:
                     # >>> --  firmware version: 0.30 --
@@ -1537,16 +1553,16 @@ default to None, only with a valid argument that setting will be sent to the dev
                     except:
                         self.logger.debug(funcname + ': No valid version string')
                     print('Firmware version:',firmwareversion)
-                
-            
+
+
         if(FLAG_IS_TODL==False):
             self.logger.warning(funcname + ': Device does not seem to be a todl')
             return False
         else:
             self.device_info = {}
             self.device_info['board'] = boardversion
-            self.device_info['firmware'] = firmwareversion            
-            
+            self.device_info['firmware'] = firmwareversion
+
         self.send_serial_data('format\n')
         time.sleep(0.1+dt)
         self.send_serial_data('ad\n')
@@ -1571,18 +1587,18 @@ default to None, only with a valid argument that setting will be sent to the dev
 
         print('Data str:' + str(data_str))
         self.device_info = parse_device_info(data_str)
-        self.channel_streams = [None] * (max(self.device_info['channel_seq']) + 1)        
+        self.channel_streams = [None] * (max(self.device_info['channel_seq']) + 1)
 
         # TODO, replace by device_info dict
         self.init_data_format_functions()
         self.flag_adcs = self.device_info['adcs']
 
-        self.print_serial_data = False                
+        self.print_serial_data = False
         self.send_serial_data('start\n')
-        
+
         return True
 
-           
+
     def start_converting_raw_data(self, dt = None, ondemand = False):
         """
 
@@ -1594,12 +1610,12 @@ default to None, only with a valid argument that setting will be sent to the dev
             ondemand: Option enables an blocking mode, the conversion functions will send with send self.raw_data_ondemand_queue.put('ready') the notification that new data can be processed, 'ready' is only sent, with an empty intraqueue.
         Returns:
             stream: A stream of the converted data
-        
-            
+
+
 
 
         """
-        
+
         funcname = self.__class__.__name__ + '.start_converting_raw_data()'
         self.logger.debug(funcname)
 
@@ -1609,7 +1625,7 @@ default to None, only with a valid argument that setting will be sent to the dev
             # This will be used by the raw_data read functions (at the moment read_file_data only)
             self.deques_raw_serial.append(deque)
             # Add datastreams for all LTC channels and devices
-            ch_seq = np.unique(np.asarray(self.device_info['channel_seq']))            
+            ch_seq = np.unique(np.asarray(self.device_info['channel_seq']))
             #for ch in self.device_info['channel_seq']: # This does not work, if channels are sampled more than once
             for ch in ch_seq:
                 self.logger.debug(funcname + ': Adding pub stream for channel:' + str(ch))
@@ -1632,7 +1648,7 @@ default to None, only with a valid argument that setting will be sent to the dev
             self.aux_streams = [None] * ( 1 + 1 )
             self.logger.debug(funcname + ': Adding pub stream for IMU ACC, Gyro x,y,z:')
             variables_IMU = [packetvar,timevar]
-            datavarT     = pymqdatastream.StreamVariable('temp','degC','float')            
+            datavarT     = pymqdatastream.StreamVariable('temp','degC','float')
             datavarx_ACC = pymqdatastream.StreamVariable('ACC x','m/s','float')
             datavary_ACC = pymqdatastream.StreamVariable('ACC y','m/s','float')
             datavarz_ACC = pymqdatastream.StreamVariable('ACC z','m/s','float')
@@ -1657,13 +1673,13 @@ default to None, only with a valid argument that setting will be sent to the dev
             for field in data_packages.pyro_science_format1_fields:
                 datavar_O2_dphi = pymqdatastream.StreamVariable(field['name'],field['unit'],field['datatype'])
                 variables_O2.append(datavar_O2_dphi)
-                
+
             name = 'todl O2 (PyroScience)'
-            famstr = 'todl O2'            
+            famstr = 'todl O2'
             self.conv_streams.append(self.add_pub_stream(socket = self.sockets[-1], name=name, variables=variables_O2, family = famstr))
-            self.aux_streams[1] = self.conv_streams[-1]            
+            self.aux_streams[1] = self.conv_streams[-1]
             # TODO, make this clean!
-            
+
             self.logger.debug(funcname + ': Starting thread')
             # Analyse data format, choose the right conversion functions and start a conversion thread
             self.init_data_format_functions()
@@ -1676,46 +1692,46 @@ default to None, only with a valid argument that setting will be sent to the dev
 
             self.convert_thread = threading.Thread(target=self.convert_raw_data, args = (deque,), kwargs = kw)
             self.convert_thread.daemon = True
-            self.convert_thread.start()            
+            self.convert_thread.start()
             self.logger.debug(funcname + ': Starting thread done')
             self.status = 1
             return self.conv_streams
 
     def create_freq_packets(self):
         freq_packets = {}
-        # LTC2442 frequency        
+        # LTC2442 frequency
         freq_packet = {'name':'Lfr'}
         freq_packet['dt_freq'] = 2.0
         freq_packet['len_t_array'] = 1000
         freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2)) # For LTC2442 packets (all)
         freq_packet['ind'] = 0
-        freq_packet['nbad'] = 0 # Sum up number of bad readings        
+        freq_packet['nbad'] = 0 # Sum up number of bad readings
         freq_packets['Lfrdata'] = freq_packet
 
         # LTC2442 frequency, single channels
         nstreams = (max(self.device_info['channel_seq']) + 1) # The maximum number of possible channels, easier for sorting
         num_ltcs = len(self.device_info['adcs']) # The number of sampling ltcs
         freq_packets_tmp = []
-        for nstream in range(nstreams):        
+        for nstream in range(nstreams):
             freq_packet = {'name':'Lfr_ch' + str(nstream)}
             freq_packet['ch'] = nstream
-            freq_packet['dt_freq'] = 0.5            
+            freq_packet['dt_freq'] = 0.5
             freq_packet['len_t_array'] = 1000
             freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
             freq_packet['Vdata'] = np.zeros((freq_packet['len_t_array'],num_ltcs))
             freq_packet['len_t_array'] = 1000
             freq_packet['ind'] = 0
             freq_packets_tmp.append(freq_packet)
-            
+
         freq_packets['Lfr_chdata'] = freq_packets_tmp
-        
+
         # IMU frequency
         freq_packet = {'name':'IMUfr'}
         freq_packet['dt_freq'] = 2.0
         freq_packet['len_t_array'] = 1000
         freq_packet['data'] = np.zeros((freq_packet['len_t_array'],2))
         freq_packet['ind'] = 0
-        freq_packets['IMUfrdata'] = freq_packet                
+        freq_packets['IMUfrdata'] = freq_packet
         # Pyroscience frequency
         freq_packet = {'name':'Ofr'}
         freq_packet['dt_freq'] = 2.0
@@ -1726,8 +1742,8 @@ default to None, only with a valid argument that setting will be sent to the dev
         freq_packets['Ofrdata'] = freq_packet
 
         return freq_packets
-        
-        
+
+
     def stop_converting_raw_data(self):
         """
 
@@ -1740,10 +1756,10 @@ default to None, only with a valid argument that setting will be sent to the dev
         data = self.conversion_thread_queue_ans.get()
         self.logger.debug(funcname + ': Got data from conversion thread, thread stopped')
 
-        self.channel_streams = None        
+        self.channel_streams = None
         for stream in self.conv_streams:
             self.rem_stream(stream)
-            
+
         self.conv_streams = []
         # A list with Nones or the streams dedicated for the channels
         self.packets_converted = 0
@@ -1762,7 +1778,7 @@ default to None, only with a valid argument that setting will be sent to the dev
             dt:
             ondemand: Option is used to send self.raw_data_ondemand_queue.put('ready') to notify the raw_data routine that new data can be processed, 'ready' is only sent, with an empty intraqueue.
 
-        HACK: This is also converting pyro science O2 data and IMU data, this should be cleaned up 
+        HACK: This is also converting pyro science O2 data and IMU data, this should be cleaned up
 
         """
         funcname = self.__class__.__name__ + '.convert_raw_data_format31()'
@@ -1775,13 +1791,13 @@ default to None, only with a valid argument that setting will be sent to the dev
         freq_packets = self.create_freq_packets()
 
         # Packet statistics
-        packet_statistics = {'name':'packet_statistics','num_err':0,'num_cobs_err':0,'num_good':0}        
+        packet_statistics = {'name':'packet_statistics','num_err':0,'num_cobs_err':0,'num_good':0}
         while True:
             #logger.debug(funcname + ': converted: ' + str(ad0_converted))
             nstreams = (max(self.device_info['channel_seq']) + 1)
             # Create a list of data to be submitted for each stream
             data_stream = [[] for _ in range(nstreams) ]
-            # PH: Another hack for the v046, make clear 
+            # PH: Another hack for the v046, make clear
             aux_data_stream = [[],[]]
             data_packets = []
             ts = time.time()
@@ -1803,7 +1819,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                     data_str_split.pop()
 
                 data_packets.extend(data_packages.decode_format31(data_str_split,self.device_info))
-                            
+
             # Push the read data
             ti = time.time()
 
@@ -1817,7 +1833,7 @@ default to None, only with a valid argument that setting will be sent to the dev
 
                 elif(data_packet['type'] == 'A'): # IMU packet
                     #data_packet['mag']
-                    self.packet_statistics['A'] += 1                    
+                    self.packet_statistics['A'] += 1
                     aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
                 elif(data_packet['type'] == 'O'): # Firesting packet
                     self.packet_statistics['O'] += 1
@@ -1831,7 +1847,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                 self.intraqueue.appendleft(data_packet)
 
 
-            # This data is for the remote datastreams ( LTC data ) 
+            # This data is for the remote datastreams ( LTC data )
             for i in range(len(self.channel_streams)):
                 if(len(data_stream[i])>0):
                     self.channel_streams[i].pub_data(data_stream[i])
@@ -1853,15 +1869,15 @@ default to None, only with a valid argument that setting will be sent to the dev
             # Check if ondemand mode, if yes send ready and wait for new data
             if(ondemand):
                 if(len(self.intraqueue) == 0): # Check if intraqueue is empty, meaning that the data has been processed
-                    # Send ready to the ondemand queue                
+                    # Send ready to the ondemand queue
                     self.raw_data_ondemand_queue.put('ready')
 
-            
+
     def convert_raw_data_format4(self, deque, dt = 0.02, ondemand = False):
         """
 
         Converts raw data of the format 4, which is popped from the deque
-        given as argument 
+        given as argument
         The data is sends in binary packages using the the consistent overhead
         byte stuffing (`COBS
         <https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing>`_)
@@ -1877,14 +1893,14 @@ default to None, only with a valid argument that setting will be sent to the dev
         3    LTC COMMAND 1
         4    LTC COMMAND 2
         5    packet counter msb
-        ...   
+        ...
         9    packet counter lsb
         10   clock 10 khz msb
-        ...    
+        ...
         14   clock 10 khz lsb
         15   LTC2442 0 msb
-        16   LTC2442 1 
-        17   LTC2442 2 lsb 
+        16   LTC2442 1
+        17   LTC2442 2 lsb
         .    3 bytes per activated LTC2442
 
         ==== ====
@@ -1909,11 +1925,11 @@ default to None, only with a valid argument that setting will be sent to the dev
         ct = cto
 
         # Frequency packets
-        freq_packets = self.create_freq_packets()        
+        freq_packets = self.create_freq_packets()
 
         # Packet statistics
         packet_statistics = {'name':'packet_statistics','num_err':0,'num_cobs_err':0,'num_good':0}
-        
+
         while True:
             cnt += 1
             aux_data_stream = [[],[]]
@@ -1934,30 +1950,30 @@ default to None, only with a valid argument that setting will be sent to the dev
                 [data_packets,data_str] = data_packages.decode_format4(data_str,self.device_info)
                 self.packets_converted += len(data_packets)
                 self.bytes_converted += lold - len(data_str)
-                
+
                 # Sort the data and put into lists for datastream
                 # distribution as well as frequency calculations
                 for data_packet in data_packets:
                     if(data_packet['type'] == 'L'): # LTC2442 packet
-                        self.packet_statistics['L'] += 1                        
+                        self.packet_statistics['L'] += 1
                         #repack it for a datastream compatible format
                         #(list instead of dict)
                         data_list = [data_packet['num'],data_packet['cnt10ks']] + data_packet['V']
                         data_stream[data_packet['ch']].append(data_list)
 
                     elif(data_packet['type'] == 'A'): # IMU packet
-                        self.packet_statistics['A'] += 1                        
+                        self.packet_statistics['A'] += 1
                         aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'],data_packet['acc'][0],data_packet['acc'][1],data_packet['acc'][2],data_packet['gyro'][0],data_packet['gyro'][1],data_packet['gyro'][2]])
 
                     elif(data_packet['type'] == 'An'): # IMU FIFO packet
                         try:
-                            self.packet_statistics['A'] += 1                        
+                            self.packet_statistics['A'] += 1
                             aux_data_stream[0].append([data_packet['num'],data_packet['cnt10ks'],data_packet['T'][0],data_packet['acc'][0][0],data_packet['acc'][1][0],data_packet['acc'][2][0],data_packet['gyro'][0][0],data_packet['gyro'][1][0],data_packet['gyro'][2][0]])#,data_packet['mag'][0][0],data_packet['mag'][1][0],data_packet['mag'][2][0]])
                         except Exception as e:
                             print('Bad acc packet, TODO, solve that')
-                            
+
                     elif(data_packet['type'] == 'O'): # Firesting packet
-                        self.packet_statistics['O'] += 1                        
+                        self.packet_statistics['O'] += 1
                         aux_data_stream[1].append([data_packet['num'],data_packet['cnt10ks'],data_packet['phi'],data_packet['umol']])
 
                     elif(data_packet['type'] == 'Stat'): # Status packet, here the time difference between TODL and PC is calculated
@@ -1969,9 +1985,9 @@ default to None, only with a valid argument that setting will be sent to the dev
                         packet_statistics['num_err'] += data_packet['num_err']
                         packet_statistics['num_cobs_err'] += data_packet['num_cobs_err']
                         packet_statistics['num_good'] += data_packet['num_good']
-                    
+
                 self.do_packet_statistics(packet_statistics,freq_packets,data_packets,ts)
-                    
+
                 ta.append( time.time() )
 
                 # This data is first put into the local intraque for data distribution (mainly the gui up to now)
@@ -1985,7 +2001,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                 # These are the aux streams (IMU stream [0], firesting stream [1], TODO, unify!)
                 for i in range(len(self.aux_streams)):
                     if(len(aux_data_stream[i])>0):
-                        self.aux_streams[i].pub_data(aux_data_stream[i])                        
+                        self.aux_streams[i].pub_data(aux_data_stream[i])
 
 
                 ta.append(time.time())
@@ -2008,7 +2024,7 @@ default to None, only with a valid argument that setting will be sent to the dev
         #    Lpacket_t[Lpacket_t_ind,0] = ts
         #    Lpacket_t[Lpacket_t_ind,1] = data_packet['cnt10ks']
         #    Lpacket_t_ind += 1
-        num_ltcs = len(self.device_info['adcs']) # The number of sampling ltcs        
+        num_ltcs = len(self.device_info['adcs']) # The number of sampling ltcs
         for data_packet in data_packets:
             if(data_packet['type'] == 'L'): # LTC2442 packet
                 ch_tmp = data_packet['ch']
@@ -2028,7 +2044,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                     # Caculating number of bad data
                     data_tmp = np.asarray(data_packet['V'][:])
                     nbad = sum((data_tmp < 0) & (data_tmp > 5))
-                    freq_packets['Lfrdata']['nbad'] += nbad                            
+                    freq_packets['Lfrdata']['nbad'] += nbad
 
             elif((data_packet['type'] == 'A') or (data_packet['type'] == 'An')): # IMU packet
                 # Packet for frequency calculation
@@ -2077,7 +2093,7 @@ default to None, only with a valid argument that setting will be sent to the dev
                             # Also print packet statistics, this is a HACK and should be done somewhere else (in the gui, not in console)
                             #print(packet_statistics)
                             #print('Bytes read:' + str(self.bytes_read) + ' converted:' + str(self.bytes_converted ))
-                            pass                                    
+                            pass
                         # Voltage mean and standard deviation calculation
                         if('Lfr_ch' in freq_pack['name']):
                             data_packet['ch'] = freq_pack['ch']
@@ -2094,33 +2110,33 @@ default to None, only with a valid argument that setting will be sent to the dev
                                 data_packet['pp'][ntmp]  = data_packet['max'][ntmp] - data_packet['min'][ntmp]
 
                             #print(data_packet)
-                        # Oxygen mean and standard deviation calculation                                    
+                        # Oxygen mean and standard deviation calculation
                         if(freq_pack['name'] == 'Ofr'):
                             data_packet['avg'] = np.mean(freq_pack['phidata'][:freq_pack['ind']-1])
                             data_packet['std'] = np.std(freq_pack['phidata'][:freq_pack['ind']-1])
                             data_packet['min'] = np.min(freq_pack['phidata'][:freq_pack['ind']-1])
                             data_packet['max'] = np.max(freq_pack['phidata'][:freq_pack['ind']-1])
-                            data_packet['pp'] = data_packet['max'] - data_packet['min']                                    
+                            data_packet['pp'] = data_packet['max'] - data_packet['min']
                             #print(data_packet)
                         data_packets.append(data_packet)
                         freq_pack['data'][:,:] = 0
-                        freq_pack['ind'] = 0                            
-        
+                        freq_pack['ind'] = 0
+
 
 
 
 
 def todlraw_to_netCDF():
     """ Converts a todl file to netCDF
-    
+
     """
 
     usage_str = 'todl_rawtonc'
     desc = 'Converts raw turbulent ocean data logger files into netCDF files. Example usage: ' + usage_str
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('rawfile', help= 'The filename of the raw data file')
-    parser.add_argument('ncfile',nargs='?', default=None,help='The filename of the converted netcdf file')    
-    parser.add_argument('--verbose', '-v', action='count')    
+    parser.add_argument('ncfile',nargs='?', default=None,help='The filename of the converted netcdf file')
+    parser.add_argument('--verbose', '-v', action='count')
 
     args = parser.parse_args()
     # Print help and exit when no arguments are given
@@ -2138,7 +2154,7 @@ def todlraw_to_netCDF():
 
 
     logger.setLevel(loglevel)
-    
+
     rawfile = args.rawfile
     if(args.ncfile == None):
         ncfile = rawfile + '.nc'
@@ -2151,17 +2167,17 @@ def todlraw_to_netCDF():
     except Exception as e:
         print('Not a valid TODL binary file, exiting')
         return
-        
+
     ncconv.to_ncfile_fast(ncfile)
     ncconv.close()
     logger.info('Conversion done')
-    
-
-    
 
 
 
-def main():    
+
+
+
+def main():
     s = todlDataStream(logging_level='DEBUG')
     s.add_serial_device('/dev/ttyUSB0')
 
@@ -2173,7 +2189,7 @@ def main():
     s.init_todllogger(flag_adcs = [0],data_format=2)
     s.query_todllogger()
     time.sleep(0.5)
-    #s.print_serial_data = True    
+    #s.print_serial_data = True
     s.start_converting_raw_data()
     print(s.get_info_str('short'))
     while(True):
@@ -2184,4 +2200,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    

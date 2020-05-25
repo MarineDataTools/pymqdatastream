@@ -18,13 +18,13 @@ def parse_firesting_data(data_str,unit_convert = True):
         fac = 1/1000.
     else:
         fac = 1.0
-    data_pyro   = data_str.split(' ')    
-    data_stat     = float(data_pyro[4])                                        
+    data_pyro   = data_str.split(' ')
+    data_stat     = float(data_pyro[4])
     data_dphi     = float(data_pyro[5])*fac
     data_umol     = float(data_pyro[6])*fac
     data_mbar     = float(data_pyro[7])*fac
-    data_asat     = float(data_pyro[8])*fac                        
-    data_ext_temp = float(data_pyro[9])*fac                            
+    data_asat     = float(data_pyro[8])*fac
+    data_ext_temp = float(data_pyro[9])*fac
     data_int_temp = float(data_pyro[10])*fac
     data_sgn_int  = float(data_pyro[11])*fac
     data_amb_light= float(data_pyro[12])*fac
@@ -33,7 +33,7 @@ def parse_firesting_data(data_str,unit_convert = True):
     data_adc      = float(data_pyro[15])*fac
     #data_oxy      = float(data_pyro[16])
     data_packet = {'type':'O'}
-    data_packet['phi']  = data_dphi 
+    data_packet['phi']  = data_dphi
     data_packet['umol'] = data_umol
     data_packet['mbar'] = data_mbar
     data_packet['asat'] = data_asat
@@ -44,15 +44,15 @@ def parse_firesting_data(data_str,unit_convert = True):
     data_packet['sgn_press'] = data_press
     data_packet['sgn_hum'] = data_hum
     return data_packet
-    
-    
+
+
 
 def decode_format31(data_str_split,device_info):
     """
     Converts raw data of the format 31
     """
     funcname = '.decode_format31()'
-    data_packets = []    
+    data_packets = []
     for line in data_str_split:
         if(len(line)>3):
             try:
@@ -70,7 +70,7 @@ def decode_format31(data_str_split,device_info):
                     # Fill the data packet dictionary
                     data_packet = {}
                     data_packet = {'num':packet_num,'cnt10ks':packet_cnt10k}
-                    data_packet['type'] = 'L'                                
+                    data_packet['type'] = 'L'
                     data_packet['ch'] = channel
                     data_packet['V'] = [9999.99] * len(device_info['adcs'])
                     for n,i in enumerate(device_info['adcs']):
@@ -104,14 +104,14 @@ def decode_format31(data_str_split,device_info):
                     gyroz = float(data_split[9])
                     magx = float(data_split[10])
                     magy = float(data_split[11])
-                    magz = float(data_split[12])                                                                
+                    magz = float(data_split[12])
                     #aux_data_stream[0].append([packet_num,packet_cnt10k,T,accx,accy,accz,gyrox,gyroy,gyroz])
                     data_packet = {'num':packet_num,'cnt10ks':packet_cnt10k}
                     data_packet['type'] = 'A'
                     data_packet['T'] = T
                     data_packet['acc'] = [accx,accy,accz]
                     data_packet['gyro'] = [gyrox,gyroy,gyroz]
-                    data_packet['mag'] = [magx,magy,magz]                                
+                    data_packet['mag'] = [magx,magy,magz]
                     data_packets.append(data_packet)
 
                 # Status
@@ -142,14 +142,14 @@ def decode_format31(data_str_split,device_info):
                     #U3<;00000021667825;RMR1 3 0 13 2 11312 1183226 864934 417122 -300000 -300000 518 106875 -1 -1 0 85383
                     #                               S  phi    umol   mbar   asat  ext T   int T   amp amblig P Hum adc oxy
                     if("RMR1 3 0" in data_split[2]):
-                        data_pyro   = data_split[2].split(' ')                                    
+                        data_pyro   = data_split[2].split(' ')
                         if(len(data_pyro) > 4):
                             packet_cnt10k = int(data_split[1])/device_info['counterfreq']
                             packet_num    = 0
                             data_packet   = parse_firesting_data(data_split[2])
                             data_packet['num'] = packet_num
                             data_packet['cnt10ks'] = packet_cnt10k
-                            data_packets.append(data_packet)                                    
+                            data_packets.append(data_packet)
 
             except Exception as e:
                 logger.debug(funcname + ':' + str(e) + ' ' + str(line))
@@ -163,7 +163,7 @@ def decode_format4(data_str,device_info):
     """
 
     Converts raw data of the format 4, which is popped from the deque
-    given as argument 
+    given as argument
     The data is sends in binary packages using the the consistent overhead
     byte stuffing (`COBS
     <https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing>`_)
@@ -179,14 +179,14 @@ def decode_format4(data_str,device_info):
     3    LTC COMMAND 1
     4    LTC COMMAND 2
     5    packet counter msb
-    ...   
+    ...
     9    packet counter lsb
     10   clock 10 khz msb
-    ...    
+    ...
     14   clock 10 khz lsb
     15   LTC2442 0 msb
-    16   LTC2442 1 
-    17   LTC2442 2 lsb 
+    16   LTC2442 1
+    17   LTC2442 2 lsb
     .    3 bytes per activated LTC2442
 
     ==== ====
@@ -204,31 +204,31 @@ def decode_format4(data_str,device_info):
         []: List of data
 
     """
-    funcname = '.decode_format4()'    
+    funcname = '.decode_format4()'
     data_packets = []
     ind_ltcs = [0,0,0,0,0,0,0,0]
     nstreams = (max(device_info['channel_seq']) + 1)
-    #data_stream = [[] for _ in range(nstreams) ]    
+    #data_stream = [[] for _ in range(nstreams) ]
     data_split = data_str.split(b'\x00') # Packets are separated by 0x00
     err_packet = 0
     cobs_err_packet = 0
     ind_bad = []
     ind_bad0 = 0
-    good_packet = 0    
+    good_packet = 0
     if(len(data_split) > 1):
         #print('data_str',data_str)
-        #print('data_split',data_split)        
+        #print('data_split',data_split)
         if(len(data_split[-1]) == 0): # The last byte was a 0x00
            data_str = b''
         else:
            data_str = data_split[-1]
-           data_split.pop() # remove last element           
+           data_split.pop() # remove last element
 
 
         for data_cobs in data_split:
             ind_bad0 += len(data_cobs)
             # Timing
-            ta = []    
+            ta = []
 
             #print('Cobs data:')
             #print(data_cobs)
@@ -238,7 +238,7 @@ def decode_format4(data_str,device_info):
                     data_decobs = cobs.decode(data_cobs)
                     #print('decobs data:')
                     #print(data_decobs)
-                    #print(data_decobs[0],type(data_decobs[0]))                            
+                    #print(data_decobs[0],type(data_decobs[0]))
                     packet_ident    = data_decobs[0]
                     #logger.debug(funcname + ': packet_ident ' + str(packet_ident))
                     # LTC2442 packet
@@ -259,7 +259,7 @@ def decode_format4(data_str,device_info):
                         packet_com_ltc2 = data_decobs[4]
                         # Decode the command
                         #speed,channel = ltc2442.interprete_ltc2442_command([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
-                        speed,channel = ltc2442.interprete_ltc2442_command_test([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)                       
+                        speed,channel = ltc2442.interprete_ltc2442_command_test([packet_com_ltc0,packet_com_ltc1,packet_com_ltc2],channel_naming=1)
                         ind = 5
                         #logger.debug(funcname + ': ltc flag ' + str(packet_flag_ltc))
                         #logger.debug(funcname + ': Num ltcs ' + str(num_ltcs))
@@ -275,7 +275,7 @@ def decode_format4(data_str,device_info):
                             packet_cnt10ks     = int(packet_cnt10k_bin.hex(), 16)/device_info['counterfreq']
                             data_list = [packet_num,packet_cnt10ks]
                             data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
-                            data_packet['type'] = 'L'     
+                            data_packet['type'] = 'L'
                             data_packet['spd'] = speed
                             data_packet['ch'] = channel
                             data_packet['ind'] = ind_ltcs
@@ -314,7 +314,7 @@ def decode_format4(data_str,device_info):
                         tstr = data_split[1]
                         td_tmp                  = datetime.datetime.strptime(tstr, '%Y.%m.%d %H:%M:%S')
                         #https://stackoverflow.com/questions/7065164/how-to-make-an-unaware-datetime-timezone-aware-in-python
-                        data_packet['date']     = td_tmp.replace(tzinfo = device_info['timezone'])    
+                        data_packet['date']     = td_tmp.replace(tzinfo = device_info['timezone'])
                         data_packet['timestamp']= datetime.datetime.timestamp(data_packet['date'])
                         data_packet['date_str']  = tstr
                         data_packet['format']    = int(data_split[2].split(':')[1])
@@ -330,11 +330,11 @@ def decode_format4(data_str,device_info):
                             data_packet['filename'] = None
 
                             #print('Status!',data_packet)
-                        data_packets.append(data_packet)                        
-                            
+                        data_packets.append(data_packet)
+
                     elif(packet_ident == 0xac): # ACC IMU packet
                         if(len(data_decobs) > 12):
-                            ind = 1                            
+                            ind = 1
                             packet_num_bin  = data_decobs[ind:ind+5]
                             packet_num      = int(packet_num_bin.hex(), 16) # python3, its unsigned, TODO check how to do that
                             ind += 5
@@ -349,7 +349,7 @@ def decode_format4(data_str,device_info):
                             ind += 2
                             T    = int(data_decobs[ind:ind+2].hex(),16)
                             T    = T / 333.87 + 21.0
-                            ind += 2                            
+                            ind += 2
                             gyrox = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
                             ind += 2
                             gyroy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
@@ -361,7 +361,7 @@ def decode_format4(data_str,device_info):
                             magy = int.from_bytes(data_decobs[ind:ind+2], byteorder = 'big',signed=False)
                             ind += 2
                             magz = int.from_bytes(data_decobs[ind:ind+2], byteorder = 'big',signed=False)
-                            print(magz)
+                            #print('magz',magz)
                             data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
                             data_packet['type'] = 'A'
                             data_packet['T'] = T
@@ -386,10 +386,10 @@ def decode_format4(data_str,device_info):
                                     Ttst1    = int.from_bytes(data_decobs[nt+ind_T:nt+ind_T+2],byteorder='big',signed=True)
                                     Ttst1    = Ttst1 / 333.87 + 21.0
                                     Ttst2    = int.from_bytes(data_decobs[nt+ind_T+package_size:nt+ind_T+2+package_size],byteorder='big',signed=True)
-                                    Ttst2    = Ttst2 / 333.87 + 21.0               
+                                    Ttst2    = Ttst2 / 333.87 + 21.0
                                     #print('T',T,'nt',nt,'Ttst1',Ttst1,'Ttst2',Ttst2)
                                     dT1 = abs(Ttst - Ttst1)
-                                    dT2 = abs(Ttst - Ttst2)                                    
+                                    dT2 = abs(Ttst - Ttst2)
                                     if((dT1 < 0.25) & (dT2 < 0.25)):
                                         #print(data_decobs[nt:],len(data_decobs[nt:]))
                                         data_decobs_new = data_decobs[:13] + data_decobs[13 + nt:]
@@ -403,11 +403,11 @@ def decode_format4(data_str,device_info):
                                             data_decobs = data_decobs_new
                                             print('Found good index by shifting start by',nt,nsamples_new)
 
-                                        break                                                                                    
+                                        break
                         if(abs(nsamples - int(nsamples)) > 0.01): # Don take data with wrong size, have to deal with that later...
                             print('Could not find good samples in package (wrong package size)')
                         else:
-                            #print('Nsamples',nsamples)                        
+                            #print('Nsamples',nsamples)
                             #print(data_decobs)
                             #print('FiFO end')
                             T_all = []
@@ -416,11 +416,11 @@ def decode_format4(data_str,device_info):
                             accz_all = []
                             gyrox_all = []
                             gyroy_all = []
-                            gyroz_all = []                        
+                            gyroz_all = []
                             magx_all = []
                             magy_all = []
                             magz_all = []
-                            ind = 1                            
+                            ind = 1
                             packet_num_bin  = data_decobs[ind:ind+5]
                             packet_num         = int.from_bytes(packet_num_bin,'big',signed=False)
                             ind += 5
@@ -440,7 +440,7 @@ def decode_format4(data_str,device_info):
                                 T    = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
                                 T    = T / 333.87 + 21.0
                                 Ttst = T # Having the data for testing packages with wrong package size
-                                ind += 2                            
+                                ind += 2
                                 gyrox = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
                                 ind += 2
                                 gyroy = int.from_bytes(data_decobs[ind:ind+2],byteorder='big',signed=True)
@@ -471,10 +471,10 @@ def decode_format4(data_str,device_info):
                                 accz_all.append(accz)
                                 gyrox_all.append(gyrox)
                                 gyroy_all.append(gyroy)
-                                gyroz_all.append(gyroz)                   
+                                gyroz_all.append(gyroz)
                                 magx_all.append(magx)
                                 magy_all.append(magy)
-                                magz_all.append(magz)                       
+                                magz_all.append(magz)
 
                             data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks,'dt_cnt10ks':packet_dt_cnt10ks}
                             if(packet_ident == 0xbb):
@@ -493,9 +493,9 @@ def decode_format4(data_str,device_info):
                             data_packet['heading_xz'] = np.arctan2(np.asarray(magx_all),np.asarray(magz_all))/np.pi * 180
                             data_packet['heading_yz'] = np.arctan2(np.asarray(magy_all),np.asarray(magz_all))/np.pi * 180
                             data_packets.append(data_packet)
-                        
+
                     elif(packet_ident == 0xA0): # U3
-                        ind = 1                            
+                        ind = 1
                         packet_num_bin      = data_decobs[ind:ind+5]
                         packet_num          = int(packet_num_bin.hex(), 16) # python3
                         ind += 5
@@ -507,16 +507,16 @@ def decode_format4(data_str,device_info):
                         #data_packet = {'num':packet_num,'cnt10ks':packet_cnt10ks}
                         #data_packet['type'] = 'ADV'
                         #data_packet.update(adv_data)
-                        #data_packets.append(data_packet)                        
+                        #data_packets.append(data_packet)
                         #print(data_packet)
                         #print('ind',ind,len(data_decobs))
-                        #print('Serial data package',packet_num,packet_cnt10ks)                        
-                        #print(packet_serial_data)                        
-                        #print('Serial data package done')                        
+                        #print('Serial data package',packet_num,packet_cnt10ks)
+                        #print(packet_serial_data)
+                        #print('Serial data package done')
                     elif(packet_ident == 0xf0): # Pyroscience firesting
                         #\xf0\x00\x00\x00\x01Y\x00\x00\x08\x8f\x03RMR1 3 0 13 2 153908 -867323 -634011 -305757 -300000 -300000 482 16785 -1 -1 0 -62587\r
                         if(len(data_decobs) > 12):
-                            ind = 1                            
+                            ind = 1
                             packet_num_bin  = data_decobs[ind:ind+5]
                             packet_num      = int(packet_num_bin.hex(), 16) # python3
                             ind += 5
@@ -553,6 +553,3 @@ def decode_format4(data_str,device_info):
 # Pyro science data packages and formats
 pyro_science_format1_fields = [{'name':'dphi','unit':'deg','datatype':'float'},
                                {'name':'O2','unit':'umul/l','datatype':'float'}]
-
-
-
